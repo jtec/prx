@@ -24,24 +24,18 @@ def load_dataset(dataset_name):
 
 def dataset2dictionary(dataset_root):
     # Build dictionary representation of the dataset:
-    ds = {}
-    return ds
-    def parse_directory(dir):
-        for (root, subdirs, files) in os.walk(dir, topdown=True):
-            for file in files:
-                print(file)
-            for subdir in subdirs:
-                parse_directory(subdir)
-    parse_directory(dataset_root)
+    def parse_directory(directory_path, dataset_root_dir=""):
+        directory_node = {}
+        for subdirectory_or_file in directory_path.iterdir():
+            if subdirectory_or_file.is_file():
+                # If we see a file, we just parse it or store its path so we can e.g. parse it at a later stage.
+                directory_node[subdirectory_or_file.name] = subdirectory_or_file.relative_to(dataset_root)
+            if subdirectory_or_file.is_dir():
+                # For a directory, we create a new node and treat it just like the root node:
+                directory_node[subdirectory_or_file.name] = {}
+                directory_node[subdirectory_or_file.name] = parse_directory(subdirectory_or_file,
+                                                                            dataset_root_dir=dataset_root)
+        return directory_node
 
-    for path in dataset_root.rglob('*.json'):
-        with open(path) as file:
-            parsed_path_file = json.load(file)
-            relative_path = str(path.relative_to(dataset_root)).split(os.path.sep)
-            for level in relative_path:
-                ds[level] = {}
-            if len(level) == 1:
-                ds[file.name] = parsed_path_file
-            else:
-                ds[level][file.name] = parsed_path_file
+    ds = parse_directory(dataset_root, dataset_root_dir=dataset_root)
     return ds
