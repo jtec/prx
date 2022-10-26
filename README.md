@@ -1,6 +1,9 @@
 # prx
 
-For anybody who justs wants to experiment with GNSS positioning.
+Putting the fun back in GNSS positioning.
+
+## Coding style
+We write python code following https://google.github.io/styleguide/pyguide.html.
 
 ## Documentation
 
