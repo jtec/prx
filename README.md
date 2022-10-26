@@ -3,7 +3,7 @@
 Putting the fun back in GNSS positioning.
 
 ## Coding style
-We write python code following https://google.github.io/styleguide/pyguide.html.
+We use https://google.github.io/styleguide/pyguide.html as out python style guide.
 
 ## Documentation
 
