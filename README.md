@@ -1,6 +1,6 @@
 # prx
 
-Putting the fun back in GNSS positioning.
+Making GNSS positioning a bit more accessible.
 
 ## Coding style
 We use https://google.github.io/styleguide/pyguide.html as our python style guide.
