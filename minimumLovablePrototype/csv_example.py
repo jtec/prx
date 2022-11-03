@@ -9,7 +9,7 @@ def generate_example_file(
         file_path=Path('__file__').resolve().parent.joinpath(Path("example.csv"))
 ) -> Path:
     header, observations = example_observations.generate()
-    # write single epoch to csv file
+    # write observations to csv file
     if file_path.exists():
         print(f"Removed existing CSV example file: {file_path}")
         os.remove(file_path)
