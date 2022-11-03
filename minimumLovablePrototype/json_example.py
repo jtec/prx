@@ -1,4 +1,3 @@
-from jsonseq.encode import JSONSeqEncoder
 import json
 import os
 from pathlib import Path
