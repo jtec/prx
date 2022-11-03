@@ -2,3 +2,4 @@
 __pycache__
 /load_dataset_paths.json
 *.csv
+*tmp*.csv
