@@ -2,7 +2,7 @@
 
 Making GNSS positioning a bit more accessible.
 
-## How we manage python version and dependecies
+## How we manage python version and dependencies
 We use `pipenv` to make sure every developer and user of prx runs the same python version
 and the same set of dependencies such as `numpy` and `pandas`.
 The environment parameters are defined by the `Pipfile` and `Pipfile.lock` files 
@@ -11,7 +11,7 @@ in the repository.
 To install pipenv, if necessary, run `pip install --user pipenv`
 
 To create the virtual environment, run
-`pipenv install` in the repository root.
+`pipenv install` in the `prx` repository root.
 
 ### Using the pipenv virtual environment in PyCharm
 Run `pipenv --venv` to find the path of the virtual environment, which we'll call `<venv-path>`
