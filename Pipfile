@@ -7,6 +7,7 @@ name = "pypi"
 numpy = "*"
 pandas = "*"
 pytest = "*"
+georinex = "*"
 
 [dev-packages]
 
