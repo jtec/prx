@@ -11,11 +11,12 @@ in the repository.
 To install pipenv, if necessary, run `pip install --user pipenv`
 
 To create the virtual environment, run
-`pipenv install` in the `prx` repository root.
+`pipenv install` in the `prx` repository root. This has to be run every time an update to the `Pipfile` and `Pipfile.lock`
+files is done (for example, after a `git fetch`)
 
 ### Using the pipenv virtual environment in PyCharm
 Run `pipenv --venv` to find the path of the virtual environment, which we'll call `<venv-path>`
-Under `File` -> `Settings` -> `Project` -> `Python Interpreter` add `<venv-path>/bin/python` as python interpreter
+Under `File` -> `Settings` -> `Project` -> `Python Interpreter` add `<venv-path>` as python interpreter
 
 ### Add packages to pipenv
 Let's say you wrote some code that uses `import new_package`. To have `new package` added to the pipenv (what you otherwise
