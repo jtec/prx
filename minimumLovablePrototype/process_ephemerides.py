@@ -46,7 +46,7 @@ def load_rnx3_obs(path):
 if __name__ == "__main__":
     # filepath towards RNX3 NAV file
     path_to_rnx3_nav_file = Path(__file__).resolve().parent.parent.joinpath("datasets", "TLSE_2022001",
-                                                                            "BRDC00IGS_R_20220010000_01D_MN.rnx")
+                                                                            "BRDC00IGS_R_20220010000_01D_GN.rnx")
     # load RNX3 NAV file
     nav_df = load_rnx3_obs(path_to_rnx3_nav_file)
 
