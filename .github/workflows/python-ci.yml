@@ -19,12 +19,14 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
-    - name: Install python version
+    - name: display pyenv version
+      run: |
+        pyenv install --list
       uses: gabrielfalcao/pyenv-action@v9
       with:
         default: "3.10.8"
         command: pip install -U pip  # upgrade pip after installing python
-    - name: Install dependecies
+    - name: Install dependencies
       uses: VaultVulp/action-pipenv@v2.0.1
       with:
         command: install -d # Install all dependencies, including development ones
