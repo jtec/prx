@@ -38,7 +38,7 @@ def load_rnx3_nav_df(path):
     Load the file using the georinex package.
     Convert it to pandas
     """
-    load_rnx3_nav_ds(path)
+    nav_ds = load_rnx3_nav_ds(path)
 
     # convert ephemerides from xarray.Dataset to pandas.DataFrame
     nav_df = convert_nav_ds_to_df(nav_ds)
@@ -65,7 +65,7 @@ def convert_nav_ds_to_df(nav_ds):
 
 def convert_nav_single_ds_to_df(nav_ds):
     # convert ephemerides from xarray.Dataset to pandas.DataFrame, as required by gnss_lib_py
-    time = pd.to_datetime(nav_time['time'].values)
+    time = pd.to_datetime(nav_ds['time'].values)
     sv = nav_ds['sv'].values
     SVclockBias = nav_ds['SVclockBias'].values
     SVclockDrift = nav_ds['SVclockDrift'].values
@@ -116,6 +116,7 @@ def convert_nav_single_ds_to_df(nav_ds):
 
 
 if __name__ == "__main__":
+
     # filepath towards RNX3 NAV file
     path_to_rnx3_nav_file = Path(__file__).resolve().parent.parent.joinpath("datasets", "TLSE_2022001",
                                                                             "BRDC00IGS_R_20220010000_01D_GN.rnx")
@@ -135,6 +136,24 @@ if __name__ == "__main__":
 
     # call findsat from gnss_lib_py
     nav_df = convert_nav_single_ds_to_df(nav_time)
-    sv_posvel = find_sat(nav_df, gps_tow, gps_week)
+    sv_posvel_rnx3_df = find_sat(nav_df, gps_tow, gps_week)
 
-    print(sv_posvel)
+    sv_posvel_rnx3 = np.array([sv_posvel_rnx3_df["x"].values[0],
+                              sv_posvel_rnx3_df["y"].values[0],
+                              sv_posvel_rnx3_df["z"].values[0]])
+    print(sv_posvel_rnx3)
+    print(f"RNX3 sat pos: {sv_posvel_rnx3}")
+
+    # filepath towards RNX3 NAV file
+    path_to_sp3_file = Path(__file__).resolve().parent.parent.joinpath("datasets", "TLSE_2022001", "igs21906.sp3")
+
+    # load sp3
+    sp3_ds = gr.load(path_to_sp3_file)
+
+    # retrieve position for specified date and sv
+    sv_posvel_sp3 = sp3_ds.sel(time=date, sv=sv)['position'].values*1000
+
+    print(f"SP3 sat pos:  {sv_posvel_sp3}")
+    print(f"Difference RNX3 - SP3: {sv_posvel_rnx3 - sv_posvel_sp3}")
+
+    # TODO : large difference may come from the fact that date is a UTC timestamp, while the time in sp3_ds is a gps time
