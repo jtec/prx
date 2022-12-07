@@ -1,8 +1,9 @@
 import georinex as gr
 import xarray
 from gnss_lib_py.utils.constants import WEEKSEC
-from gnss_lib_py.utils.time_conversions import datetime_to_tow
+from gnss_lib_py.utils.time_conversions import datetime_to_tow, get_leap_seconds
 from gnss_lib_py.utils.sim_gnss import find_sat
+# from gnss_lib_py.parsers.precise_ephemeris import parse_sp3
 import pandas as pd
 import numpy as np
 import zipfile
@@ -130,7 +131,7 @@ if __name__ == "__main__":
 
     # select right ephemeris
     nav_prn = nav_ds.sel(sv=sv)
-    # find first epehemeris before date of interest
+    # find first ephemeris before date of interest
     indexEph = np.searchsorted(nav_prn.time.values, date)
     nav_time = nav_prn.isel(time=0)
 
@@ -150,8 +151,19 @@ if __name__ == "__main__":
     # load sp3
     sp3_ds = gr.load(path_to_sp3_file)
 
+    # convert sp3 time from utc to gps_time
+    ls = get_leap_seconds(date.astype(datetime))
+
+    # TODO : cannot import parse_sp3 function from gnss_lib_py/parsers/precise_ephemeris
+    # sp3_data = parse_sp3(path_to_sp3_file)
+
     # retrieve position for specified date and sv
-    sv_posvel_sp3 = sp3_ds.sel(time=date, sv=sv)['position'].values*1000
+    # # large difference between sp3 and rx3 sat pos, maybe due to different timescales
+    # sv_posvel_sp3 = sp3_ds.sel(time=date, sv=sv)['position'].values*1000
+    # # added leap second, but sel() does not work if the date is not part of the time array
+    # sv_posvel_sp3 = sp3_ds.sel(time=date + np.timedelta64(ls, 's'), sv=sv)['position'].values*1000
+    sp3_sv = sp3_ds.sel(sv=sv)
+    sv_posvel_sp3 = sp3_sv.interp(time=date + np.timedelta64(ls, 's'))['position'].values*1000
 
     print(f"SP3 sat pos:  {sv_posvel_sp3}")
     print(f"Difference RNX3 - SP3: {sv_posvel_rnx3 - sv_posvel_sp3}")
