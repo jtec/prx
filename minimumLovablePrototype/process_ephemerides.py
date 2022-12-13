@@ -1,7 +1,7 @@
 import georinex as gr
 import xarray
 from gnss_lib_py.utils.constants import WEEKSEC
-from gnss_lib_py.utils.time_conversions import datetime_to_tow, get_leap_seconds
+from gnss_lib_py.utils.time_conversions import datetime_to_tow, get_leap_seconds, tow_to_datetime
 from gnss_lib_py.utils.sim_gnss import find_sat
 # from gnss_lib_py.parsers.precise_ephemeris import parse_sp3
 import pandas as pd
@@ -116,6 +116,28 @@ def convert_nav_single_ds_to_df(nav_ds):
     return nav_df
 
 
+def select_nav_ephemeris(nav_ds, sv, date):
+    """select an ephemeris from a rinex nav dataset for a particular sv and time
+
+    Input examples:
+    nav_ds = load_rnx3_nav_ds(path_to_rnx3_nav_file)
+    sv: np.array('G01', dtype='<U3')
+    date: np.datetime64('2022-01-01T00:00:00.000')
+
+    Output:
+    nav_df: a pandas.dataframe containing the selected ephemeris
+    """
+    # select ephemeris for right satellite
+    nav_prn = nav_ds.sel(sv=sv)
+    # find first ephemeris before date of interest
+    indexEph = np.searchsorted(nav_prn.time.values, date)
+    nav_time = nav_prn.isel(time=indexEph-1)
+
+    # call findsat from gnss_lib_py
+    nav_df = convert_nav_single_ds_to_df(nav_time)
+
+    return nav_df
+
 if __name__ == "__main__":
 
     # filepath towards RNX3 NAV file
@@ -126,26 +148,24 @@ if __name__ == "__main__":
 
     # select sv and time
     sv = np.array('G01', dtype='<U3')
-    date = np.datetime64('2022-01-01T00:00:00.000')
-    gps_week, gps_tow = datetime_to_tow(date.astype(datetime))
+    gps_week = 2190
+    gps_tow = 523800
+    sv_pos_magnitude = np.array([13053451.235, -12567273.060, 19015357.126])
 
     # select right ephemeris
-    nav_prn = nav_ds.sel(sv=sv)
-    # find first ephemeris before date of interest
-    indexEph = np.searchsorted(nav_prn.time.values, date)
-    nav_time = nav_prn.isel(time=0)
+    date = np.datetime64(tow_to_datetime(gps_week, gps_tow))
+    nav_df = select_nav_ephemeris(nav_ds, sv, date)
 
     # call findsat from gnss_lib_py
-    nav_df = convert_nav_single_ds_to_df(nav_time)
     sv_posvel_rnx3_df = find_sat(nav_df, gps_tow, gps_week)
+    sv_pos_rnx3 = np.array([sv_posvel_rnx3_df["x"].values[0],
+                            sv_posvel_rnx3_df["y"].values[0],
+                            sv_posvel_rnx3_df["z"].values[0]])
+    print(sv_pos_rnx3)
+    print(f"RNX3 sat pos: {sv_pos_rnx3}")
+    print(f"MAGNITUDE sat pos: {sv_pos_magnitude}")
 
-    sv_posvel_rnx3 = np.array([sv_posvel_rnx3_df["x"].values[0],
-                              sv_posvel_rnx3_df["y"].values[0],
-                              sv_posvel_rnx3_df["z"].values[0]])
-    print(sv_posvel_rnx3)
-    print(f"RNX3 sat pos: {sv_posvel_rnx3}")
-
-    # filepath towards RNX3 NAV file
+    # filepath towards SP3 file
     path_to_sp3_file = Path(__file__).resolve().parent.parent.joinpath("datasets", "TLSE_2022001", "igs21906.sp3")
 
     # load sp3
@@ -159,13 +179,13 @@ if __name__ == "__main__":
 
     # retrieve position for specified date and sv
     # # large difference between sp3 and rx3 sat pos, maybe due to different timescales
-    # sv_posvel_sp3 = sp3_ds.sel(time=date, sv=sv)['position'].values*1000
+    # sv_pos_sp3 = sp3_ds.sel(time=date, sv=sv)['position'].values*1000
     # # added leap second, but sel() does not work if the date is not part of the time array
-    # sv_posvel_sp3 = sp3_ds.sel(time=date + np.timedelta64(ls, 's'), sv=sv)['position'].values*1000
+    # sv_pos_sp3 = sp3_ds.sel(time=date + np.timedelta64(ls, 's'), sv=sv)['position'].values*1000
     sp3_sv = sp3_ds.sel(sv=sv)
-    sv_posvel_sp3 = sp3_sv.interp(time=date + np.timedelta64(ls, 's'))['position'].values*1000
+    sv_pos_sp3 = sp3_sv.interp(time=date + np.timedelta64(ls, 's'))['position'].values*1000
 
-    print(f"SP3 sat pos:  {sv_posvel_sp3}")
-    print(f"Difference RNX3 - SP3: {sv_posvel_rnx3 - sv_posvel_sp3}")
+    print(f"SP3 sat pos:  {sv_pos_sp3}")
+    print(f"Difference RNX3 - SP3: {sv_pos_rnx3 - sv_pos_sp3}")
 
     # TODO : large difference may come from the fact that date is a UTC timestamp, while the time in sp3_ds is a gps time
