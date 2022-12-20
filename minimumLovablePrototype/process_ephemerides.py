@@ -3,7 +3,7 @@ import xarray
 from gnss_lib_py.utils.constants import WEEKSEC
 from gnss_lib_py.utils.time_conversions import datetime_to_tow, get_leap_seconds, tow_to_datetime
 from gnss_lib_py.utils.sim_gnss import find_sat
-# from gnss_lib_py.parsers.precise_ephemeris import parse_sp3
+from gnss_lib_py.parsers.precise_ephemerides import parse_sp3
 import pandas as pd
 import numpy as np
 import zipfile
@@ -175,7 +175,7 @@ if __name__ == "__main__":
     ls = get_leap_seconds(date.astype(datetime))
 
     # TODO : cannot import parse_sp3 function from gnss_lib_py/parsers/precise_ephemeris
-    # sp3_data = parse_sp3(path_to_sp3_file)
+    sp3_data = parse_sp3(path_to_sp3_file)
 
     # retrieve position for specified date and sv
     # # large difference between sp3 and rx3 sat pos, maybe due to different timescales
