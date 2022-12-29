@@ -1,7 +1,4 @@
 .idea
 __pycache__
-/load_dataset_paths.json
 *.csv
 *.json*
-*tmp*.csv
-
