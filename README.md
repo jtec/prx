@@ -16,7 +16,8 @@ files is done (for example, after a `git fetch`)
 
 ### Using the pipenv virtual environment in PyCharm
 Run `pipenv --venv` to find the path of the virtual environment, which we'll call `<venv-path>`
-Under `File` -> `Settings` -> `Project` -> `Python Interpreter` add `<venv-path>` as python interpreter
+Under `File` -> `Settings` -> `Project` -> `Python Interpreter` add `<venv-path>` as python interpreter.
+If you run into problems, try `<venv-path>/bin/python`.
 
 ### Add packages to pipenv
 Let's say you wrote some code that uses `import new_package`. To have `new package` added to the pipenv (what you otherwise
