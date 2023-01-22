@@ -38,14 +38,21 @@ def compact_rinex_to_rinex(file: Path):
         command = f" {crx2rnx_binary} {file}"
         result = subprocess.run(command, capture_output=True, shell=True)
         if result.returncode == 0:
-            logger.info("Converted compact Rinex to Rinex: {}")
+            expanded_file = Path(str(file).replace(".crx", ".rnx"))
+            logger.info(f"Converted compact Rinex to Rinex: {expanded_file}")
+            return expanded_file
+    return None
 
 
 def rinex_2_to_rinex_3(file: Path):
     return None
 
 def is_rinex_3(file: Path):
-    return False
+    with open(file) as f:
+        first_line = f.readline()
+    if "RINEX VERSION" not in first_line or "3.0" not in first_line:
+        return False
+    return True
 
 def anything_to_rinex_3(file: Path):
     file = Path(file)
@@ -58,7 +65,7 @@ def anything_to_rinex_3(file: Path):
     input = file
     for converter in itertools.cycle(converters):
         output = converter(input)
-        if is_rinex_3(output):
-            break
         if output is not None:
+            if is_rinex_3(output):
+                break
             input = output
