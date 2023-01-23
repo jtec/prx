@@ -6,55 +6,53 @@ from gnss_lib_py.utils.sim_gnss import find_sat
 from gnss_lib_py.parsers.precise_ephemerides import parse_sp3, multi_gnss_from_precise_eph, extract_sp3
 import pandas as pd
 import numpy as np
-import zipfile
 from pathlib import Path
 from datetime import datetime, timedelta
 
+cGpstEpoch = datetime(1980, 1, 6, 0, 0, 0)
+cNanoSecondsPerSecond = 1e-9
 
-def load_rnx3_nav_ds(path):
-    """load rnx3 nav file specified in path
 
-    If zipped, unzip.
+def convert_rnx3_nav_file_to_dataset(path):
+    """load rnx3 nav file specified in path as xarray.dataset
+
+    Input:
+    path: pathlib.path object to a RNX3 file
+
     Load the file using the georinex package.
-    return as an xarray.dataset object
+    return as an xarray.dataset object.
     """
-    # unzip file if necessary
-    if not path.exists():
-        print("Unzipping RNX3 NAV file...")
-        # unzip file
-        path_to_zip_file = path.with_suffix(".zip")
-        with zipfile.ZipFile(path_to_zip_file, 'r') as zip_ref:
-            print(path.resolve().parent)
-            zip_ref.extractall(path.resolve().parent)
 
     # parse RNX3 NAV file using georinex module
     nav_ds = gr.load(path)
     return nav_ds
 
 
-def load_rnx3_nav_df(path):
-    """load rnx3 nav file specified in path
+def convert_rnx3_nav_file_to_dataframe(path):
+    """load rnx3 nav file specified in path in pandas.dataframe
 
-    If zipped, unzip.
-    Load the file using the georinex package.
-    Convert it to pandas
+    Input:
+    path can be either the path to a RNX3 file
+
+    Load the file as dataset.
+    Convert it to pandas.
     """
-    nav_ds = load_rnx3_nav_ds(path)
-
-    # convert ephemerides from xarray.Dataset to pandas.DataFrame
-    nav_df = convert_nav_ds_to_df(nav_ds)
+    nav_ds = convert_rnx3_nav_file_to_dataset(path)
+    nav_df = convert_nav_dataset_to_dataframe(nav_ds)
 
     return nav_df
 
 
-def convert_nav_ds_to_df(nav_ds):
-    # convert ephemerides from xarray.Dataset to pandas.DataFrame, as required by gnss_lib_py
+def convert_nav_dataset_to_dataframe(nav_ds):
+    """convert ephemerides from xarray.Dataset to pandas.DataFrame, as required by gnss_lib_py"""
     nav_df = nav_ds.to_dataframe()
     nav_df.dropna(how='all', inplace=True)
     nav_df.reset_index(inplace=True)
     nav_df['source'] = nav_ds.filename
-    nav_df['t_oc'] = pd.to_numeric(nav_df['time'] - datetime(1980, 1, 6, 0, 0, 0))
-    nav_df['t_oc'] = 1e-9 * nav_df['t_oc'] - WEEKSEC * np.floor(1e-9 * nav_df['t_oc'] / WEEKSEC)
+    # convert time to number of elapsed seconds since GPST origin
+    nav_df['t_oc'] = pd.to_numeric(nav_df['time'] - cGpstEpoch) * cNanoSecondsPerSecond
+    # convert time to number of elapsed seconds since beginning of week
+    nav_df['t_oc'] = nav_df['t_oc'] - WEEKSEC * np.floor(nav_df['t_oc'] / WEEKSEC)
     nav_df['time'] = nav_df['time'].dt.tz_localize('UTC')
 
     nav_df.rename(
@@ -64,8 +62,8 @@ def convert_nav_ds_to_df(nav_ds):
     return nav_df
 
 
-def convert_nav_single_ds_to_df(nav_ds):
-    # convert ephemerides from xarray.Dataset to pandas.DataFrame, as required by gnss_lib_py
+def convert_single_nav_dataset_to_dataframe(nav_ds):
+    """convert ephemerides from xarray.Dataset to pandas.DataFrame, as required by gnss_lib_py"""
     time = pd.to_datetime(nav_ds['time'].values)
     sv = nav_ds['sv'].values
     SVclockBias = nav_ds['SVclockBias'].values
@@ -97,10 +95,10 @@ def convert_nav_single_ds_to_df(nav_ds):
     IODC = nav_ds['IODC'].values
     TransTime = nav_ds['TransTime'].values
     source = nav_ds.filename
-    td = nav_ds['time'].values.astype('datetime64[ms]').astype(datetime) - datetime(1980, 1, 6, 0, 0, 0)
-    td_np = np.timedelta64(td)
-    t_oc = pd.to_numeric(td_np).astype('float')
-    t_oc = 1e-9 * t_oc - WEEKSEC * np.floor(1e-9 * t_oc / WEEKSEC)
+    time_gpst_ns = nav_ds['time'].values.astype('datetime64[ms]').astype(datetime) - cGpstEpoch
+    time_gpst_ns_np = np.timedelta64(time_gpst_ns)
+    t_oc = pd.to_numeric(time_gpst_ns_np).astype('float')*cNanoSecondsPerSecond
+    t_oc = t_oc - WEEKSEC * np.floor(t_oc / WEEKSEC)
 
     dataframe_data = {
         'time': time, 'sv': sv, 'SVclockBias': SVclockBias, 'SVclockDrift': SVclockDrift,
@@ -134,7 +132,7 @@ def select_nav_ephemeris(nav_ds, sv, date):
     nav_time = nav_prn.isel(time=indexEph-1)
 
     # call findsat from gnss_lib_py
-    nav_df = convert_nav_single_ds_to_df(nav_time)
+    nav_df = convert_single_nav_dataset_to_dataframe(nav_time)
 
     return nav_df
 
