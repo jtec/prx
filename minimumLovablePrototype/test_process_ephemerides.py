@@ -5,16 +5,30 @@ from pathlib import Path
 from datetime import datetime
 import georinex as gr
 import process_ephemerides as eph
+import zipfile
 
 def test_compare_rnx3_sat_pos_with_magnitude():
-    """"Loads a RNX3 file, compute a position for different satellites and time, and compare to MAGNITUDE results
-    Test will be a success if the difference in position is lower than threshold_pos_error = 0.01
+    """Loads a RNX3 file, compute a position for different satellites and time, and compare to MAGNITUDE results
+    Test will be a success if the difference in position is lower than threshold_pos_error_m = 0.01
     """
-    threshold_pos_error = 0.01
+    threshold_pos_error_m = 0.01
 
     # filepath towards RNX3 NAV file
     path_to_rnx3_nav_file = Path(__file__).resolve().parent.parent.joinpath("datasets", "TLSE_2022001",
                                                                             "BRDC00IGS_R_20220010000_01D_GN.rnx")
+
+    # check existence of file, and if not, try to find and unzip a compressed version
+    if not path_to_rnx3_nav_file.exists():
+        # check existence of zipped file
+        path_to_zip_file = path_to_rnx3_nav_file.with_suffix(".zip")
+        if path_to_zip_file.exists():
+            print("Unzipping RNX3 NAV file...")
+            # unzip file
+            with zipfile.ZipFile(path_to_zip_file, 'r') as zip_ref:
+                zip_ref.extractall(path_to_rnx3_nav_file.resolve().parent)
+        else:
+            print(f"File {path_to_rnx3_nav_file} (or zipped version) does not exist")
+
     # select sv and time
     sv = np.array('G01', dtype='<U3')
     gps_week = 2190
@@ -25,7 +39,7 @@ def test_compare_rnx3_sat_pos_with_magnitude():
 
     # Compute RNX3 satellite position
         # load RNX3 NAV file
-    nav_ds = eph.load_rnx3_nav_ds(path_to_rnx3_nav_file)
+    nav_ds = eph.convert_rnx3_nav_file_to_dataset(path_to_rnx3_nav_file)
 
         # select right ephemeris
     date = np.datetime64(tow_to_datetime(gps_week, gps_tow))
@@ -37,15 +51,15 @@ def test_compare_rnx3_sat_pos_with_magnitude():
                             sv_posvel_rnx3_df["y"].values[0],
                             sv_posvel_rnx3_df["z"].values[0]])
 
-    assert (np.linalg.norm(sv_pos_rnx3 - sv_pos_magnitude) < threshold_pos_error)
+    assert (np.linalg.norm(sv_pos_rnx3 - sv_pos_magnitude) < threshold_pos_error_m)
 
 
 '''
 def test_compare_rnx3_sat_pos_with_sp3():
-    """"Loads a RNX3 file, compute a position for different satellites and time, and compare to MAGNITUDE results
-    Test will be a success if the difference in position is lower than threshold_pos_error = 0.01
+    """Loads a RNX3 file, compute a position for different satellites and time, and compare to MAGNITUDE results
+    Test will be a success if the difference in position is lower than threshold_pos_error_m = 0.01
     """
-    threshold_pos_error = 0.01
+    threshold_pos_error_m = 0.01
 
     # filepath towards RNX3 NAV file
     path_to_rnx3_nav_file = Path(__file__).resolve().parent.parent.joinpath("datasets", "TLSE_2022001",
@@ -89,5 +103,5 @@ def test_compare_rnx3_sat_pos_with_sp3():
     sv_pos_sp3 = sp3_sv.interp(time=date + np.timedelta64(ls, 's'))['position'].values * 1000
     """
 
-    assert (np.linalg.norm(sv_pos_rnx3 - sv_pos_sp3) < threshold_pos_error)
+    assert (np.linalg.norm(sv_pos_rnx3 - sv_pos_sp3) < threshold_pos_error_m)
 '''
