@@ -114,26 +114,27 @@ def convert_single_nav_dataset_to_dataframe(nav_ds):
     return nav_df
 
 
-def select_nav_ephemeris(nav_ds, sv, date):
-    """select an ephemeris from a rinex nav dataset for a particular sv and time
+def select_nav_ephemeris(nav_dataset, satellite_id, gpst_datetime):
+    """select an ephemeris from a RNX3 nav dataset for a particular sv and time, and return a dataframe
 
     Input examples:
-    nav_ds = load_rnx3_nav_ds(path_to_rnx3_nav_file)
-    sv: np.array('G01', dtype='<U3')
-    date: np.datetime64('2022-01-01T00:00:00.000')
+    nav_dataset = convert_rnx3_nav_file_to_dataset(path_to_rnx3_nav_file)
+    satellite_id = np.array('G01', dtype='<U3') # satellite ID for a single satellite,
+    gpst_datetime = np.datetime64('2022-01-01T00:00:00.000'), np.datetime64(tow_to_datetime(gps_week, gps_tow))
 
     Output:
-    nav_df: a pandas.dataframe containing the selected ephemeris
+    nav_dataframe: a pandas.dataframe containing the selected ephemeris
     """
     # select ephemeris for right satellite
-    nav_prn = nav_ds.sel(sv=sv)
+    nav_dataset_of_requested_satellite_id = nav_dataset.sel(sv=satellite_id)
     # find first ephemeris before date of interest
-    indexEph = np.searchsorted(nav_prn.time.values, date)
-    nav_time = nav_prn.isel(time=indexEph-1)
+    ephemeris_index = np.searchsorted(nav_dataset_of_requested_satellite_id.time.values, gpst_datetime)
+    nav_dataset_of_requested_satellite_id_and_time = nav_dataset_of_requested_satellite_id.isel(time=ephemeris_index - 1)
+    # convert to dataframe
+    nav_dataframe = convert_single_nav_dataset_to_dataframe(nav_dataset_of_requested_satellite_id_and_time)
 
-    # call findsat from gnss_lib_py
-    nav_df = convert_single_nav_dataset_to_dataframe(nav_time)
+    return nav_dataframe
 
-    return nav_df
 
-#if __name__ == "__main__":
+'''if __name__ == "__main__":'''
+
