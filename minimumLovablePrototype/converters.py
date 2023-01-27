@@ -14,24 +14,33 @@ logging.basicConfig(format='%(asctime)s,%(msecs)03d %(levelname)-8s [%(filename)
 
 logger = logging.getLogger(__name__)
 
+
 def compressed_to_uncompressed(file: Path):
+    assert file.exists()
     if str(file).endswith(".gz"):
-        uncompressed_file = str(file).replace(".gz", "")
+        uncompressed_file = Path(str(file).replace(".gz", ""))
         with gzip.open(file, 'rb') as compressed_file:
             with open(uncompressed_file, 'wb') as output_file:
                 output_file.write(compressed_file.read())
-        logger.info(f"Uncompressed file(s) to {uncompressed_file}")
+        logger.info(f"Uncompressed {file} to {uncompressed_file}")
         return uncompressed_file
     else:
         return None
 
-
-def compact_rinex_to_rinex(file: Path):
+def is_compact_rinex(file: Path):
+    assert file.exists()
     if not str(file).endswith(".crx"):
-        return None
+        return False
     with open(file) as f:
         first_line = f.readline()
     if "COMPACT RINEX FORMAT" not in first_line:
+        return False
+    return True
+
+
+def compact_rinex_to_rinex(file: Path):
+    assert file.exists()
+    if not is_compact_rinex(file):
         return None
     crx2rnx_binaries = glob.glob(str(prx.prx_root().joinpath("tools/RNXCMP/**/CRX2RNX*")), recursive=True)
     for crx2rnx_binary in crx2rnx_binaries:
@@ -45,9 +54,11 @@ def compact_rinex_to_rinex(file: Path):
 
 
 def rinex_2_to_rinex_3(file: Path):
+    assert file.exists()
     return None
 
 def is_rinex_3(file: Path):
+    assert file.exists()
     with open(file) as f:
         first_line = f.readline()
     if "RINEX VERSION" not in first_line or "3.0" not in first_line:
@@ -55,6 +66,7 @@ def is_rinex_3(file: Path):
     return True
 
 def anything_to_rinex_3(file: Path):
+    assert file.exists()
     file = Path(file)
     converters = [
         compact_rinex_to_rinex,
@@ -67,5 +79,6 @@ def anything_to_rinex_3(file: Path):
         output = converter(input)
         if output is not None:
             if is_rinex_3(output):
-                break
+                return output
             input = output
+    return None
