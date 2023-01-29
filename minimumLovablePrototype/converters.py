@@ -73,10 +73,16 @@ def anything_to_rinex_3(file: Path):
     ]
     output = None
     input = file
+    converter_calls = 0
+    max_number_of_conversions = 10
     for converter in itertools.cycle(converters):
+        converter_calls += 1
         output = converter(input)
         if output is not None:
             if is_rinex_3(output):
                 return output
             input = output
+        if converter_calls > max_number_of_conversions*len(converters):
+            logging.error(f"Tried converting file {file.name} {max_number_of_conversions} times, still not RINEX 3, giving up.")
+            return None
     return None
