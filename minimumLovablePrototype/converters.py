@@ -1,10 +1,8 @@
-import shutil
 from pathlib import Path
 import glob
 import itertools
 import subprocess
 import gzip
-import gzinfo
 import logging
 import prx
 
