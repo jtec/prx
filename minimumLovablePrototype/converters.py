@@ -5,12 +5,9 @@ import subprocess
 import gzip
 import logging
 import prx
+import helpers
 
-logging.basicConfig(format='%(asctime)s,%(msecs)03d %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s',
-    datefmt='%Y-%m-%d:%H:%M:%S',
-    level=logging.DEBUG)
-
-logger = logging.getLogger(__name__)
+log = helpers.get_logger(__name__)
 
 
 def compressed_to_uncompressed(file: Path):
@@ -20,7 +17,7 @@ def compressed_to_uncompressed(file: Path):
         with gzip.open(file, 'rb') as compressed_file:
             with open(uncompressed_file, 'wb') as output_file:
                 output_file.write(compressed_file.read())
-        logger.info(f"Uncompressed {file} to {uncompressed_file}")
+        log.info(f"Uncompressed {file} to {uncompressed_file}")
         return uncompressed_file
     else:
         return None
@@ -46,7 +43,7 @@ def compact_rinex_to_rinex(file: Path):
         result = subprocess.run(command, capture_output=True, shell=True)
         if result.returncode == 0:
             expanded_file = Path(str(file).replace(".crx", ".rnx"))
-            logger.info(f"Converted compact Rinex to Rinex: {expanded_file}")
+            log.info(f"Converted compact Rinex to Rinex: {expanded_file}")
             return expanded_file
     return None
 
@@ -83,6 +80,6 @@ def anything_to_rinex_3(file: Path):
                 return output
             input = output
         if converter_calls > max_number_of_conversions*len(converters):
-            logging.error(f"Tried converting file {file.name} {max_number_of_conversions} times, still not RINEX 3, giving up.")
+            log.error(f"Tried converting file {file.name} {max_number_of_conversions} times, still not RINEX 3, giving up.")
             return None
     return None

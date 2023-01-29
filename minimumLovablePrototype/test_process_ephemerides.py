@@ -37,7 +37,7 @@ def test_compare_rnx3_sat_pos_with_magnitude():
             print(f"File {path_to_rnx3_nav_file} (or zipped version) does not exist")
 
     # Compute RNX3 satellite position
-        # load RNX3 NAV file
+    # load RNX3 NAV file
     nav_ds = eph.convert_rnx3_nav_file_to_dataset(path_to_rnx3_nav_file)
 
         # select right ephemeris

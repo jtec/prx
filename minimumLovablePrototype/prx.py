@@ -1,14 +1,11 @@
 import argparse
 from pathlib import Path
-import logging
 import converters
 import helpers
 
-logging.basicConfig(format='%(asctime)s,%(msecs)03d %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s',
-    datefmt='%Y-%m-%d:%H:%M:%S',
-    level=logging.DEBUG)
+log = helpers.get_logger(__name__)
 
-logger = logging.getLogger(__name__)
+
 def prx_root() -> Path:
     return Path(__file__).parent.parent
 
@@ -19,7 +16,7 @@ def write_prx_file(prx_content: dict, file: Path):
 
 
 def process(observation_file_path: Path):
-    logger.info(f"Starting processing {observation_file_path.name} (full path {observation_file_path})")
+    log.info(f"Starting processing {observation_file_path.name} (full path {observation_file_path})")
     rinex_3_obs_file = converters.anything_to_rinex_3(observation_file_path)
     prx_header = {
         "input_files": [
