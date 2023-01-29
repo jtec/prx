@@ -14,10 +14,11 @@ def test_prx_processing():
         # test run having crashed:
         shutil.rmtree(test_directory)
     os.makedirs(test_directory)
-    compressed_compact_rinex_file = "TLSE00FRA_R_20230010000_10S_01S_MO.crx.gz"
-    shutil.copy(prx.prx_root().joinpath(f"datasets/{compressed_compact_rinex_file}"),
-                test_directory.joinpath(compressed_compact_rinex_file))
-    prx.process(test_directory.joinpath(compressed_compact_rinex_file))
-    expected_prx_file = test_directory.joinpath(compressed_compact_rinex_file.replace('crx.gz', 'json'))
+    rinex_observation_file = "TLSE00FRA_R_20230010000_03S_01S_MO.rnx"
+    shutil.copy(prx.prx_root().joinpath(f"datasets/{rinex_observation_file}"),
+                test_directory.joinpath(rinex_observation_file))
+    assert test_directory.joinpath(rinex_observation_file).exists()
+    prx.process(test_directory.joinpath(rinex_observation_file))
+    expected_prx_file = test_directory.joinpath(rinex_observation_file.replace('rnx', 'json'))
     assert expected_prx_file.exists()
     shutil.rmtree(test_directory)

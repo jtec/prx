@@ -3,7 +3,6 @@ import glob
 import itertools
 import subprocess
 import gzip
-import logging
 import prx
 import helpers
 
@@ -11,7 +10,7 @@ log = helpers.get_logger(__name__)
 
 
 def compressed_to_uncompressed(file: Path):
-    assert file.exists()
+    assert file.exists(), "File does not exist"
     if str(file).endswith(".gz"):
         uncompressed_file = Path(str(file).replace(".gz", ""))
         with gzip.open(file, 'rb') as compressed_file:
@@ -23,7 +22,7 @@ def compressed_to_uncompressed(file: Path):
         return None
 
 def is_compact_rinex(file: Path):
-    assert file.exists()
+    assert file.exists(), "File does not exist"
     if not str(file).endswith(".crx"):
         return False
     with open(file) as f:
@@ -34,7 +33,7 @@ def is_compact_rinex(file: Path):
 
 
 def compact_rinex_to_rinex(file: Path):
-    assert file.exists()
+    assert file.exists(), "File does not exist"
     if not is_compact_rinex(file):
         return None
     crx2rnx_binaries = glob.glob(str(prx.prx_root().joinpath("tools/RNXCMP/**/CRX2RNX*")), recursive=True)
@@ -49,19 +48,24 @@ def compact_rinex_to_rinex(file: Path):
 
 
 def rinex_2_to_rinex_3(file: Path):
-    assert file.exists()
+    assert file.exists(), "File does not exist"
     return None
 
+
 def is_rinex_3(file: Path):
-    assert file.exists()
-    with open(file) as f:
-        first_line = f.readline()
+    assert file.exists(), "File does not exist"
+    try:
+        with open(file) as f:
+            first_line = f.readline()
+    except UnicodeDecodeError as e_unicode:
+        return False
     if "RINEX VERSION" not in first_line or "3.0" not in first_line:
         return False
     return True
 
+
 def anything_to_rinex_3(file: Path):
-    assert file.exists()
+    assert file.exists(), "File does not exist"
     file = Path(file)
     converters = [
         compact_rinex_to_rinex,
@@ -73,13 +77,12 @@ def anything_to_rinex_3(file: Path):
     converter_calls = 0
     max_number_of_conversions = 10
     for converter in itertools.cycle(converters):
+        if is_rinex_3(input):
+            return input
         converter_calls += 1
         output = converter(input)
         if output is not None:
-            if is_rinex_3(output):
-                return output
             input = output
         if converter_calls > max_number_of_conversions*len(converters):
             log.error(f"Tried converting file {file.name} {max_number_of_conversions} times, still not RINEX 3, giving up.")
             return None
-    return None

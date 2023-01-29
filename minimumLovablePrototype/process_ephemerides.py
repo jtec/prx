@@ -8,9 +8,8 @@ import pandas as pd
 import numpy as np
 from pathlib import Path
 from datetime import datetime, timedelta
-
-cGpstEpoch = datetime(1980, 1, 6, 0, 0, 0)
-cNanoSecondsPerSecond = 1e-9
+import parse_rinex
+import constants
 
 
 def convert_rnx3_nav_file_to_dataset(path):
@@ -24,7 +23,7 @@ def convert_rnx3_nav_file_to_dataset(path):
     """
 
     # parse RNX3 NAV file using georinex module
-    nav_ds = gr.load(path)
+    nav_ds = parse_rinex.load(path)
     return nav_ds
 
 
@@ -50,7 +49,7 @@ def convert_nav_dataset_to_dataframe(nav_ds):
     nav_df.reset_index(inplace=True)
     nav_df['source'] = nav_ds.filename
     # convert time to number of elapsed seconds since GPST origin
-    nav_df['t_oc'] = pd.to_numeric(nav_df['time'] - cGpstEpoch) * cNanoSecondsPerSecond
+    nav_df['t_oc'] = pd.to_numeric(nav_df['time'] - constants.cGpstEpoch) * constants.cNanoSecondsPerSecond
     # convert time to number of elapsed seconds since beginning of week
     nav_df['t_oc'] = nav_df['t_oc'] - WEEKSEC * np.floor(nav_df['t_oc'] / WEEKSEC)
     nav_df['time'] = nav_df['time'].dt.tz_localize('UTC')
