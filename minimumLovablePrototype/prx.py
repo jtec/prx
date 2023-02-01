@@ -9,7 +9,6 @@ import constants
 from collections import defaultdict
 import git
 
-
 log = helpers.get_logger(__name__)
 
 
@@ -19,11 +18,23 @@ def prx_root() -> Path:
 
 def write_prx_file(prx_header: dict,
                    prx_content: dict,
-                   file: Path):
+                   file_name_without_extension: Path,
+                   output_format: str):
+    output_writers = {
+        "jsonseq": write_json_text_sequence_file
+    }
+    output_writers[output_format](prx_header, prx_content, file_name_without_extension)
+
+
+def write_json_text_sequence_file(prx_header: dict,
+                                  prx_content: dict,
+                                  file_name_without_extension: Path):
     indent = 2
-    with open(file, 'w', encoding='utf-8') as file:
+    output_file = Path(f"{str(file_name_without_extension)}.{constants.cPrxJsonTextSequenceFileExtension}")
+    with open(output_file, 'w',
+              encoding='utf-8') as file:
         file.write("\u241E" + json.dumps(prx_header, ensure_ascii=False, indent=indent) + "\n")
-    log.info(f"Generated JSONL prx file: {file}")
+    log.info(f"Generated JSON Text Sequence prx file: {file}")
 
 
 # From RINEX Version 3.05, 1 December, 2020.
@@ -37,9 +48,9 @@ def carrier_frequencies_hz():
     # FDMA signals
     cf["R"]["L1"] = defaultdict(dict)
     cf["R"]["L2"] = defaultdict(dict)
-    for frequency_slot in range(-7, 12+1):
-        cf["R"]["L1"][frequency_slot] = (1602 + frequency_slot*9/16) * constants.cHzPerMhz
-        cf["R"]["L2"][frequency_slot] = (1246 + frequency_slot*7/16) * constants.cHzPerMhz
+    for frequency_slot in range(-7, 12 + 1):
+        cf["R"]["L1"][frequency_slot] = (1602 + frequency_slot * 9 / 16) * constants.cHzPerMhz
+        cf["R"]["L2"][frequency_slot] = (1246 + frequency_slot * 7 / 16) * constants.cHzPerMhz
     # CDMA signals
     cf["R"]["L4"] = 1600.995 * constants.cHzPerMhz
     cf["R"]["L3"] = 1202.025 * constants.cHzPerMhz
@@ -80,16 +91,17 @@ def build_header(rinex_header, input_files):
     return prx_header
 
 
-def process(observation_file_path: Path):
+def process(observation_file_path: Path, output_format):
     log.info(f"Starting processing {observation_file_path.name} (full path {observation_file_path})")
     rinex_3_obs_file = converters.anything_to_rinex_3(observation_file_path)
     rinex_header = georinex.rinexheader(rinex_3_obs_file)
     rinex_obs = parse_rinex.load(rinex_3_obs_file, use_caching=True)
-    prx_file = str(rinex_3_obs_file).replace('.rnx', f".{constants.cPrxJsonTextSequenceFileExtension}")
+    prx_file = str(rinex_3_obs_file).replace('.rnx', "")
     write_prx_file(
         build_header(rinex_header, [rinex_3_obs_file]),
         rinex_obs,
-        prx_file)
+        prx_file,
+        output_format)
 
 
 if __name__ == "__main__":
@@ -102,4 +114,4 @@ if __name__ == "__main__":
                         help='Observation file path', default=None)
     args = parser.parse_args()
     if args.observation_file_path is not None and Path(args.observation_file_path).exists():
-        process(args.observation_file_path)
+        process(args.observation_file_path, "jsonseq")
