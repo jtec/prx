@@ -94,9 +94,9 @@ def convert_single_nav_dataset_to_dataframe(nav_ds):
     IODC = nav_ds['IODC'].values
     TransTime = nav_ds['TransTime'].values
     source = nav_ds.filename
-    time_gpst_ns = nav_ds['time'].values.astype('datetime64[ms]').astype(datetime) - cGpstEpoch
+    time_gpst_ns = nav_ds['time'].values.astype('datetime64[ms]').astype(datetime) - constants.cGpstEpoch
     time_gpst_ns_np = np.timedelta64(time_gpst_ns)
-    t_oc = pd.to_numeric(time_gpst_ns_np).astype('float')*cNanoSecondsPerSecond
+    t_oc = pd.to_numeric(time_gpst_ns_np).astype('float')*constants.cNanoSecondsPerSecond
     t_oc = t_oc - WEEKSEC * np.floor(t_oc / WEEKSEC)
 
     dataframe_data = {
