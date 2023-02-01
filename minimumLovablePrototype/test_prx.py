@@ -3,6 +3,7 @@ import time
 import random
 from pathlib import Path
 import shutil
+import constants
 
 import prx
 
@@ -19,6 +20,6 @@ def test_prx_processing():
                 test_directory.joinpath(rinex_observation_file))
     assert test_directory.joinpath(rinex_observation_file).exists()
     prx.process(test_directory.joinpath(rinex_observation_file))
-    expected_prx_file = test_directory.joinpath(rinex_observation_file.replace('rnx', 'json'))
+    expected_prx_file = test_directory.joinpath(rinex_observation_file.replace('rnx', constants.cPrxJsonTextSequenceFileExtension))
     assert expected_prx_file.exists()
     shutil.rmtree(test_directory)
