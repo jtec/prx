@@ -47,4 +47,4 @@ if __name__ == "__main__":
                         help='Observation file path', default=None)
     args = parser.parse_args()
     if args.observation_file_path is not None and Path(args.observation_file_path).exists():
-        process(args.observation_file_path)
+        process(Path(args.observation_file_path))
