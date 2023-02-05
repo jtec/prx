@@ -8,6 +8,7 @@ import xarray
 log = helpers.get_logger(__name__)
 
 
+# Can speed up RINEX parsing by using parsing results previously obtained and saved to disk.
 def load(rinex_file: Path, use_caching=False):
     cache_directory = Path(__file__).resolve().parent.joinpath("afterburner")
     os.makedirs(cache_directory, exist_ok=True)
@@ -20,4 +21,3 @@ def load(rinex_file: Path, use_caching=False):
     if use_caching:
         parsed.to_netcdf(cache_file)
     return parsed
-
