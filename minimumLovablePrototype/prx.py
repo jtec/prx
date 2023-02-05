@@ -81,7 +81,7 @@ def carrier_frequencies_hz():
     return cf
 
 
-def build_header(rinex_header, input_files):
+def build_header(input_files):
     prx_header = {}
     prx_header["input_files"] = [{"name": file.name, "md5": helpers.md5(file)} for file in input_files]
     prx_header["speed_of_light_mps"] = constants.cGpsIcdSpeedOfLight_mps
@@ -91,14 +91,14 @@ def build_header(rinex_header, input_files):
     return prx_header
 
 
-def process(observation_file_path: Path, output_format):
+def process(observation_file_path=Path(), output_format="jsonseq"):
     log.info(f"Starting processing {observation_file_path.name} (full path {observation_file_path})")
     rinex_3_obs_file = converters.anything_to_rinex_3(observation_file_path)
     rinex_header = georinex.rinexheader(rinex_3_obs_file)
     rinex_obs = parse_rinex.load(rinex_3_obs_file, use_caching=True)
     prx_file = str(rinex_3_obs_file).replace('.rnx', "")
     write_prx_file(
-        build_header(rinex_header, [rinex_3_obs_file]),
+        build_header([rinex_3_obs_file]),
         rinex_obs,
         prx_file,
         output_format)
@@ -114,4 +114,6 @@ if __name__ == "__main__":
                         help='Observation file path', default=None)
     args = parser.parse_args()
     if args.observation_file_path is not None and Path(args.observation_file_path).exists():
-        process(args.observation_file_path, "jsonseq")
+
+        process(Path(args.observation_file_path), "jsonseq")
+

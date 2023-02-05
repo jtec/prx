@@ -63,7 +63,6 @@ def is_rinex_3(file: Path):
         return False
     return True
 
-
 def anything_to_rinex_3(file: Path):
     assert file.exists(), "File does not exist"
     file = Path(file)
@@ -86,3 +85,4 @@ def anything_to_rinex_3(file: Path):
         if converter_calls > max_number_of_conversions*len(converters):
             log.error(f"Tried converting file {file.name} {max_number_of_conversions} times, still not RINEX 3, giving up.")
             return None
+
