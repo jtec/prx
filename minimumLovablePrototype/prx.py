@@ -23,6 +23,8 @@ def write_prx_file(prx_header: dict,
     output_writers = {
         "jsonseq": write_json_text_sequence_file
     }
+    if output_format not in output_writers.keys():
+        assert False, f"Output format {output_format} not supported,  we can do {list(output_writers.keys())}"
     output_writers[output_format](prx_header, prx_content, file_name_without_extension)
 
 
@@ -112,8 +114,8 @@ if __name__ == "__main__":
         epilog='P.S. GNSS rules!')
     parser.add_argument('--observation_file_path', type=str,
                         help='Observation file path', default=None)
+    parser.add_argument('--output_format', type=str,
+                        help='Output file format', default="jsonseq")
     args = parser.parse_args()
     if args.observation_file_path is not None and Path(args.observation_file_path).exists():
-
-        process(Path(args.observation_file_path), "jsonseq")
-
+        process(Path(args.observation_file_path), args.output_format)
