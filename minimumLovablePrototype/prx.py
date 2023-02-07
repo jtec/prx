@@ -21,7 +21,8 @@ def write_prx_file(prx_header: dict,
                    file_name_without_extension: Path,
                    output_format: str):
     output_writers = {
-        "jsonseq": write_json_text_sequence_file
+        "jsonseq": write_json_text_sequence_file,
+        "csv": write_csv_file,
     }
     if output_format not in output_writers.keys():
         assert False, f"Output format {output_format} not supported,  we can do {list(output_writers.keys())}"
@@ -37,6 +38,16 @@ def write_json_text_sequence_file(prx_header: dict,
               encoding='utf-8') as file:
         file.write("\u241E" + json.dumps(prx_header, ensure_ascii=False, indent=indent) + "\n")
     log.info(f"Generated JSON Text Sequence prx file: {file}")
+
+
+def write_csv_file(prx_header: dict,
+                   prx_content: dict,
+                   file_name_without_extension: Path):
+    output_file = Path(f"{str(file_name_without_extension)}.{constants.cPrxCsvFileExtension}")
+    with open(output_file, 'w',
+              encoding='utf-8') as file:
+        file.write(f"Empty so far." + "\n")
+    log.info(f"Generated CSV prx file: {file}")
 
 
 # From RINEX Version 3.05, 1 December, 2020.
@@ -115,7 +126,7 @@ if __name__ == "__main__":
     parser.add_argument('--observation_file_path', type=str,
                         help='Observation file path', default=None)
     parser.add_argument('--output_format', type=str,
-                        help='Output file format', default="jsonseq")
+                        help='Output file format', choices=["jsonseq", "csv"], default="jsonseq")
     args = parser.parse_args()
     if args.observation_file_path is not None and Path(args.observation_file_path).exists():
         process(Path(args.observation_file_path), args.output_format)
