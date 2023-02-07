@@ -7,3 +7,4 @@ cGpsIcdSpeedOfLight_mps = 2.99792458 * 1e8
 cPrxReferenceFrame = {"name": "IGS14", "epoch": "2005.001"}
 
 cPrxJsonTextSequenceFileExtension = "jsonseq"
+cPrxCsvFileExtension = "csv"
