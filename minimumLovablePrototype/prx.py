@@ -116,7 +116,6 @@ def process(observation_file_path=Path(), output_format="jsonseq"):
         prx_file,
         output_format)
 
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         prog='prx',
