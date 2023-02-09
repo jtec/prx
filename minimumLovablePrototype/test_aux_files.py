@@ -23,3 +23,4 @@ def set_up_test():
 
 def test_find_local_ephemeris_file(set_up_test):
     aux_files = aux.get_on_it(set_up_test["test_file"])
+    assert type(aux_files) is dict
