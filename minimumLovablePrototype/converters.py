@@ -6,9 +6,11 @@ import gzip
 import logging
 import prx
 
-logging.basicConfig(format='%(asctime)s,%(msecs)03d %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s',
-    datefmt='%Y-%m-%d:%H:%M:%S',
-    level=logging.DEBUG)
+logging.basicConfig(
+    format="%(asctime)s,%(msecs)03d %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s",
+    datefmt="%Y-%m-%d:%H:%M:%S",
+    level=logging.DEBUG,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -17,13 +19,14 @@ def compressed_to_uncompressed(file: Path):
     assert file.exists()
     if str(file).endswith(".gz"):
         uncompressed_file = Path(str(file).replace(".gz", ""))
-        with gzip.open(file, 'rb') as compressed_file:
-            with open(uncompressed_file, 'wb') as output_file:
+        with gzip.open(file, "rb") as compressed_file:
+            with open(uncompressed_file, "wb") as output_file:
                 output_file.write(compressed_file.read())
         logger.info(f"Uncompressed {file} to {uncompressed_file}")
         return uncompressed_file
     else:
         return None
+
 
 def is_compact_rinex(file: Path):
     assert file.exists()
@@ -40,7 +43,9 @@ def compact_rinex_to_rinex(file: Path):
     assert file.exists()
     if not is_compact_rinex(file):
         return None
-    crx2rnx_binaries = glob.glob(str(prx.prx_root().joinpath("tools/RNXCMP/**/CRX2RNX*")), recursive=True)
+    crx2rnx_binaries = glob.glob(
+        str(prx.prx_root().joinpath("tools/RNXCMP/**/CRX2RNX*")), recursive=True
+    )
     for crx2rnx_binary in crx2rnx_binaries:
         command = f" {crx2rnx_binary} {file}"
         result = subprocess.run(command, capture_output=True, shell=True)
@@ -55,6 +60,7 @@ def rinex_2_to_rinex_3(file: Path):
     assert file.exists()
     return None
 
+
 def is_rinex_3(file: Path):
     assert file.exists()
     with open(file) as f:
@@ -62,6 +68,7 @@ def is_rinex_3(file: Path):
     if "RINEX VERSION" not in first_line or "3.0" not in first_line:
         return False
     return True
+
 
 def anything_to_rinex_3(file: Path):
     assert file.exists()
@@ -82,7 +89,9 @@ def anything_to_rinex_3(file: Path):
             if is_rinex_3(output):
                 return output
             input = output
-        if converter_calls > max_number_of_conversions*len(converters):
-            logging.error(f"Tried converting file {file.name} {max_number_of_conversions} times, still not RINEX 3, giving up.")
+        if converter_calls > max_number_of_conversions * len(converters):
+            logging.error(
+                f"Tried converting file {file.name} {max_number_of_conversions} times, still not RINEX 3, giving up."
+            )
             return None
     return None

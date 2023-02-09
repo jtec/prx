@@ -15,12 +15,18 @@ def test_prx_command_line_call():
         shutil.rmtree(test_directory)
     os.makedirs(test_directory)
     compressed_compact_rinex_file = "TLSE00FRA_R_20230010000_10S_01S_MO.crx.gz"
-    shutil.copy(prx.prx_root().joinpath(f"datasets/{compressed_compact_rinex_file}"),
-                test_directory.joinpath(compressed_compact_rinex_file))
+    shutil.copy(
+        prx.prx_root().joinpath(f"datasets/{compressed_compact_rinex_file}"),
+        test_directory.joinpath(compressed_compact_rinex_file),
+    )
     prx_path = prx.prx_root().joinpath("minimumLovablePrototype").joinpath("prx.py")
     command = f"python {prx_path} --observation_file_path {test_directory.joinpath(compressed_compact_rinex_file)}"
-    result = subprocess.run(command, capture_output=True, shell=True, cwd=test_directory)
-    expected_prx_file = test_directory.joinpath(compressed_compact_rinex_file.replace('crx.gz', 'json'))
+    result = subprocess.run(
+        command, capture_output=True, shell=True, cwd=test_directory
+    )
+    expected_prx_file = test_directory.joinpath(
+        compressed_compact_rinex_file.replace("crx.gz", "json")
+    )
     assert result.returncode == 0
     assert expected_prx_file.exists()
     shutil.rmtree(test_directory)
@@ -34,9 +40,13 @@ def test_prx_function_call():
         shutil.rmtree(test_directory)
     os.makedirs(test_directory)
     compressed_compact_rinex_file = "TLSE00FRA_R_20230010000_10S_01S_MO.crx.gz"
-    shutil.copy(prx.prx_root().joinpath(f"datasets/{compressed_compact_rinex_file}"),
-                test_directory.joinpath(compressed_compact_rinex_file))
+    shutil.copy(
+        prx.prx_root().joinpath(f"datasets/{compressed_compact_rinex_file}"),
+        test_directory.joinpath(compressed_compact_rinex_file),
+    )
     prx.process(test_directory.joinpath(compressed_compact_rinex_file))
-    expected_prx_file = test_directory.joinpath(compressed_compact_rinex_file.replace('crx.gz', 'json'))
+    expected_prx_file = test_directory.joinpath(
+        compressed_compact_rinex_file.replace("crx.gz", "json")
+    )
     assert expected_prx_file.exists()
     shutil.rmtree(test_directory)
