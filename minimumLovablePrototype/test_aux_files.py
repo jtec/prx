@@ -19,8 +19,7 @@ def set_up_test():
         shutil.rmtree(test_directory())
     os.makedirs(test_directory())
     test_file = test_directory().joinpath("TLSE00FRA_R_20230010000_10S_01S_MO.crx.gz")
-    shutil.copy(prx.prx_root().joinpath(f"datasets/{test_file.name}"),
-                test_file)
+    shutil.copy(prx.prx_root().joinpath(f"datasets/{test_file.name}"), test_file)
     assert test_file.exists()
     return test_file
 

@@ -20,12 +20,14 @@ def get_on_it(observation_file_path=Path()):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        prog='rinex_aux_files',
-        description='rinex_aux_files discovers or downloads files needed to get started on positioning: broadcast ephemeris, precise ephemeris etc.',)
-    parser.add_argument('--observation_file_path',
-                        type=str,
-                        help='Observation file path',
-                        required=True)
+        prog="rinex_aux_files",
+        description="rinex_aux_files discovers or downloads files needed to get started on positioning: broadcast ephemeris, precise ephemeris etc.",
+    )
+    parser.add_argument(
+        "--observation_file_path", type=str, help="Observation file path", required=True
+    )
     args = parser.parse_args()
-    assert Path(args.observation_file_path).exists(), f"Cannot find observation file {args.observation_file_path}"
+    assert Path(
+        args.observation_file_path
+    ).exists(), f"Cannot find observation file {args.observation_file_path}"
     get_on_it(Path(args.observation_file_path), args.output_format)
