@@ -138,4 +138,6 @@ if __name__ == "__main__":
     assert Path(
         args.observation_file_path
     ).exists(), f"Cannot find observation file {args.observation_file_path}"
-    download_or_discover_ephemerides(Path(args.observation_file_path), args.output_format)
+    download_or_discover_ephemerides(
+        Path(args.observation_file_path), args.output_format
+    )
