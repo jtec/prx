@@ -31,7 +31,7 @@ def repair_with_gfzrnx(file):
         command = f" {gfzrnx_binary} -finp {file} -fout {file}  -chk -kv -f"
         result = subprocess.run(command, capture_output=True, shell=True)
         if result.returncode == 0:
-            log.info(f"Ran file gfzrnx file repair on {file}")
+            log.info(f"Ran gfzrnx file repair on {file}")
             return file
     assert False, "gdzrnx file repair run failed!"
 
