@@ -20,7 +20,10 @@ def set_up_test():
     compressed_compact_rinex_file = "TLSE00FRA_R_20230010000_10S_01S_MO.crx.gz"
     test_file = test_directory().joinpath(compressed_compact_rinex_file)
     shutil.copy(
-        prx.prx_root().joinpath(f"datasets/{compressed_compact_rinex_file}"), test_file
+        prx.prx_root().joinpath(
+            f"datasets/TLSE_2023001/{compressed_compact_rinex_file}"
+        ),
+        test_file,
     )
     assert test_file.exists()
     return test_file

@@ -105,7 +105,8 @@ def carrier_frequencies_hz():
 def build_header(input_files):
     prx_header = {}
     prx_header["input_files"] = [
-        {"name": file.name, "md5": helpers.md5(file)} for file in input_files
+        {"name": file.name, "md5": helpers.md5_of_file_content(file)}
+        for file in input_files
     ]
     prx_header["speed_of_light_mps"] = constants.cGpsIcdSpeedOfLight_mps
     prx_header["reference_frame"] = constants.cPrxReferenceFrame

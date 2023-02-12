@@ -14,7 +14,7 @@ def load(rinex_file: Path, use_caching=False):
     os.makedirs(cache_directory, exist_ok=True)
     if use_caching:
         cache_file = cache_directory.joinpath(
-            f"{rinex_file.stem}_{helpers.md5(rinex_file)}.nc"
+            f"{rinex_file.stem}_{helpers.md5_of_file_content(rinex_file)}.nc"
         )
         if cache_file.exists():
             log.info(

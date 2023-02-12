@@ -26,7 +26,9 @@ def test_compressed_crx_to_rnx():
     prepare_test()
     compressed_compact_rinex_file = "TLSE00FRA_R_20230010000_10S_01S_MO.crx.gz"
     shutil.copy(
-        prx.prx_root().joinpath(f"datasets/{compressed_compact_rinex_file}"),
+        prx.prx_root().joinpath(
+            f"datasets/TLSE_2023001/{compressed_compact_rinex_file}"
+        ),
         test_directory().joinpath(compressed_compact_rinex_file),
     )
     rinex_3_file = converters.anything_to_rinex_3(

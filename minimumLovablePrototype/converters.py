@@ -23,7 +23,7 @@ def compressed_to_uncompressed(file: Path):
         return None
 
 
-def is_compact_rinex(file: Path):
+def is_compact_rinex_obs_file(file: Path):
     assert file.exists(), "File does not exist"
     if not str(file).endswith(".crx"):
         return False
@@ -34,9 +34,9 @@ def is_compact_rinex(file: Path):
     return True
 
 
-def compact_rinex_to_rinex(file: Path):
+def compact_rinex_obs_file_to_rinex_obs_file(file: Path):
     assert file.exists(), "File does not exist"
-    if not is_compact_rinex(file):
+    if not is_compact_rinex_obs_file(file):
         return None
     crx2rnx_binaries = glob.glob(
         str(prx.prx_root().joinpath("tools/RNXCMP/**/CRX2RNX*")), recursive=True
@@ -56,7 +56,7 @@ def rinex_2_to_rinex_3(file: Path):
     return None
 
 
-def is_rinex_3(file: Path):
+def is_rinex_3_obs_file(file: Path):
     assert file.exists(), "File does not exist"
     try:
         with open(file) as f:
@@ -72,7 +72,7 @@ def anything_to_rinex_3(file: Path):
     assert file.exists(), "File does not exist"
     file = Path(file)
     converters = [
-        compact_rinex_to_rinex,
+        compact_rinex_obs_file_to_rinex_obs_file,
         compressed_to_uncompressed,
         rinex_2_to_rinex_3,
     ]
@@ -81,7 +81,7 @@ def anything_to_rinex_3(file: Path):
     converter_calls = 0
     max_number_of_conversions = 10
     for converter in itertools.cycle(converters):
-        if is_rinex_3(input):
+        if is_rinex_3_obs_file(input):
             return input
         converter_calls += 1
         output = converter(input)
