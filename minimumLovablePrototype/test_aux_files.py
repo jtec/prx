@@ -2,6 +2,7 @@ import os
 from pathlib import Path
 import shutil
 import pytest
+import subprocess
 import prx
 import aux_files as aux
 
@@ -42,3 +43,15 @@ def test_download_remote_ephemeris_files(set_up_test):
     os.remove(set_up_test["test_nav_file"])
     aux_files = aux.download_or_discover_ephemerides(set_up_test["test_obs_file"])
     assert type(aux_files) is dict
+
+
+def test_command_line_call(set_up_test):
+    test_file = set_up_test["test_obs_file"]
+    aux_file_script_path = (
+        prx.prx_root().joinpath("minimumLovablePrototype").joinpath("aux_files.py")
+    )
+    command = f"python {aux_file_script_path} --observation_file_path {test_file}"
+    result = subprocess.run(
+        command, capture_output=True, shell=True, cwd=str(test_file.parent)
+    )
+    assert result.returncode == 0
