@@ -108,7 +108,7 @@ def discover_or_download_ephemerides(
             return ephemerides_files
 
 
-def get_on_it(observation_file_path=Path()):
+def download_or_discover_ephemerides(observation_file_path=Path()):
     log.info(f"Finding auxiliary files for {observation_file_path} ...")
     rinex_3_obs_file = converters.anything_to_rinex_3(observation_file_path)
     header = georinex.rinexheader(rinex_3_obs_file)
@@ -138,4 +138,4 @@ if __name__ == "__main__":
     assert Path(
         args.observation_file_path
     ).exists(), f"Cannot find observation file {args.observation_file_path}"
-    get_on_it(Path(args.observation_file_path), args.output_format)
+    download_or_discover_ephemerides(Path(args.observation_file_path), args.output_format)

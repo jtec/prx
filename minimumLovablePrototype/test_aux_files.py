@@ -34,11 +34,11 @@ def set_up_test():
 
 
 def test_find_local_ephemeris_file(set_up_test):
-    aux_files = aux.get_on_it(set_up_test["test_obs_file"])
+    aux_files = aux.download_or_discover_ephemerides(set_up_test["test_obs_file"])
     assert type(aux_files) is dict
 
 
 def test_download_remote_ephemeris_files(set_up_test):
     os.remove(set_up_test["test_nav_file"])
-    aux_files = aux.get_on_it(set_up_test["test_obs_file"])
+    aux_files = aux.download_or_discover_ephemerides(set_up_test["test_obs_file"])
     assert type(aux_files) is dict
