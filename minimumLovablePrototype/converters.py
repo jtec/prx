@@ -13,13 +13,14 @@ def compressed_to_uncompressed(file: Path):
     assert file.exists(), "File does not exist"
     if str(file).endswith(".gz"):
         uncompressed_file = Path(str(file).replace(".gz", ""))
-        with gzip.open(file, 'rb') as compressed_file:
-            with open(uncompressed_file, 'wb') as output_file:
+        with gzip.open(file, "rb") as compressed_file:
+            with open(uncompressed_file, "wb") as output_file:
                 output_file.write(compressed_file.read())
         log.info(f"Uncompressed {file} to {uncompressed_file}")
         return uncompressed_file
     else:
         return None
+
 
 def is_compact_rinex(file: Path):
     assert file.exists(), "File does not exist"
@@ -36,7 +37,9 @@ def compact_rinex_to_rinex(file: Path):
     assert file.exists(), "File does not exist"
     if not is_compact_rinex(file):
         return None
-    crx2rnx_binaries = glob.glob(str(prx.prx_root().joinpath("tools/RNXCMP/**/CRX2RNX*")), recursive=True)
+    crx2rnx_binaries = glob.glob(
+        str(prx.prx_root().joinpath("tools/RNXCMP/**/CRX2RNX*")), recursive=True
+    )
     for crx2rnx_binary in crx2rnx_binaries:
         command = f" {crx2rnx_binary} {file}"
         result = subprocess.run(command, capture_output=True, shell=True)
@@ -63,6 +66,7 @@ def is_rinex_3(file: Path):
         return False
     return True
 
+
 def anything_to_rinex_3(file: Path):
     assert file.exists(), "File does not exist"
     file = Path(file)
@@ -85,4 +89,3 @@ def anything_to_rinex_3(file: Path):
         if converter_calls > max_number_of_conversions*len(converters):
             log.error(f"Tried converting file {file.name} {max_number_of_conversions} times, still not RINEX 3, giving up.")
             return None
-
