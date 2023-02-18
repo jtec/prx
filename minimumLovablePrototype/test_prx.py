@@ -14,7 +14,7 @@ def test_directory():
 
 
 # This function sets up a temporary directory, copies a rinex observations file into that directory
-# and returns its path. The @pytest.fixture annotation allows us too pass the function as an input
+# and returns its path. The @pytest.fixture annotation allows us to pass the function as an input
 # to test functions. When running a test function, pytest will then first run this function, pass
 # whatever is passed to `yield` to the test function, and run the code after `yield` after the test,
 # even  if the test crashes.
