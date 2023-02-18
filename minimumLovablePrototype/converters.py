@@ -6,7 +6,6 @@ import gzip
 import prx
 import helpers
 
-
 log = helpers.get_logger(__name__)
 
 
