@@ -60,7 +60,7 @@ def fields_to_arrays(flat_obs):
 
 
 def replace_flat_by_array(flat_dict, array_field, flat_fields):
-    assert len(flat_fields) > 0
+    assert len(flat_fields) > 0, "Array of flat field names is empty"
     dict_with_array = flat_dict.copy()
     dict_with_array[array_field] = []
     for flat_field in flat_fields:
