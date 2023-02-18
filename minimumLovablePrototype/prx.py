@@ -1,13 +1,15 @@
 import argparse
 import json
 from pathlib import Path
-import converters
-import helpers
 import georinex
 import parse_rinex
-import constants
 from collections import defaultdict
 import git
+
+import converters
+import helpers
+import constants
+import aux_file_discovery as aux
 
 log = helpers.get_logger(__name__)
 
@@ -117,7 +119,7 @@ def build_header(input_files):
     return prx_header
 
 
-def process(observation_file_path=Path(), output_format="jsonseq"):
+def process(observation_file_path: Path, output_format="jsonseq"):
     log.info(
         f"Starting processing {observation_file_path.name} (full path {observation_file_path})"
     )
@@ -125,6 +127,7 @@ def process(observation_file_path=Path(), output_format="jsonseq"):
     rinex_header = georinex.rinexheader(rinex_3_obs_file)
     rinex_obs = parse_rinex.load(rinex_3_obs_file, use_caching=True)
     prx_file = str(rinex_3_obs_file).replace(".rnx", "")
+    aux_files = aux.discover_or_download_auxiliary_files(observation_file_path)
     write_prx_file(build_header([rinex_3_obs_file]), rinex_obs, prx_file, output_format)
 
 
