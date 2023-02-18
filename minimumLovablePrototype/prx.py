@@ -2,6 +2,8 @@ import argparse
 import json
 from pathlib import Path
 import georinex
+import pandas as pd
+
 import parse_rinex
 from collections import defaultdict
 import git
@@ -119,6 +121,22 @@ def build_header(input_files):
     return prx_header
 
 
+def build_records(rinex_3_obs_file, rinex_3_ephemerides_file):
+    obs = parse_rinex.load(rinex_3_obs_file, use_caching=True)
+    # First flatten the DataSet:
+    flat_obs = pd.DataFrame({"time_gpst_ns": [],
+                             "obs_label": [],
+                             "satellite": [],
+                             })
+    for obs_label, sat_time_obs_array in obs.data_vars.items():
+        for row in sat_time_obs_array:
+            for element in row:
+                print(element.time.item())
+                print(element.sv.item())
+
+    nav = parse_rinex.load(rinex_3_ephemerides_file, use_caching=True)
+
+
 def process(observation_file_path: Path, output_format="jsonseq"):
     log.info(
         f"Starting processing {observation_file_path.name} (full path {observation_file_path})"
@@ -128,7 +146,12 @@ def process(observation_file_path: Path, output_format="jsonseq"):
     rinex_obs = parse_rinex.load(rinex_3_obs_file, use_caching=True)
     prx_file = str(rinex_3_obs_file).replace(".rnx", "")
     aux_files = aux.discover_or_download_auxiliary_files(observation_file_path)
-    write_prx_file(build_header([rinex_3_obs_file]), rinex_obs, prx_file, output_format)
+    write_prx_file(
+        build_header([rinex_3_obs_file, aux_files["broadcast_ephemerides"]]),
+        build_records(rinex_3_obs_file, aux_files["broadcast_ephemerides"]),
+        rinex_obs,
+        prx_file,
+        output_format)
 
 
 if __name__ == "__main__":
