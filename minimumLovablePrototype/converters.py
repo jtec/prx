@@ -67,6 +67,18 @@ def is_rinex_3_obs_file(file: Path):
     return True
 
 
+def is_rinex_3_nav_file(file: Path):
+    assert file.exists(), "File does not exist"
+    try:
+        with open(file) as f:
+            first_line = f.readline()
+    except UnicodeDecodeError as e_unicode:
+        return False
+    if "NAVIGATION DATA" not in first_line or "3.0" not in first_line:
+        return False
+    return True
+
+
 def anything_to_rinex_3(file: Path):
     assert file.exists(), "File does not exist"
     file = Path(file)
@@ -80,7 +92,7 @@ def anything_to_rinex_3(file: Path):
     converter_calls = 0
     max_number_of_conversions = 10
     for converter in itertools.cycle(converters):
-        if is_rinex_3_obs_file(input):
+        if is_rinex_3_obs_file(input) or is_rinex_3_nav_file(input):
             return input
         converter_calls += 1
         output = converter(input)
