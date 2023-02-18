@@ -9,6 +9,7 @@ pandas = "*"
 pytest = "*"
 georinex = "*"
 gnss-lib-py = "*"
+gitpython = "*"
 
 [dev-packages]
 
