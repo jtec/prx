@@ -57,9 +57,14 @@ def convert_nav_dataset_to_dataframe(nav_ds):
     nav_df.reset_index(inplace=True)
     nav_df["source"] = nav_ds.filename
     # convert time to number of elapsed seconds since GPST origin
-    nav_df["t_oc"] = pd.to_numeric(nav_df["time"] - constants.cGpstEpoch) / constants.cNanoSecondsPerSecond
+    nav_df["t_oc"] = (
+        pd.to_numeric(nav_df["time"] - constants.cGpstEpoch)
+        / constants.cNanoSecondsPerSecond
+    )
     # convert time to number of elapsed seconds since beginning of week
-    nav_df["t_oc"] = nav_df["t_oc"] - constants.cSecondsPerWeek * np.floor(nav_df["t_oc"] / constants.cSecondsPerWeek)
+    nav_df["t_oc"] = nav_df["t_oc"] - constants.cSecondsPerWeek * np.floor(
+        nav_df["t_oc"] / constants.cSecondsPerWeek
+    )
     nav_df["time"] = nav_df["time"].dt.tz_localize("UTC")
 
     nav_df.rename(
