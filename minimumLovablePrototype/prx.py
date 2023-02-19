@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 import georinex
 import pandas as pd
+import numpy as np
 
 import parse_rinex
 from collections import defaultdict
@@ -21,10 +22,10 @@ def prx_root() -> Path:
 
 
 def write_prx_file(
-    prx_header: dict,
-    prx_content: dict,
-    file_name_without_extension: Path,
-    output_format: str,
+        prx_header: dict,
+        prx_content: dict,
+        file_name_without_extension: Path,
+        output_format: str,
 ):
     output_writers = {"jsonseq": write_json_text_sequence_file, "csv": write_csv_file}
     if output_format not in output_writers.keys():
@@ -35,7 +36,7 @@ def write_prx_file(
 
 
 def write_json_text_sequence_file(
-    prx_header: dict, prx_content: dict, file_name_without_extension: Path
+        prx_header: dict, prx_content: dict, file_name_without_extension: Path
 ):
     indent = 2
     output_file = Path(
@@ -49,7 +50,7 @@ def write_json_text_sequence_file(
 
 
 def write_csv_file(
-    prx_header: dict, prx_content: dict, file_name_without_extension: Path
+        prx_header: dict, prx_content: dict, file_name_without_extension: Path
 ):
     output_file = Path(
         f"{str(file_name_without_extension)}.{constants.cPrxCsvFileExtension}"
@@ -71,11 +72,11 @@ def carrier_frequencies_hz():
     cf["R"]["L2"] = defaultdict(dict)
     for frequency_slot in range(-7, 12 + 1):
         cf["R"]["L1"][frequency_slot] = (
-            1602 + frequency_slot * 9 / 16
-        ) * constants.cHzPerMhz
+                                                1602 + frequency_slot * 9 / 16
+                                        ) * constants.cHzPerMhz
         cf["R"]["L2"][frequency_slot] = (
-            1246 + frequency_slot * 7 / 16
-        ) * constants.cHzPerMhz
+                                                1246 + frequency_slot * 7 / 16
+                                        ) * constants.cHzPerMhz
     # Glonass CDMA signals
     cf["R"]["L4"] = 1600.995 * constants.cHzPerMhz
     cf["R"]["L3"] = 1202.025 * constants.cHzPerMhz
@@ -124,15 +125,12 @@ def build_header(input_files):
 def build_records(rinex_3_obs_file, rinex_3_ephemerides_file):
     obs = parse_rinex.load(rinex_3_obs_file, use_caching=True)
     # First flatten the DataSet:
-    flat_obs = pd.DataFrame({"time_gpst_ns": [],
-                             "obs_label": [],
-                             "satellite": [],
-                             })
+    flat_obs = pd.DataFrame()
     for obs_label, sat_time_obs_array in obs.data_vars.items():
-        for row in sat_time_obs_array:
-            for element in row:
-                print(element.time.item())
-                print(element.sv.item())
+        df = sat_time_obs_array.to_dataframe(name="obs_value").reset_index()
+        df = df[df['obs_value'].notna()]
+        df = df.assign(obs_type=lambda x: obs_label)
+        flat_obs = pd.concat([flat_obs, df])
 
     nav = parse_rinex.load(rinex_3_ephemerides_file, use_caching=True)
 
@@ -158,7 +156,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         prog="prx",
         description="prx processes RINEX observations, computes a few useful things such as satellite position, "
-        "relativistic effects etc. and outputs everything to a text file in a convenient format.",
+                    "relativistic effects etc. and outputs everything to a text file in a convenient format.",
         epilog="P.S. GNSS rules!",
     )
     parser.add_argument(
@@ -173,7 +171,7 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
     if (
-        args.observation_file_path is not None
-        and Path(args.observation_file_path).exists()
+            args.observation_file_path is not None
+            and Path(args.observation_file_path).exists()
     ):
         process(Path(args.observation_file_path), args.output_format)
