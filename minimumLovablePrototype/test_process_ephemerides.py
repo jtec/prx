@@ -1,3 +1,6 @@
+import math
+
+import pandas as pd
 from gnss_lib_py.utils.time_conversions import (
     datetime_to_tow,
     tow_to_datetime,
@@ -10,6 +13,11 @@ from datetime import datetime
 import georinex as gr
 import process_ephemerides as eph
 import zipfile
+
+import helpers
+import converters
+import parse_rinex
+import constants
 
 
 def test_compare_rnx3_sat_pos_with_magnitude():
@@ -65,3 +73,31 @@ def test_compare_rnx3_sat_pos_with_magnitude():
     )
 
     assert np.linalg.norm(sv_pos_rnx3 - sv_pos_magnitude) < threshold_pos_error_m
+
+
+def test_compute_satellite_clock_offset():
+# When computing the satellite clock offset of GPS-001 for January 1st 2022 at 1am GPST
+    # We expect the clock offset to be computed from the following RINEX 3 ephemeris
+    """
+G01 2022 01 01 00 00 00 4.691267386079e-04-1.000444171950e-11 0.000000000000e+00
+     3.900000000000e+01-1.411250000000e+02 3.988380417768e-09-6.242942382352e-01
+    -7.363036274910e-06 1.121813920327e-02 4.695728421211e-06 5.153674995422e+03
+     5.184000000000e+05-3.166496753693e-08-1.036611240093e+00 1.955777406693e-07
+     9.864187694897e-01 2.997500000000e+02 8.840876015687e-01-8.133553080847e-09
+    -3.778728827795e-10 1.000000000000e+00 2.190000000000e+03 0.000000000000e+00
+     2.000000000000e+00 0.000000000000e+00 5.122274160385e-09 3.900000000000e+01
+     5.171890000000e+05 4.000000000000e+00 0.000000000000e+00 0.000000000000e+00
+     """
+    # copied from the following file
+    rinex_3_navigation_file = helpers.prx_root().joinpath(
+            f"datasets/TLSE_2022001/BRDC00IGS_R_20220010000_01D_GN.rnx")
+    computed_offset_s, computed_offset_rate_sps = eph.compute_satellite_clock_offset_and_clock_offset_rate(
+        eph.convert_rnx3_nav_file_to_dataset(rinex_3_navigation_file),
+        "G01",
+        pd.Timestamp(np.datetime64("2022-01-01T01:00:00.000000000")))
+    # We expect the following clock offset and clock offset rate computed by hand from the parameters above.
+    delta_t_s = constants.cSecondsPerHour
+    expected_offset = 4.691267386079e-04 + (-1.000444171950e-11 * delta_t_s) + math.pow(0.000000000000e+00, 2)
+    expected_offset_rate = -1.000444171950e-11
+    assert constants.cGpsIcdSpeedOfLight_mps * (expected_offset - computed_offset_s) < 1e-6
+

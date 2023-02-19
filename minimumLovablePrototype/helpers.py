@@ -16,6 +16,10 @@ def get_logger(label):
     return logging.getLogger(__name__)
 
 
+def prx_root() -> Path:
+    return Path(__file__).parent.parent
+
+
 # From https://stackoverflow.com/a/3431838
 def md5_of_file_content(file: Path):
     hash_md5 = hashlib.md5()
