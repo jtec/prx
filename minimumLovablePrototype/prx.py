@@ -23,7 +23,7 @@ def prx_root() -> Path:
 
 def write_prx_file(
     prx_header: dict,
-    prx_content: dict,
+    prx_records: pd.DataFrame,
     file_name_without_extension: Path,
     output_format: str,
 ):
@@ -32,11 +32,11 @@ def write_prx_file(
         assert (
             False
         ), f"Output format {output_format} not supported,  we can do {list(output_writers.keys())}"
-    output_writers[output_format](prx_header, prx_content, file_name_without_extension)
+    output_writers[output_format](prx_header, prx_records, file_name_without_extension)
 
 
 def write_json_text_sequence_file(
-    prx_header: dict, prx_content: dict, file_name_without_extension: Path
+    prx_header: dict, prx_records: pd.DataFrame, file_name_without_extension: Path
 ):
     indent = 2
     output_file = Path(
@@ -46,11 +46,11 @@ def write_json_text_sequence_file(
         file.write(
             "\u241E" + json.dumps(prx_header, ensure_ascii=False, indent=indent) + "\n"
         )
-    log.info(f"Generated JSON Text Sequence prx file: {file}")
+    log.info(f"Generated JSON Text Sequence prx file: {output_file}")
 
 
 def write_csv_file(
-    prx_header: dict, prx_content: dict, file_name_without_extension: Path
+    prx_header: dict, prx_records: pd.DataFrame, file_name_without_extension: Path
 ):
     output_file = Path(
         f"{str(file_name_without_extension)}.{constants.cPrxCsvFileExtension}"
@@ -126,10 +126,10 @@ def check_assumptions(rinex_3_obs_file):
     obs_header = georinex.rinexheader(rinex_3_obs_file)
     if "RCV CLOCK OFFS APPL" in obs_header.keys():
         assert (
-                obs_header["RCV CLOCK OFFS APPL"].strip() == "0"
+            obs_header["RCV CLOCK OFFS APPL"].strip() == "0"
         ), "Handling of 'RCV CLOCK OFFS APPL' != 0 not implemented yet."
     assert (
-            obs_header["TIME OF FIRST OBS"].split()[-1].strip() == "GPS"
+        obs_header["TIME OF FIRST OBS"].split()[-1].strip() == "GPS"
     ), "Handling of observation files using time scales other than GPST no implemented yet"
 
 
@@ -145,7 +145,7 @@ def build_records(rinex_3_obs_file, rinex_3_ephemerides_file):
         df = df.assign(obs_type=lambda x: obs_label)
         flat_obs = pd.concat([flat_obs, df])
 
-    def format(row):
+    def format_flat_rows(row):
         return [
             helpers.timestamp_2_gpst_ns(pd.Timestamp(row[0])),
             str(row[1]),
@@ -153,13 +153,14 @@ def build_records(rinex_3_obs_file, rinex_3_ephemerides_file):
             str(row[3]),
         ]
 
-    flat_obs = flat_obs.apply(format, axis=1, result_type="expand")
+    flat_obs = flat_obs.apply(format_flat_rows, axis=1, result_type="expand")
     flat_obs.rename(
         columns={0: "rx_time_gpst_ns", 1: "satellite", 2: "obs_value", 3: "obs_type"},
         inplace=True,
     )
 
     nav = parse_rinex.load(rinex_3_ephemerides_file, use_caching=True)
+    # Compute time-of-emission satellite broadcast position and clock
 
 
 def process(observation_file_path: Path, output_format="jsonseq"):
@@ -167,14 +168,11 @@ def process(observation_file_path: Path, output_format="jsonseq"):
         f"Starting processing {observation_file_path.name} (full path {observation_file_path})"
     )
     rinex_3_obs_file = converters.anything_to_rinex_3(observation_file_path)
-    rinex_header = georinex.rinexheader(rinex_3_obs_file)
-    rinex_obs = parse_rinex.load(rinex_3_obs_file, use_caching=True)
     prx_file = str(rinex_3_obs_file).replace(".rnx", "")
     aux_files = aux.discover_or_download_auxiliary_files(observation_file_path)
     write_prx_file(
         build_header([rinex_3_obs_file, aux_files["broadcast_ephemerides"]]),
         build_records(rinex_3_obs_file, aux_files["broadcast_ephemerides"]),
-        rinex_obs,
         prx_file,
         output_format,
     )
