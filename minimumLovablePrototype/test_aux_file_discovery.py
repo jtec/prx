@@ -6,6 +6,7 @@ import subprocess
 import aux_file_discovery as aux
 import helpers
 
+
 @pytest.fixture
 def set_up_test():
     test_directory = Path(f"./tmp_test_directory_{__name__}").resolve()
