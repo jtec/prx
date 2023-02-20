@@ -3,9 +3,8 @@ from pathlib import Path
 import shutil
 import pytest
 import subprocess
-import prx
-import aux_files as aux
-
+import aux_file_discovery as aux
+import helpers
 
 @pytest.fixture
 def set_up_test():
@@ -19,11 +18,11 @@ def set_up_test():
     test_nav_file = test_directory.joinpath("BRDC00IGS_R_20230010000_01D_MN.rnx.gz")
 
     shutil.copy(
-        prx.prx_root().joinpath(f"datasets/TLSE_2023001/{test_obs_file.name}"),
+        helpers.prx_root().joinpath(f"datasets/TLSE_2023001/{test_obs_file.name}"),
         test_obs_file,
     )
     shutil.copy(
-        prx.prx_root().joinpath(f"datasets/TLSE_2023001/{test_nav_file.name}"),
+        helpers.prx_root().joinpath(f"datasets/TLSE_2023001/{test_nav_file.name}"),
         test_nav_file,
     )
 
@@ -48,7 +47,7 @@ def test_download_remote_ephemeris_files(set_up_test):
 def test_command_line_call(set_up_test):
     test_file = set_up_test["test_obs_file"]
     aux_file_script_path = (
-        prx.prx_root().joinpath("minimumLovablePrototype").joinpath("aux_files.py")
+        helpers.prx_root().joinpath("minimumLovablePrototype").joinpath("aux_files.py")
     )
     command = f"python {aux_file_script_path} --observation_file_path {test_file}"
     result = subprocess.run(

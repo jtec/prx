@@ -46,7 +46,7 @@ def compact_rinex_obs_file_to_rinex_obs_file(file: Path):
     if not is_compact_rinex_obs_file(file):
         return None
     crx2rnx_binaries = glob.glob(
-        str(prx.prx_root().joinpath("tools/RNXCMP/**/CRX2RNX*")), recursive=True
+        str(helpers.prx_root().joinpath("tools/RNXCMP/**/CRX2RNX*")), recursive=True
     )
     for crx2rnx_binary in crx2rnx_binaries:
         command = f" {crx2rnx_binary} {file}"

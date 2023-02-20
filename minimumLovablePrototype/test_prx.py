@@ -6,6 +6,7 @@ import subprocess
 import pytest
 
 import prx
+import helpers
 import constants
 
 
@@ -28,7 +29,7 @@ def input_for_test():
     compressed_compact_rinex_file = "TLSE00FRA_R_20230010000_10S_01S_MO.crx.gz"
     test_file = test_directory().joinpath(compressed_compact_rinex_file)
     shutil.copy(
-        prx.prx_root().joinpath(
+        helpers.prx_root().joinpath(
             f"datasets/TLSE_2023001/{compressed_compact_rinex_file}"
         ),
         test_file,
@@ -40,7 +41,7 @@ def input_for_test():
 
 def test_prx_command_line_call_with_jsonseq_output(input_for_test):
     test_file = input_for_test
-    prx_path = prx.prx_root().joinpath("minimumLovablePrototype").joinpath("prx.py")
+    prx_path = helpers.prx_root().joinpath("minimumLovablePrototype").joinpath("prx.py")
     command = f"python {prx_path} --observation_file_path {test_file}"
     result = subprocess.run(
         command, capture_output=True, shell=True, cwd=str(test_file.parent)
