@@ -105,6 +105,12 @@ G01 2022 01 01 00 00 00 4.691267386079e-04-1.000444171950e-11 0.000000000000e+00
         + math.pow(0.000000000000e00, 2)
     )
     expected_offset_rate = -1.000444171950e-11
+    # Expect micrometers and micrometers/s here:
     assert (
         constants.cGpsIcdSpeedOfLight_mps * (expected_offset - computed_offset_s) < 1e-6
+    )
+    assert (
+        constants.cGpsIcdSpeedOfLight_mps
+        * (expected_offset_rate - computed_offset_rate_sps)
+        < 1e-6
     )
