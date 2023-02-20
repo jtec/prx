@@ -25,7 +25,7 @@ def is_rinex_3_mixed_mgex_broadcast_ephemerides_file(file: Path):
 
 def repair_with_gfzrnx(file):
     gfzrnx_binaries = glob.glob(
-        str(prx.prx_root().joinpath("tools/gfzrnx/**gfzrnx**")), recursive=True
+        str(helpers.prx_root().joinpath("tools/gfzrnx/**gfzrnx**")), recursive=True
     )
     for gfzrnx_binary in gfzrnx_binaries:
         command = f" {gfzrnx_binary} -finp {file} -fout {file}  -chk -kv -f"

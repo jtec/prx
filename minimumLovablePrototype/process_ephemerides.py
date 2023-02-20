@@ -202,4 +202,4 @@ def compute_satellite_clock_offset_and_clock_offset_rate(parsed_rinex_3_nav_file
     time_wrt_ephemeris_epoch_s = pd.Timedelta(time_constellation_time_ns - ephemeris_df["time"][0]).total_seconds()
     offset_s = ephemeris_df["SVclockBias"] + ephemeris_df["SVclockDrift"]*time_wrt_ephemeris_epoch_s + ephemeris_df["SVclockDriftRate"]* math.pow(time_wrt_ephemeris_epoch_s, 2)
     offset_rate_sps = ephemeris_df["SVclockDrift"] + 2 * ephemeris_df["SVclockDriftRate"] * time_wrt_ephemeris_epoch_s
-    return offset_s, offset_rate_sps
+    return offset_s[0], offset_rate_sps[0]
