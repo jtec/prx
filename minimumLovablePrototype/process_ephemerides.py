@@ -197,9 +197,24 @@ def select_nav_ephemeris(nav_dataset, satellite_id, gpst_datetime):
     return nav_dataframe
 
 
-def compute_satellite_clock_offset_and_clock_offset_rate(parsed_rinex_3_nav_file: xarray.Dataset, satellite: str, time_constellation_time_ns: pd.Timestamp):
-    ephemeris_df = select_nav_ephemeris(parsed_rinex_3_nav_file, satellite, time_constellation_time_ns.to_datetime64())
-    time_wrt_ephemeris_epoch_s = pd.Timedelta(time_constellation_time_ns - ephemeris_df["time"][0]).total_seconds()
-    offset_s = ephemeris_df["SVclockBias"] + ephemeris_df["SVclockDrift"]*time_wrt_ephemeris_epoch_s + ephemeris_df["SVclockDriftRate"]* math.pow(time_wrt_ephemeris_epoch_s, 2)
-    offset_rate_sps = ephemeris_df["SVclockDrift"] + 2 * ephemeris_df["SVclockDriftRate"] * time_wrt_ephemeris_epoch_s
+def compute_satellite_clock_offset_and_clock_offset_rate(
+    parsed_rinex_3_nav_file: xarray.Dataset,
+    satellite: str,
+    time_constellation_time_ns: pd.Timestamp,
+):
+    ephemeris_df = select_nav_ephemeris(
+        parsed_rinex_3_nav_file, satellite, time_constellation_time_ns.to_datetime64()
+    )
+    time_wrt_ephemeris_epoch_s = pd.Timedelta(
+        time_constellation_time_ns - ephemeris_df["time"][0]
+    ).total_seconds()
+    offset_s = (
+        ephemeris_df["SVclockBias"]
+        + ephemeris_df["SVclockDrift"] * time_wrt_ephemeris_epoch_s
+        + ephemeris_df["SVclockDriftRate"] * math.pow(time_wrt_ephemeris_epoch_s, 2)
+    )
+    offset_rate_sps = (
+        ephemeris_df["SVclockDrift"]
+        + 2 * ephemeris_df["SVclockDriftRate"] * time_wrt_ephemeris_epoch_s
+    )
     return offset_s[0], offset_rate_sps[0]

@@ -53,7 +53,9 @@ def test_converting_file_that_cannot_be_converted():
         .exists()
     )
     shutil.copy(
-        helpers.prx_root().joinpath(f"datasets/TLSE_2022001/{does_not_contain_rinex_3}"),
+        helpers.prx_root().joinpath(
+            f"datasets/TLSE_2022001/{does_not_contain_rinex_3}"
+        ),
         test_directory().joinpath(does_not_contain_rinex_3),
     )
     assert (

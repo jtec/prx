@@ -76,7 +76,7 @@ def test_compare_rnx3_sat_pos_with_magnitude():
 
 
 def test_compute_satellite_clock_offset():
-# When computing the satellite clock offset of GPS-001 for January 1st 2022 at 1am GPST
+    # When computing the satellite clock offset of GPS-001 for January 1st 2022 at 1am GPST
     # We expect the clock offset to be computed from the following RINEX 3 ephemeris
     """
 G01 2022 01 01 00 00 00 4.691267386079e-04-1.000444171950e-11 0.000000000000e+00
@@ -90,14 +90,21 @@ G01 2022 01 01 00 00 00 4.691267386079e-04-1.000444171950e-11 0.000000000000e+00
      """
     # copied from the following file
     rinex_3_navigation_file = helpers.prx_root().joinpath(
-            f"datasets/TLSE_2022001/BRDC00IGS_R_20220010000_01D_GN.rnx")
+        f"datasets/TLSE_2022001/BRDC00IGS_R_20220010000_01D_GN.rnx"
+    )
     computed_offset_s, computed_offset_rate_sps = eph.compute_satellite_clock_offset_and_clock_offset_rate(
         eph.convert_rnx3_nav_file_to_dataset(rinex_3_navigation_file),
         "G01",
-        pd.Timestamp(np.datetime64("2022-01-01T01:00:00.000000000")))
+        pd.Timestamp(np.datetime64("2022-01-01T01:00:00.000000000")),
+    )
     # We expect the following clock offset and clock offset rate computed by hand from the parameters above.
     delta_t_s = constants.cSecondsPerHour
-    expected_offset = 4.691267386079e-04 + (-1.000444171950e-11 * delta_t_s) + math.pow(0.000000000000e+00, 2)
+    expected_offset = (
+        4.691267386079e-04
+        + (-1.000444171950e-11 * delta_t_s)
+        + math.pow(0.000000000000e00, 2)
+    )
     expected_offset_rate = -1.000444171950e-11
-    assert constants.cGpsIcdSpeedOfLight_mps * (expected_offset - computed_offset_s) < 1e-6
-
+    assert (
+        constants.cGpsIcdSpeedOfLight_mps * (expected_offset - computed_offset_s) < 1e-6
+    )
