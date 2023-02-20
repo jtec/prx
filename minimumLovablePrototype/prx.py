@@ -126,7 +126,7 @@ def check_assumptions(rinex_3_obs_file):
         ), "Handling of 'RCV CLOCK OFFS APPL' != 0 not implemented yet."
     assert (
         obs_header["TIME OF FIRST OBS"].split()[-1].strip() == "GPS"
-    ), "Handling of observation files using time scales other than GPST no implemented yet"
+    ), "Handling of observation files using time scales other than GPST not implemented yet."
 
 
 def build_records(rinex_3_obs_file, rinex_3_ephemerides_file):
