@@ -37,6 +37,9 @@ def load_from_pickle_cache(rinex_file: Path, use_caching=False):
                 )
                 os.remove(cache_file)
                 return load_from_pickle_cache(rinex_file, use_caching)
+    log.info(
+        f"Parsing {rinex_file} ..."
+    )
     parsed = georinex.load(rinex_file)
     if use_caching:
         try:
@@ -44,7 +47,7 @@ def load_from_pickle_cache(rinex_file: Path, use_caching=False):
                 pickle.dump(parsed, file)
         except Exception as e:
             log.error(
-                f"Exception when writing parsed RINEX to pickle cache. moving on without saving. Exception: {e}"
+                f"Exception when writing parsed RINEX to pickle cache. Moving on without saving. Exception: {e}"
             )
     return parsed
 
