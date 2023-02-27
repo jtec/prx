@@ -1,5 +1,6 @@
 import math
 
+import georinex
 import georinex as gr
 import xarray
 from gnss_lib_py.utils.constants import WEEKSEC
@@ -22,21 +23,6 @@ import parse_rinex
 import constants
 
 
-def convert_rnx3_nav_file_to_dataset(path):
-    """load rnx3 nav file specified in path as xarray.dataset
-
-    Input:
-    path: pathlib.path object to a RNX3 file
-
-    Load the file using the georinex package.
-    return as an xarray.dataset object.
-    """
-
-    # parse RNX3 NAV file using georinex module
-    nav_ds = parse_rinex.load(path, use_caching=True)
-    return nav_ds
-
-
 def convert_rnx3_nav_file_to_dataframe(path):
     """load rnx3 nav file specified in path in pandas.dataframe
 
@@ -46,24 +32,41 @@ def convert_rnx3_nav_file_to_dataframe(path):
     Load the file as dataset.
     Convert it to pandas.
     """
-    nav_ds = convert_rnx3_nav_file_to_dataset(path)
+    # parse RNX3 NAV file using georinex module
+    nav_ds = parse_rinex.load(path, use_caching=True)
     nav_df = convert_nav_dataset_to_dataframe(nav_ds)
 
     return nav_df
+
+constellation_2_system_time_scale = {
+    "G": "GPST",
+    "E": "GST",
+    "C": "BDT",
+    "R": "GLONASST",
+    "J": "QZSST",
+    "I": "IRNWT"
+}
+
+def satellite_id_2_system_time_scale(satellite_id)
 
 
 def convert_nav_dataset_to_dataframe(nav_ds):
     """convert ephemerides from xarray.Dataset to pandas.DataFrame, as required by gnss_lib_py"""
     nav_df = nav_ds.to_dataframe()
+    # Drop ephemerides for which all parameters are NaN, as we cannot compute anything from those
     nav_df.dropna(how="all", inplace=True)
     nav_df.reset_index(inplace=True)
     nav_df["source"] = nav_ds.filename
-    # convert time to number of elapsed seconds since GPST origin
+
+    nav_df["time_scale"] = nav_df.apply(
+        satellite_id_to_system_time_scale, axis=1, args=(nav,)
+    )
+    # Convert time to number of elapsed seconds since system time epoch
     nav_df["t_oc"] = (
         pd.to_numeric(nav_df["time"] - constants.cGpstEpoch)
         / constants.cNanoSecondsPerSecond
     )
-    # convert time to number of elapsed seconds since beginning of week
+    # Convert time to number of elapsed seconds since beginning of week
     nav_df["t_oc"] = nav_df["t_oc"] - constants.cSecondsPerWeek * np.floor(
         nav_df["t_oc"] / constants.cSecondsPerWeek
     )
@@ -91,6 +94,7 @@ def convert_nav_dataset_to_dataframe(nav_ds):
 
 def convert_single_nav_dataset_to_dataframe(nav_ds):
     """convert ephemerides from xarray.Dataset to pandas.DataFrame, as required by gnss_lib_py"""
+    nav_df = nav_ds.to_dataframe()
     time = pd.to_datetime(nav_ds["time"].values)
     sv = nav_ds["sv"].values
     SVclockBias = nav_ds["SVclockBias"].values
@@ -129,6 +133,7 @@ def convert_single_nav_dataset_to_dataframe(nav_ds):
     )
     t_oc = t_oc - WEEKSEC * np.floor(t_oc / WEEKSEC)
 
+
     dataframe_data = {
         "time": time,
         "sv": sv,
@@ -162,6 +167,8 @@ def convert_single_nav_dataset_to_dataframe(nav_ds):
         "TransTime": TransTime,
         "source": source,
         "t_oc": t_oc,
+        # Glonass orbit parameters:
+        "X": nav_ds["X"].values
     }
 
     nav_df = pd.DataFrame(dataframe_data, index=[0])
@@ -169,22 +176,23 @@ def convert_single_nav_dataset_to_dataframe(nav_ds):
     return nav_df
 
 
-def select_nav_ephemeris(nav_dataset, satellite_id, gpst_datetime):
-    """select an ephemeris from a RNX3 nav dataset for a particular sv and time, and return a dataframe
+def select_nav_ephemeris(nav_dataframe, satellite_id, gpst_datetime):
+    """select an ephemeris from a RNX3 nav dataframe for a particular sv and time, and return a dataframe
 
     Input examples:
-    nav_dataset = convert_rnx3_nav_file_to_dataset(path_to_rnx3_nav_file)
+    nav_dataset = convert_nav_dataset_to_dataframe(path_to_rnx3_nav_file)
     satellite_id = np.array('G01', dtype='<U3') # satellite ID for a single satellite,
     gpst_datetime = np.datetime64('2022-01-01T00:00:00.000'), np.datetime64(tow_to_datetime(gps_week, gps_tow))
 
     Output:
     nav_dataframe: a pandas.dataframe containing the selected ephemeris
     """
-    # select ephemeris for right satellite
-    nav_dataset_of_requested_satellite_id = nav_dataset.sel(sv=satellite_id)
+    # Find all ephemerides of this satellite
+    nav_dataframe_of_requested_satellite_id = nav_dataframe.loc[
+        (nav_dataframe['sv'] == satellite_id)]
     # find first ephemeris before date of interest
     ephemeris_index = np.searchsorted(
-        nav_dataset_of_requested_satellite_id.time.values, gpst_datetime
+        nav_dataframe_of_requested_satellite_id["time"], gpst_datetime
     )
     nav_dataset_of_requested_satellite_id_and_time = nav_dataset_of_requested_satellite_id.isel(
         time=ephemeris_index - 1
@@ -198,7 +206,7 @@ def select_nav_ephemeris(nav_dataset, satellite_id, gpst_datetime):
 
 
 def compute_satellite_clock_offset_and_clock_offset_rate(
-    parsed_rinex_3_nav_file: xarray.Dataset,
+    parsed_rinex_3_nav_file: pd.DataFrame,
     satellite: str,
     time_constellation_time_ns: pd.Timestamp,
 ):

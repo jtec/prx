@@ -76,6 +76,8 @@ def test_compare_rnx3_sat_pos_with_magnitude():
 
 
 def test_compute_satellite_clock_offset():
+    # GPS, GAL, QZSS, BDS, IRNSS broadcast satellite clock system time offsets are all given
+    # as parameters of a polynomial of order 2, so this test should cover those constellations.
     # When computing the satellite clock offset of GPS-001 for January 1st 2022 at 1am GPST
     # We expect the clock offset to be computed from the following RINEX 3 ephemeris
     """
@@ -95,6 +97,45 @@ G01 2022 01 01 00 00 00 4.691267386079e-04-1.000444171950e-11 0.000000000000e+00
     computed_offset_s, computed_offset_rate_sps = eph.compute_satellite_clock_offset_and_clock_offset_rate(
         eph.convert_rnx3_nav_file_to_dataset(rinex_3_navigation_file),
         "G01",
+        pd.Timestamp(np.datetime64("2022-01-01T01:00:00.000000000")),
+    )
+    # We expect the following clock offset and clock offset rate computed by hand from the parameters above.
+    delta_t_s = constants.cSecondsPerHour
+    expected_offset = (
+        4.691267386079e-04
+        + (-1.000444171950e-11 * delta_t_s)
+        + math.pow(0.000000000000e00, 2)
+    )
+    expected_offset_rate = -1.000444171950e-11
+    # Expect micrometers and micrometers/s here:
+    assert (
+        constants.cGpsIcdSpeedOfLight_mps * (expected_offset - computed_offset_s) < 1e-6
+    )
+    assert (
+        constants.cGpsIcdSpeedOfLight_mps
+        * (expected_offset_rate - computed_offset_rate_sps)
+        < 1e-6
+    )
+
+
+def test_compute_satellite_clock_offset_glonass():
+    # Glonass broadcast system time clock offsets are given as a clock offset in seconds
+    # plus a relative frequency offset.
+    # When computing the satellite clock offset of Glonass-001 for January 1st 2022 at 1am GLONASST
+    # We expect the clock offset to be computed from the following RINEX 3 ephemeris
+    """
+R01 2022 01 01 00 45 00 7.305294275284E-06-0.000000000000E+00 5.202000000000E+05
+     1.799304101562E+04-1.798223495483E+00 1.862645149231E-09 0.000000000000E+00
+     1.165609716797E+04-5.995044708252E-01-3.725290298462E-09 1.000000000000E+00
+     1.381343408203E+04 2.848098754883E+00 0.000000000000E+00 0.000000000000E+00
+     """
+    # copied from the following file
+    rinex_3_navigation_file = helpers.prx_root().joinpath(
+        f"datasets/TLSE_2022001/BRDC00IGS_R_20220010000_01D_MN.rnx"
+    )
+    computed_offset_s, computed_offset_rate_sps = eph.compute_satellite_clock_offset_and_clock_offset_rate(
+        eph.convert_rnx3_nav_file_to_dataframe(rinex_3_navigation_file),
+        "R01",
         pd.Timestamp(np.datetime64("2022-01-01T01:00:00.000000000")),
     )
     # We expect the following clock offset and clock offset rate computed by hand from the parameters above.
