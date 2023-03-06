@@ -20,15 +20,16 @@ def test_directory():
 # even  if the test crashes.
 @pytest.fixture
 def input_for_test():
-    if test_directory().exists():
+    test_directory = Path(f"./tmp_test_directory_{__name__}").resolve()
+    if test_directory.exists():
         # Make sure the expected file has not been generated before and is still on disk due to e.g. a previous
         # test run having crashed:
-        shutil.rmtree(test_directory())
-    os.makedirs(test_directory())
+        shutil.rmtree(test_directory)
+    os.makedirs(test_directory)
     compressed_compact_rinex_file = "TLSE00FRA_R_20230010000_10S_01S_MO.crx.gz"
-    test_file = test_directory().joinpath(compressed_compact_rinex_file)
+    test_file = test_directory.joinpath(compressed_compact_rinex_file)
     shutil.copy(
-        prx.prx_root().joinpath(
+        prx.prx_root().joinpatsh(
             f"datasets/TLSE_2023001/{compressed_compact_rinex_file}"
         ),
         test_file,
