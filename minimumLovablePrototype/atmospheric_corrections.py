@@ -39,11 +39,11 @@ def compute_klobuchar_correction(tow, gps_a, gps_b, el_s, az_s, phi_u, lambda_u)
     if t < 0: t += 86400
 
     # amplitude of the iono delay
-    A_i = gps_a(1) + gps_a(2) * phi_m / math.pi + gps_a(3) * (phi_m / math.pi) ** 2 + gps_a(4) * (phi_m / math.pi) ** 3
+    A_i = gps_a(0) + gps_a(1) * phi_m / math.pi + gps_a(2) * (phi_m / math.pi) ** 2 + gps_a(3) * (phi_m / math.pi) ** 3
     if A_i < 0: A_i = 0
 
     # period of iono delay
-    P_i = gps_b(1) + gps_b(2) * phi_m / math.pi + gps_b(3) * (phi_m / math.pi) ** 2 + gps_b(4) * (phi_m / math.pi) ** 3
+    P_i = gps_b(0) + gps_b(1) * phi_m / math.pi + gps_b(2) * (phi_m / math.pi) ** 2 + gps_b(3) * (phi_m / math.pi) ** 3
     if P_i < 72000: P_i = 72000
 
     # phase of the iono delay
