@@ -1,6 +1,40 @@
 import numpy as np
 import atmospheric_corrections as atmo
+import process_ephemerides as eph
+from pathlib import Path
+import zipfile
 
+def test_get_klobuchar_parameters_from_rinex3():
+    # filepath towards RNX3 NAV file
+    path_to_rnx3_nav_file = Path(__file__).resolve().parent.parent.joinpath("datasets", "TLSE_2022001",
+                                                                            "BRDC00IGS_R_20220010000_01D_GN.rnx")
+
+    # expected GPSA and GPSB parameters from header
+    gps_a_expected = np.array([1.1176e-08, -7.4506e-09, -5.9605e-08, 1.1921e-07])
+    gps_b_expected = np.array([1.1674e+05, -2.2938e+05, -1.3107e+05, 1.0486e+06])
+
+    # check existence of RNX3 file, and if not, try to find and unzip a compressed version
+    if not path_to_rnx3_nav_file.exists():
+        # check existence of zipped file
+        path_to_zip_file = path_to_rnx3_nav_file.with_suffix(".zip")
+        if path_to_zip_file.exists():
+            print("Unzipping RNX3 NAV file...")
+            # unzip file
+            with zipfile.ZipFile(path_to_zip_file, 'r') as zip_ref:
+                zip_ref.extractall(path_to_rnx3_nav_file.resolve().parent)
+        else:
+            print(f"File {path_to_rnx3_nav_file} (or zipped version) does not exist")
+
+    # Compute RNX3 satellite position
+    # load RNX3 NAV file
+    nav_ds = eph.convert_rnx3_nav_file_to_dataset(path_to_rnx3_nav_file)
+
+    # recover klobuchar parameters
+    gps_a = nav_ds.ionospheric_corr_GPS[0:4]
+    gps_b = nav_ds.ionospheric_corr_GPS[4:9]
+
+    assert((gps_a == gps_a_expected).all())
+    assert((gps_b == gps_b_expected).all())
 
 def test_klobuchar_correction():
     threshold_iono_error_m = 0.01
@@ -22,7 +56,7 @@ def test_klobuchar_correction():
                                      2.52078132484571, 2.42442804067487, 2.38622307601646, 2.40461884807421,
                                      2.48167682626566, 2.62331655108814, 2.83924716365741, 3.14130628142798,
                                      3.53626108493281]])
-    # parse RNX NAV file ang get GPSA and GPSB parameters from header
+    # GPSA and GPSB parameters from header of 'datasets/TLSE_2022001/BRDC00IGS_R_2022001000_01D_GN.rnx'
     gps_a = np.array([1.1176e-08, -7.4506e-09, -5.9605e-08, 1.1921e-07])
     gps_b = np.array([1.1674e+05, -2.2938e+05, -1.3107e+05, 1.0486e+06])
 
