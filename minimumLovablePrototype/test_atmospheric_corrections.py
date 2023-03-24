@@ -3,6 +3,8 @@ import atmospheric_corrections as atmo
 
 
 def test_klobuchar_correction():
+    threshold_iono_error_m = 0.01
+
     # expected iono correction
     iono_corr_magnitude = np.array([[3.11827805725116, 2.76346284622445, 2.47578416083077, 2.24496388261401,
                                      2.06032891260419, 1.91298307101363, 1.79609582797929, 1.70464456302035,
@@ -29,7 +31,7 @@ def test_klobuchar_correction():
     lat_u_rad = 0.760277591246057
     lon_u_rad = 0.025846486197371
 
-    tow_s = np.arange(519300, 530100, 900)
+    tow_s = np.arange(519300, 530100+1, 900) # added +1 to stop parameter, in order to have the last tow
 
     el_s_rad = np.array([[0.389610854319298, 0.481591693955173, 0.574237498820712, 0.667572412962547, 0.761560089319323,
                           0.856042601539353, 0.950629038638004, 1.04447640837162, 1.13581910197266, 1.22087957072990,
@@ -59,4 +61,4 @@ def test_klobuchar_correction():
     # compute iono correction from Klobuchar model
     iono_corr = atmo.compute_klobuchar_correction(tow_s, gps_a, gps_b, el_s_rad, az_s_rad, lat_u_rad, lon_u_rad)
 
-    assert (iono_corr == iono_corr_magnitude)
+    assert (np.max(np.fabs(iono_corr - iono_corr_magnitude)) < threshold_iono_error_m)
