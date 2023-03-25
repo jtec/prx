@@ -32,6 +32,7 @@ def convert_rnx3_nav_file_to_dataframe(path):
 
 constellation_2_system_time_scale = {
     "G": "GPST",
+    "S": "SBAST",
     "E": "GST",
     "C": "BDT",
     "R": "GLONASST",
@@ -196,15 +197,24 @@ def compute_satellite_clock_offset_and_clock_offset_rate(
         parsed_rinex_3_nav_file, satellite, time_constellation_time_ns.to_datetime64()
     )
     time_wrt_ephemeris_epoch_s = pd.Timedelta(
-        time_constellation_time_ns - ephemeris_df["time"][0]
+        time_constellation_time_ns - ephemeris_df["time"].iloc[0]
     ).total_seconds()
+    if satellite[0] != "R":
+        offset_at_epoch_s = ephemeris_df["SVclockBias"].iloc[0]
+        offset_rate_sps = ephemeris_df["SVclockDrift"].iloc[0]
+        offset_acceleration_sps2 = ephemeris_df["SVclockDriftRate"].iloc[0]
+    else:
+        offset_at_epoch_s = ephemeris_df["SVclockBias"].iloc[0]
+        offset_rate_sps = ephemeris_df["SVrelFreqBias"].iloc[0]
+        offset_acceleration_sps2 = 0
+
     offset_s = (
-        ephemeris_df["SVclockBias"][0]
-        + ephemeris_df["SVclockDrift"][0] * time_wrt_ephemeris_epoch_s
-        + ephemeris_df["SVclockDriftRate"][0] * math.pow(time_wrt_ephemeris_epoch_s, 2)
+        offset_at_epoch_s
+        + offset_rate_sps * time_wrt_ephemeris_epoch_s
+        + offset_acceleration_sps2 * math.pow(time_wrt_ephemeris_epoch_s, 2)
     )
     offset_rate_sps = (
-        ephemeris_df["SVclockDrift"][0]
-        + 2 * ephemeris_df["SVclockDriftRate"][0] * time_wrt_ephemeris_epoch_s
+        offset_rate_sps
+        + 2 * offset_acceleration_sps2 * time_wrt_ephemeris_epoch_s
     )
     return offset_s, offset_rate_sps

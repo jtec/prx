@@ -105,7 +105,7 @@ G01 2022 01 01 00 00 00 4.691267386079e-04-1.000444171950e-11 0.000000000000e+00
         + math.pow(0.000000000000e00, 2)
     )
     expected_offset_rate = -1.000444171950e-11
-    # Expect micrometers and micrometers/s here:
+    # Expect micrometers and micrometers/s accuracy here:
     assert (
         constants.cGpsIcdSpeedOfLight_mps * (expected_offset - computed_offset_s) < 1e-6
     )
@@ -128,9 +128,9 @@ R01 2022 01 01 00 45 00 7.305294275284E-06-0.000000000000E+00 5.202000000000E+05
      1.381343408203E+04 2.848098754883E+00 0.000000000000E+00 0.000000000000E+00
      """
     # copied from the following file
-    rinex_3_navigation_file = helpers.prx_root().joinpath(
-        f"datasets/TLSE_2022001/BRDC00IGS_R_20220010000_01D_MN.rnx"
-    )
+    rinex_3_navigation_file = converters.anything_to_rinex_3(helpers.prx_root().joinpath(
+        f"datasets/TLSE_2022001/BRDC00IGS_R_20220010000_01D_MN.zip"
+    ))
     computed_offset_s, computed_offset_rate_sps = eph.compute_satellite_clock_offset_and_clock_offset_rate(
         eph.convert_rnx3_nav_file_to_dataframe(rinex_3_navigation_file),
         "R01",
@@ -139,12 +139,12 @@ R01 2022 01 01 00 45 00 7.305294275284E-06-0.000000000000E+00 5.202000000000E+05
     # We expect the following clock offset and clock offset rate computed by hand from the parameters above.
     delta_t_s = constants.cSecondsPerHour
     expected_offset = (
-        4.691267386079e-04
-        + (-1.000444171950e-11 * delta_t_s)
+        7.305294275284E-06
+        + (0.0 * delta_t_s)
         + math.pow(0.000000000000e00, 2)
     )
-    expected_offset_rate = -1.000444171950e-11
-    # Expect micrometers and micrometers/s here:
+    expected_offset_rate = 0
+    # Expect micrometers and micrometers/s accuracy here:
     assert (
         constants.cGpsIcdSpeedOfLight_mps * (expected_offset - computed_offset_s) < 1e-6
     )
