@@ -178,12 +178,6 @@ def build_records(rinex_3_obs_file, rinex_3_ephemerides_file):
 
     # Compute broadcast satellite clock - constellation time offsets
     def compute_satellite_clock_offsets(row, nav):
-        if row["observation_type"].startswith("C"):
-            return row[
-                "time_of_reception_in_receiver_time_ns"
-            ] - constants.cNanoSecondsPerSecond * (
-                row["observation_value"] / constants.cGpsIcdSpeedOfLight_mps
-            )
         return np.float64("NaN")
 
     flat_obs["satellite_clock_offset_ns"] = flat_obs.apply(

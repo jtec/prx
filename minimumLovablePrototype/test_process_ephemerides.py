@@ -55,12 +55,10 @@ def test_compare_rnx3_sat_pos_with_magnitude():
             print(f"File {path_to_rnx3_nav_file} (or zipped version) does not exist")
 
     # Compute RNX3 satellite position
-    # load RNX3 NAV file
-    nav_ds = eph.convert_rnx3_nav_file_to_dataset(path_to_rnx3_nav_file)
-
-    # select right ephemeris
+    # Select right ephemeris
     date = np.datetime64(tow_to_datetime(gps_week, gps_tow))
-    nav_df = eph.select_nav_ephemeris(nav_ds, sv, date)
+    ephemerides = eph.convert_rnx3_nav_file_to_dataframe(path_to_rnx3_nav_file)
+    nav_df = eph.select_nav_ephemeris(ephemerides, sv, date)
 
     # call findsat from gnss_lib_py
     sv_posvel_rnx3_df = find_sat(nav_df, gps_tow, gps_week)
@@ -95,7 +93,7 @@ G01 2022 01 01 00 00 00 4.691267386079e-04-1.000444171950e-11 0.000000000000e+00
         f"datasets/TLSE_2022001/BRDC00IGS_R_20220010000_01D_GN.rnx"
     )
     computed_offset_s, computed_offset_rate_sps = eph.compute_satellite_clock_offset_and_clock_offset_rate(
-        eph.convert_rnx3_nav_file_to_dataset(rinex_3_navigation_file),
+        eph.convert_rnx3_nav_file_to_dataframe(rinex_3_navigation_file),
         "G01",
         pd.Timestamp(np.datetime64("2022-01-01T01:00:00.000000000")),
     )
