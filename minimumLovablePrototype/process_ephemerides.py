@@ -37,7 +37,7 @@ constellation_2_system_time_scale = {
     "C": "BDT",
     "R": "GLONASST",
     "J": "QZSST",
-    "I": "IRNWT"
+    "I": "IRNWT",
 }
 
 
@@ -53,7 +53,9 @@ def convert_nav_dataset_to_dataframe(nav_ds):
     nav_df.reset_index(inplace=True)
     nav_df["source"] = nav_ds.filename
 
-    nav_df["time_scale"] = nav_df.apply(lambda row:  satellite_id_2_system_time_scale(row["sv"]), axis=1)
+    nav_df["time_scale"] = nav_df.apply(
+        lambda row: satellite_id_2_system_time_scale(row["sv"]), axis=1
+    )
 
     # TODO Can we be sure that this is always GPST?
     gpst_s = (
@@ -61,7 +63,8 @@ def convert_nav_dataset_to_dataframe(nav_ds):
         / constants.cNanoSecondsPerSecond
     )
     # Week second:
-    nav_df["t_oc"] = gpst_s - constants.cSecondsPerWeek * np.floor(gpst_s / constants.cSecondsPerWeek
+    nav_df["t_oc"] = gpst_s - constants.cSecondsPerWeek * np.floor(
+        gpst_s / constants.cSecondsPerWeek
     )
 
     nav_df.rename(
@@ -125,7 +128,6 @@ def convert_single_nav_dataset_to_dataframe(nav_ds):
     )
     t_oc = t_oc - WEEKSEC * np.floor(t_oc / WEEKSEC)
 
-
     dataframe_data = {
         "time": time,
         "sv": sv,
@@ -160,7 +162,7 @@ def convert_single_nav_dataset_to_dataframe(nav_ds):
         "source": source,
         "t_oc": t_oc,
         # Glonass orbit parameters:
-        "X": nav_ds["X"].values
+        "X": nav_ds["X"].values,
     }
 
     nav_df = pd.DataFrame(dataframe_data, index=[0])
@@ -180,11 +182,18 @@ def select_nav_ephemeris(nav_dataframe, satellite_id, gpst_datetime):
     nav_dataframe: a pandas.dataframe containing the selected ephemeris
     """
     ephemerides_of_requested_sat = nav_dataframe.loc[
-        (nav_dataframe['sv'] == satellite_id)]
+        (nav_dataframe["sv"] == satellite_id)
+    ]
     # Find first ephemeris before time of interest
-    ephemerides_of_requested_sat = ephemerides_of_requested_sat.sort_values(by=['time'])
-    ephemerides_of_requested_sat_before_requested_time = ephemerides_of_requested_sat.loc[ephemerides_of_requested_sat["time"] < gpst_datetime]
-    assert ephemerides_of_requested_sat_before_requested_time.shape[0] > 0, f"Did not find ephemeris with timestamp before {gpst_datetime}"
+    ephemerides_of_requested_sat = ephemerides_of_requested_sat.sort_values(by=["time"])
+    ephemerides_of_requested_sat_before_requested_time = (
+        ephemerides_of_requested_sat.loc[
+            ephemerides_of_requested_sat["time"] < gpst_datetime
+        ]
+    )
+    assert (
+        ephemerides_of_requested_sat_before_requested_time.shape[0] > 0
+    ), f"Did not find ephemeris with timestamp before {gpst_datetime}"
     return ephemerides_of_requested_sat_before_requested_time.iloc[[-1]]
 
 
@@ -214,7 +223,6 @@ def compute_satellite_clock_offset_and_clock_offset_rate(
         + offset_acceleration_sps2 * math.pow(time_wrt_ephemeris_epoch_s, 2)
     )
     offset_rate_sps = (
-        offset_rate_sps
-        + 2 * offset_acceleration_sps2 * time_wrt_ephemeris_epoch_s
+        offset_rate_sps + 2 * offset_acceleration_sps2 * time_wrt_ephemeris_epoch_s
     )
     return offset_s, offset_rate_sps
