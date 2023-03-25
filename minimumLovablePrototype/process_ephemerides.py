@@ -24,19 +24,11 @@ import constants
 
 
 def convert_rnx3_nav_file_to_dataframe(path):
-    """load rnx3 nav file specified in path in pandas.dataframe
-
-    Input:
-    path can be either the path to a RNX3 file
-
-    Load the file as dataset.
-    Convert it to pandas.
-    """
     # parse RNX3 NAV file using georinex module
     nav_ds = parse_rinex.load(path, use_caching=True)
     nav_df = convert_nav_dataset_to_dataframe(nav_ds)
-
     return nav_df
+
 
 constellation_2_system_time_scale = {
     "G": "GPST",
@@ -47,7 +39,9 @@ constellation_2_system_time_scale = {
     "I": "IRNWT"
 }
 
-def satellite_id_2_system_time_scale(satellite_id)
+
+def satellite_id_2_system_time_scale(satellite_id):
+    return constellation_2_system_time_scale[satellite_id[0]]
 
 
 def convert_nav_dataset_to_dataframe(nav_ds):
@@ -58,19 +52,16 @@ def convert_nav_dataset_to_dataframe(nav_ds):
     nav_df.reset_index(inplace=True)
     nav_df["source"] = nav_ds.filename
 
-    nav_df["time_scale"] = nav_df.apply(
-        satellite_id_to_system_time_scale, axis=1, args=(nav,)
-    )
-    # Convert time to number of elapsed seconds since system time epoch
-    nav_df["t_oc"] = (
+    nav_df["time_scale"] = nav_df.apply(lambda row:  satellite_id_2_system_time_scale(row["sv"]), axis=1)
+
+    # TODO Can we be sure that this is always GPST?
+    gpst_s = (
         pd.to_numeric(nav_df["time"] - constants.cGpstEpoch)
         / constants.cNanoSecondsPerSecond
     )
-    # Convert time to number of elapsed seconds since beginning of week
-    nav_df["t_oc"] = nav_df["t_oc"] - constants.cSecondsPerWeek * np.floor(
-        nav_df["t_oc"] / constants.cSecondsPerWeek
+    # Week second:
+    nav_df["t_oc"] = gpst_s - constants.cSecondsPerWeek * np.floor(gpst_s / constants.cSecondsPerWeek
     )
-    nav_df["time"] = nav_df["time"].dt.tz_localize("UTC")
 
     nav_df.rename(
         columns={
@@ -177,7 +168,7 @@ def convert_single_nav_dataset_to_dataframe(nav_ds):
 
 
 def select_nav_ephemeris(nav_dataframe, satellite_id, gpst_datetime):
-    """select an ephemeris from a RNX3 nav dataframe for a particular sv and time, and return a dataframe
+    """select an ephemeris from a RNX3 nav dataframe for a particular sv and time, and return the ephemeris.
 
     Input examples:
     nav_dataset = convert_nav_dataset_to_dataframe(path_to_rnx3_nav_file)
@@ -187,22 +178,13 @@ def select_nav_ephemeris(nav_dataframe, satellite_id, gpst_datetime):
     Output:
     nav_dataframe: a pandas.dataframe containing the selected ephemeris
     """
-    # Find all ephemerides of this satellite
-    nav_dataframe_of_requested_satellite_id = nav_dataframe.loc[
+    ephemerides_of_requested_sat = nav_dataframe.loc[
         (nav_dataframe['sv'] == satellite_id)]
-    # find first ephemeris before date of interest
-    ephemeris_index = np.searchsorted(
-        nav_dataframe_of_requested_satellite_id["time"], gpst_datetime
-    )
-    nav_dataset_of_requested_satellite_id_and_time = nav_dataset_of_requested_satellite_id.isel(
-        time=ephemeris_index - 1
-    )
-    # convert to dataframe
-    nav_dataframe = convert_single_nav_dataset_to_dataframe(
-        nav_dataset_of_requested_satellite_id_and_time
-    )
-
-    return nav_dataframe
+    # Find first ephemeris before time of interest
+    ephemerides_of_requested_sat = ephemerides_of_requested_sat.sort_values(by=['time'])
+    ephemerides_of_requested_sat_before_requested_time = ephemerides_of_requested_sat.loc[ephemerides_of_requested_sat["time"] < gpst_datetime]
+    assert ephemerides_of_requested_sat_before_requested_time.shape[0] > 0, f"Did not find ephemeris with timestamp before {gpst_datetime}"
+    return ephemerides_of_requested_sat_before_requested_time.iloc[-1]
 
 
 def compute_satellite_clock_offset_and_clock_offset_rate(
@@ -214,7 +196,7 @@ def compute_satellite_clock_offset_and_clock_offset_rate(
         parsed_rinex_3_nav_file, satellite, time_constellation_time_ns.to_datetime64()
     )
     time_wrt_ephemeris_epoch_s = pd.Timedelta(
-        time_constellation_time_ns - ephemeris_df["time"][0]
+        time_constellation_time_ns - ephemeris_df["time"]
     ).total_seconds()
     offset_s = (
         ephemeris_df["SVclockBias"]
@@ -225,4 +207,4 @@ def compute_satellite_clock_offset_and_clock_offset_rate(
         ephemeris_df["SVclockDrift"]
         + 2 * ephemeris_df["SVclockDriftRate"] * time_wrt_ephemeris_epoch_s
     )
-    return offset_s[0], offset_rate_sps[0]
+    return offset_s, offset_rate_sps
