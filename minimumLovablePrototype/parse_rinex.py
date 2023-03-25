@@ -37,9 +37,7 @@ def load_from_pickle_cache(rinex_file: Path, use_caching=False):
                 )
                 os.remove(cache_file)
                 return load_from_pickle_cache(rinex_file, use_caching)
-    log.info(
-        f"Parsing {rinex_file} ..."
-    )
+    log.info(f"Parsing {rinex_file} ...")
     parsed = georinex.load(rinex_file)
     if use_caching:
         try:

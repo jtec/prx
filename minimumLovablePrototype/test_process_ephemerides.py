@@ -79,20 +79,23 @@ def astestos_compute_satellite_clock_offset():
     # When computing the satellite clock offset of GPS-001 for January 1st 2022 at 1am GPST
     # We expect the clock offset to be computed from the following RINEX 3 ephemeris
     """
-G01 2022 01 01 00 00 00 4.691267386079e-04-1.000444171950e-11 0.000000000000e+00
-     3.900000000000e+01-1.411250000000e+02 3.988380417768e-09-6.242942382352e-01
-    -7.363036274910e-06 1.121813920327e-02 4.695728421211e-06 5.153674995422e+03
-     5.184000000000e+05-3.166496753693e-08-1.036611240093e+00 1.955777406693e-07
-     9.864187694897e-01 2.997500000000e+02 8.840876015687e-01-8.133553080847e-09
-    -3.778728827795e-10 1.000000000000e+00 2.190000000000e+03 0.000000000000e+00
-     2.000000000000e+00 0.000000000000e+00 5.122274160385e-09 3.900000000000e+01
-     5.171890000000e+05 4.000000000000e+00 0.000000000000e+00 0.000000000000e+00
-     """
+    G01 2022 01 01 00 00 00 4.691267386079e-04-1.000444171950e-11 0.000000000000e+00
+         3.900000000000e+01-1.411250000000e+02 3.988380417768e-09-6.242942382352e-01
+        -7.363036274910e-06 1.121813920327e-02 4.695728421211e-06 5.153674995422e+03
+         5.184000000000e+05-3.166496753693e-08-1.036611240093e+00 1.955777406693e-07
+         9.864187694897e-01 2.997500000000e+02 8.840876015687e-01-8.133553080847e-09
+        -3.778728827795e-10 1.000000000000e+00 2.190000000000e+03 0.000000000000e+00
+         2.000000000000e+00 0.000000000000e+00 5.122274160385e-09 3.900000000000e+01
+         5.171890000000e+05 4.000000000000e+00 0.000000000000e+00 0.000000000000e+00
+    """
     # copied from the following file
     rinex_3_navigation_file = helpers.prx_root().joinpath(
         f"datasets/TLSE_2022001/BRDC00IGS_R_20220010000_01D_GN.rnx"
     )
-    computed_offset_s, computed_offset_rate_sps = eph.compute_satellite_clock_offset_and_clock_offset_rate(
+    (
+        computed_offset_s,
+        computed_offset_rate_sps,
+    ) = eph.compute_satellite_clock_offset_and_clock_offset_rate(
         eph.convert_rnx3_nav_file_to_dataframe(rinex_3_navigation_file),
         "G01",
         pd.Timestamp(np.datetime64("2022-01-01T01:00:00.000000000")),
@@ -122,16 +125,21 @@ def test_compute_satellite_clock_offset_glonass():
     # When computing the satellite clock offset of Glonass-001 for January 1st 2022 at 1am GLONASST
     # We expect the clock offset to be computed from the following RINEX 3 ephemeris
     """
-R01 2022 01 01 00 45 00 7.305294275284E-06-0.000000000000E+00 5.202000000000E+05
-     1.799304101562E+04-1.798223495483E+00 1.862645149231E-09 0.000000000000E+00
-     1.165609716797E+04-5.995044708252E-01-3.725290298462E-09 1.000000000000E+00
-     1.381343408203E+04 2.848098754883E+00 0.000000000000E+00 0.000000000000E+00
-     """
+    R01 2022 01 01 00 45 00 7.305294275284E-06-0.000000000000E+00 5.202000000000E+05
+         1.799304101562E+04-1.798223495483E+00 1.862645149231E-09 0.000000000000E+00
+         1.165609716797E+04-5.995044708252E-01-3.725290298462E-09 1.000000000000E+00
+         1.381343408203E+04 2.848098754883E+00 0.000000000000E+00 0.000000000000E+00
+    """
     # copied from the following file
-    rinex_3_navigation_file = converters.anything_to_rinex_3(helpers.prx_root().joinpath(
-        f"datasets/TLSE_2022001/BRDC00IGS_R_20220010000_01D_MN.zip"
-    ))
-    computed_offset_s, computed_offset_rate_sps = eph.compute_satellite_clock_offset_and_clock_offset_rate(
+    rinex_3_navigation_file = converters.anything_to_rinex_3(
+        helpers.prx_root().joinpath(
+            f"datasets/TLSE_2022001/BRDC00IGS_R_20220010000_01D_MN.zip"
+        )
+    )
+    (
+        computed_offset_s,
+        computed_offset_rate_sps,
+    ) = eph.compute_satellite_clock_offset_and_clock_offset_rate(
         eph.convert_rnx3_nav_file_to_dataframe(rinex_3_navigation_file),
         "R01",
         pd.Timestamp(np.datetime64("2022-01-01T01:00:00.000000000")),
@@ -139,9 +147,7 @@ R01 2022 01 01 00 45 00 7.305294275284E-06-0.000000000000E+00 5.202000000000E+05
     # We expect the following clock offset and clock offset rate computed by hand from the parameters above.
     delta_t_s = constants.cSecondsPerHour
     expected_offset = (
-        7.305294275284E-06
-        + (0.0 * delta_t_s)
-        + math.pow(0.000000000000e00, 2)
+        7.305294275284e-06 + (0.0 * delta_t_s) + math.pow(0.000000000000e00, 2)
     )
     expected_offset_rate = 0
     # Expect micrometers and micrometers/s accuracy here:
