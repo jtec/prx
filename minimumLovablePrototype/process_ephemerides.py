@@ -184,7 +184,7 @@ def select_nav_ephemeris(nav_dataframe, satellite_id, gpst_datetime):
     ephemerides_of_requested_sat = ephemerides_of_requested_sat.sort_values(by=['time'])
     ephemerides_of_requested_sat_before_requested_time = ephemerides_of_requested_sat.loc[ephemerides_of_requested_sat["time"] < gpst_datetime]
     assert ephemerides_of_requested_sat_before_requested_time.shape[0] > 0, f"Did not find ephemeris with timestamp before {gpst_datetime}"
-    return ephemerides_of_requested_sat_before_requested_time.iloc[-1]
+    return ephemerides_of_requested_sat_before_requested_time.iloc[[-1]]
 
 
 def compute_satellite_clock_offset_and_clock_offset_rate(
@@ -196,15 +196,15 @@ def compute_satellite_clock_offset_and_clock_offset_rate(
         parsed_rinex_3_nav_file, satellite, time_constellation_time_ns.to_datetime64()
     )
     time_wrt_ephemeris_epoch_s = pd.Timedelta(
-        time_constellation_time_ns - ephemeris_df["time"]
+        time_constellation_time_ns - ephemeris_df["time"][0]
     ).total_seconds()
     offset_s = (
-        ephemeris_df["SVclockBias"]
-        + ephemeris_df["SVclockDrift"] * time_wrt_ephemeris_epoch_s
-        + ephemeris_df["SVclockDriftRate"] * math.pow(time_wrt_ephemeris_epoch_s, 2)
+        ephemeris_df["SVclockBias"][0]
+        + ephemeris_df["SVclockDrift"][0] * time_wrt_ephemeris_epoch_s
+        + ephemeris_df["SVclockDriftRate"][0] * math.pow(time_wrt_ephemeris_epoch_s, 2)
     )
     offset_rate_sps = (
-        ephemeris_df["SVclockDrift"]
-        + 2 * ephemeris_df["SVclockDriftRate"] * time_wrt_ephemeris_epoch_s
+        ephemeris_df["SVclockDrift"][0]
+        + 2 * ephemeris_df["SVclockDriftRate"][0] * time_wrt_ephemeris_epoch_s
     )
     return offset_s, offset_rate_sps
