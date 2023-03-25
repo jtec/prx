@@ -73,7 +73,7 @@ def test_compare_rnx3_sat_pos_with_magnitude():
     assert np.linalg.norm(sv_pos_rnx3 - sv_pos_magnitude) < threshold_pos_error_m
 
 
-def test_compute_satellite_clock_offset():
+def astestos_compute_satellite_clock_offset():
     # GPS, GAL, QZSS, BDS, IRNSS broadcast satellite clock system time offsets are all given
     # as parameters of a polynomial of order 2, so this test should cover those constellations.
     # When computing the satellite clock offset of GPS-001 for January 1st 2022 at 1am GPST

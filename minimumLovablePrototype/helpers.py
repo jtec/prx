@@ -22,6 +22,7 @@ def prx_root() -> Path:
 
 # From https://stackoverflow.com/a/3431838
 def md5_of_file_content(file: Path):
+    assert file.exists(), f"Looks like {file} does not exist."
     hash_md5 = hashlib.md5()
     with open(file, "rb") as f:
         for chunk in iter(lambda: f.read(4096), b""):
