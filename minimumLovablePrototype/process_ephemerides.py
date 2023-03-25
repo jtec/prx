@@ -184,8 +184,8 @@ def select_nav_ephemeris(nav_dataset, satellite_id, gpst_datetime):
     ephemeris_index = np.searchsorted(
         nav_dataset_of_requested_satellite_id.time.values, gpst_datetime
     )
-    nav_dataset_of_requested_satellite_id_and_time = nav_dataset_of_requested_satellite_id.isel(
-        time=ephemeris_index - 1
+    nav_dataset_of_requested_satellite_id_and_time = (
+        nav_dataset_of_requested_satellite_id.isel(time=ephemeris_index - 1)
     )
     # convert to dataframe
     nav_dataframe = convert_single_nav_dataset_to_dataframe(
