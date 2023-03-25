@@ -6,7 +6,7 @@ import example_observations
 
 
 def generate_example_file(
-    file_path=Path("__file__").resolve().parent.joinpath(Path("example.jsonl"))
+    file_path=Path("__file__").resolve().parent.joinpath(Path("example.jsonl")),
 ) -> Path:
     header, observations = example_observations.generate()
     # write header and observations to json file
