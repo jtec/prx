@@ -39,7 +39,6 @@ def repair_with_gfzrnx(file):
 def try_downloading_ephemerides_from_bkg(
     t_start: pd.Timestamp, t_end: pd.Timestamp, folder: Path
 ):
-
     time = t_start
     files = []
     while True:
