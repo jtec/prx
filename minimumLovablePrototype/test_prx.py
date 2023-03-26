@@ -6,11 +6,8 @@ import subprocess
 import pytest
 
 import prx
+import helpers
 import constants
-
-
-def test_directory():
-    return Path(f"./tmp_test_directory_{__name__}").resolve()
 
 
 # This function sets up a temporary directory, copies a rinex observations file into that directory
@@ -26,22 +23,30 @@ def input_for_test():
         # test run having crashed:
         shutil.rmtree(test_directory)
     os.makedirs(test_directory)
-    compressed_compact_rinex_file = "TLSE00FRA_R_20230010000_10S_01S_MO.crx.gz"
+    compressed_compact_rinex_file = "TLSE00FRA_R_20230010100_10S_01S_MO.crx.gz"
     test_file = test_directory.joinpath(compressed_compact_rinex_file)
     shutil.copy(
-        prx.prx_root().joinpath(
+        helpers.prx_root().joinpath(
             f"datasets/TLSE_2023001/{compressed_compact_rinex_file}"
         ),
         test_file,
     )
     assert test_file.exists()
+    # Also provide ephemerides so the test does not have to download them:
+    ephemerides_file = "BRDC00IGS_R_20230010000_01D_MN.rnx.zip"
+    shutil.copy(
+        helpers.prx_root().joinpath(f"datasets/TLSE_2023001/{ephemerides_file}"),
+        test_file.parent.joinpath(ephemerides_file),
+    )
+    assert test_file.parent.joinpath(ephemerides_file).exists()
+
     yield test_file
     shutil.rmtree(test_file.parent)
 
 
 def test_prx_command_line_call_with_jsonseq_output(input_for_test):
     test_file = input_for_test
-    prx_path = prx.prx_root().joinpath("minimumLovablePrototype").joinpath("prx.py")
+    prx_path = helpers.prx_root().joinpath("minimumLovablePrototype").joinpath("prx.py")
     command = f"python {prx_path} --observation_file_path {test_file}"
     result = subprocess.run(
         command, capture_output=True, shell=True, cwd=str(test_file.parent)

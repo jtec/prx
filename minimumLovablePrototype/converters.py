@@ -3,6 +3,7 @@ import glob
 import itertools
 import subprocess
 import gzip
+import zipfile
 import prx
 import helpers
 
@@ -18,8 +19,16 @@ def compressed_to_uncompressed(file: Path):
                 output_file.write(compressed_file.read())
         log.info(f"Uncompressed {file} to {uncompressed_file}")
         return uncompressed_file
-    else:
-        return None
+    if str(file).endswith(".zip"):
+        with zipfile.ZipFile(file, mode="r") as archive:
+            assert (
+                len(archive.namelist()) == 1
+            ), "Not expecting more than one file in archive here."
+            uncompressed_file = file.parent.joinpath(archive.namelist()[0])
+            archive.extract(uncompressed_file.name, uncompressed_file.parent)
+        log.info(f"Uncompressed {file} to {uncompressed_file}")
+        return uncompressed_file
+    return None
 
 
 def is_compact_rinex_obs_file(file: Path):
@@ -38,7 +47,7 @@ def compact_rinex_obs_file_to_rinex_obs_file(file: Path):
     if not is_compact_rinex_obs_file(file):
         return None
     crx2rnx_binaries = glob.glob(
-        str(prx.prx_root().joinpath("tools/RNXCMP/**/CRX2RNX*")), recursive=True
+        str(helpers.prx_root().joinpath("tools/RNXCMP/**/CRX2RNX*")), recursive=True
     )
     for crx2rnx_binary in crx2rnx_binaries:
         command = f" {crx2rnx_binary} {file}"
@@ -67,6 +76,18 @@ def is_rinex_3_obs_file(file: Path):
     return True
 
 
+def is_rinex_3_nav_file(file: Path):
+    assert file.exists(), "File does not exist"
+    try:
+        with open(file) as f:
+            first_line = f.readline()
+    except UnicodeDecodeError as e_unicode:
+        return False
+    if "NAVIGATION DATA" not in first_line or "3.0" not in first_line:
+        return False
+    return True
+
+
 def anything_to_rinex_3(file: Path):
     assert file.exists(), "File does not exist"
     file = Path(file)
@@ -80,7 +101,7 @@ def anything_to_rinex_3(file: Path):
     converter_calls = 0
     max_number_of_conversions = 10
     for converter in itertools.cycle(converters):
-        if is_rinex_3_obs_file(input):
+        if is_rinex_3_obs_file(input) or is_rinex_3_nav_file(input):
             return input
         converter_calls += 1
         output = converter(input)
