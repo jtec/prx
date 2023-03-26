@@ -15,6 +15,7 @@ logging.basicConfig(
 
 log = logging.getLogger(__name__)
 
+
 def get_logger(label):
     return logging.getLogger(label)
 
