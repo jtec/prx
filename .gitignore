@@ -11,4 +11,4 @@ __pycache__
 /datasets/TLSE_2022001/TLSE00FRA_R_20220010000_01D_30S_GO.rnx
 /bin/act
 */afterburner/*
-
+*.DS_Store
