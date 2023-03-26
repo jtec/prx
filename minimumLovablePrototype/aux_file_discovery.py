@@ -23,19 +23,6 @@ def is_rinex_3_mixed_mgex_broadcast_ephemerides_file(file: Path):
     return str(file).endswith("MN.rnx")
 
 
-def repair_with_gfzrnx(file):
-    gfzrnx_binaries = glob.glob(
-        str(prx.prx_root().joinpath("tools/gfzrnx/**gfzrnx**")), recursive=True
-    )
-    for gfzrnx_binary in gfzrnx_binaries:
-        command = f" {gfzrnx_binary} -finp {file} -fout {file}  -chk -kv -f"
-        result = subprocess.run(command, capture_output=True, shell=True)
-        if result.returncode == 0:
-            log.info(f"Ran gfzrnx file repair on {file}")
-            return file
-    assert False, "gdzrnx file repair run failed!"
-
-
 def try_downloading_ephemerides_from_bkg(
     t_start: pd.Timestamp, t_end: pd.Timestamp, folder: Path
 ):
@@ -53,7 +40,7 @@ def try_downloading_ephemerides_from_bkg(
         local_file = converters.compressed_to_uncompressed(local_compressed_file)
         os.remove(local_compressed_file)
         log.info(f"Downloaded broadcast ephemerides file from {url}")
-        local_file = repair_with_gfzrnx(local_file)
+        local_file = helpers.repair_with_gfzrnx(local_file)
         files.append(local_file)
         # Assuming that the downloaded files cover the whole day:
         t_coverage_start, t_coverage_end = rinex_3_ephemerides_file_coverage_time(
@@ -83,7 +70,7 @@ def discover_local_ephemerides(
     nav_files = []
     start_end_end_times = []
     for candidate in candidates:
-        nav_file = converters.compressed_to_uncompressed(Path(candidate))
+        nav_file = converters.anything_to_rinex_3(Path(candidate))
         if nav_file is None:
             continue
         if not is_rinex_3_mixed_mgex_broadcast_ephemerides_file(nav_file):
@@ -94,6 +81,7 @@ def discover_local_ephemerides(
         return None
     if min(start_end_end_times) > t_start or max(start_end_end_times) < t_end:
         return None
+    log.info(f"Found broadcast ephemeris files on disk: {[str(f) for f in nav_files]}")
     return nav_files
 
 
@@ -107,21 +95,21 @@ def discover_or_download_ephemerides(
             return ephemerides_files
 
 
-def download_or_discover_ephemerides(observation_file_path=Path()):
+def discover_or_download_auxiliary_files(observation_file_path=Path()):
     log.info(f"Finding auxiliary files for {observation_file_path} ...")
     rinex_3_obs_file = converters.anything_to_rinex_3(observation_file_path)
     header = georinex.rinexheader(rinex_3_obs_file)
-    eph = discover_or_download_ephemerides(
+    ephs = discover_or_download_ephemerides(
         helpers.rinex_header_time_string_2_timestamp_ns(header["TIME OF FIRST OBS"]),
         helpers.rinex_header_time_string_2_timestamp_ns(header["TIME OF LAST OBS"]),
         rinex_3_obs_file.parent,
         list(header["fields"].keys()),
     )
-    if len(eph) > 1:
+    if len(ephs) > 1:
         assert (
             False
         ), "Observations crossing day boundaries not handled yet, need to merge ephemeris files here"
-    return {"broadcast-ephemerides": eph}
+    return {"broadcast_ephemerides": ephs[0]}
 
 
 if __name__ == "__main__":
@@ -137,4 +125,4 @@ if __name__ == "__main__":
     assert Path(
         args.observation_file_path
     ).exists(), f"Cannot find observation file {args.observation_file_path}"
-    download_or_discover_ephemerides(Path(args.observation_file_path))
+    discover_or_download_auxiliary_files(Path(args.observation_file_path))
