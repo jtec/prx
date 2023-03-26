@@ -87,89 +87,6 @@ def convert_nav_dataset_to_dataframe(nav_ds):
     return nav_df
 
 
-def convert_single_nav_dataset_to_dataframe(nav_ds):
-    """convert ephemerides from xarray.Dataset to pandas.DataFrame, as required by gnss_lib_py"""
-    nav_df = nav_ds.to_dataframe()
-    time = pd.to_datetime(nav_ds["time"].values)
-    sv = nav_ds["sv"].values
-    SVclockBias = nav_ds["SVclockBias"].values
-    SVclockDrift = nav_ds["SVclockDrift"].values
-    SVclockDriftRate = nav_ds["SVclockDriftRate"].values
-    IODE = nav_ds["IODE"].values
-    C_rs = nav_ds["Crs"].values
-    deltaN = nav_ds["DeltaN"].values
-    M_0 = nav_ds["M0"].values
-    C_uc = nav_ds["Cuc"].values
-    e = nav_ds["Eccentricity"].values
-    C_us = nav_ds["Cus"].values
-    sqrtA = nav_ds["sqrtA"].values
-    t_oe = nav_ds["Toe"].values
-    C_ic = nav_ds["Cic"].values
-    Omega_0 = nav_ds["Omega0"].values
-    C_is = nav_ds["Cis"].values
-    i_0 = nav_ds["Io"].values
-    C_rc = nav_ds["Crc"].values
-    omega = nav_ds["omega"].values
-    OmegaDot = nav_ds["OmegaDot"].values
-    IDOT = nav_ds["IDOT"].values
-    CodesL2 = nav_ds["CodesL2"].values
-    GPSWeek = nav_ds["GPSWeek"].values
-    L2Pflag = nav_ds["L2Pflag"].values
-    SVacc = nav_ds["SVacc"].values
-    health = nav_ds["health"].values
-    TGD = nav_ds["TGD"].values
-    IODC = nav_ds["IODC"].values
-    TransTime = nav_ds["TransTime"].values
-    source = nav_ds.filename
-    time_gpst_ns = nav_ds["time"].values.astype("datetime64[ms]") - constants.cGpstEpoch
-    time_gpst_ns_np = np.timedelta64(time_gpst_ns)
-    t_oc = (
-        pd.to_numeric(time_gpst_ns_np).astype("float") / constants.cNanoSecondsPerSecond
-    )
-    t_oc = t_oc - WEEKSEC * np.floor(t_oc / WEEKSEC)
-
-    dataframe_data = {
-        "time": time,
-        "sv": sv,
-        "SVclockBias": SVclockBias,
-        "SVclockDrift": SVclockDrift,
-        "SVclockDriftRate": SVclockDriftRate,
-        "IODE": IODE,
-        "C_rs": C_rs,
-        "deltaN": deltaN,
-        "M_0": M_0,
-        "C_uc": C_uc,
-        "e": e,
-        "C_us": C_us,
-        "sqrtA": sqrtA,
-        "t_oe": t_oe,
-        "C_ic": C_ic,
-        "Omega_0": Omega_0,
-        "C_is": C_is,
-        "i_0": i_0,
-        "C_rc": C_rc,
-        "omega": omega,
-        "OmegaDot": OmegaDot,
-        "IDOT": IDOT,
-        "CodesL2": CodesL2,
-        "GPSWeek": GPSWeek,
-        "L2Pflag": L2Pflag,
-        "SVacc": SVacc,
-        "health": health,
-        "TGD": TGD,
-        "IODC": IODC,
-        "TransTime": TransTime,
-        "source": source,
-        "t_oc": t_oc,
-        # Glonass orbit parameters:
-        "X": nav_ds["X"].values,
-    }
-
-    nav_df = pd.DataFrame(dataframe_data, index=[0])
-
-    return nav_df
-
-
 def select_nav_ephemeris(nav_dataframe, satellite_id, gpst_datetime):
     """select an ephemeris from a RNX3 nav dataframe for a particular sv and time, and return the ephemeris.
 
@@ -205,24 +122,32 @@ def compute_satellite_clock_offset_and_clock_offset_rate(
     ephemeris_df = select_nav_ephemeris(
         parsed_rinex_3_nav_file, satellite, time_constellation_time_ns.to_datetime64()
     )
+    # Convert to float64 seconds here, as pandas.Timedelta has only nanosecond resolution
     time_wrt_ephemeris_epoch_s = pd.Timedelta(
         time_constellation_time_ns - ephemeris_df["time"].iloc[0]
     ).total_seconds()
-    if satellite[0] != "R":
+    if satellite[0] == "R":
         offset_at_epoch_s = ephemeris_df["SVclockBias"].iloc[0]
-        offset_rate_sps = ephemeris_df["SVclockDrift"].iloc[0]
-        offset_acceleration_sps2 = ephemeris_df["SVclockDriftRate"].iloc[0]
+        offset_rate_at_epoch_sps = ephemeris_df["SVrelFreqBias"].iloc[0]
+        offset_acceleration_sps2 = 0
+    elif satellite[0] == "S":
+        # TODO RINEX 3.05 mentions a W0 time offset term for SBAS, where do we get that from?
+        offset_at_epoch_s = ephemeris_df["SVclockBias"].iloc[0]
+        offset_rate_at_epoch_sps = ephemeris_df["SVrelFreqBias"].iloc[0]
+        offset_acceleration_sps2 = 0
     else:
         offset_at_epoch_s = ephemeris_df["SVclockBias"].iloc[0]
-        offset_rate_sps = ephemeris_df["SVrelFreqBias"].iloc[0]
-        offset_acceleration_sps2 = 0
+        offset_rate_at_epoch_sps = ephemeris_df["SVclockDrift"].iloc[0]
+        offset_acceleration_sps2 = ephemeris_df["SVclockDriftRate"].iloc[0]
 
     offset_s = (
         offset_at_epoch_s
-        + offset_rate_sps * time_wrt_ephemeris_epoch_s
+        + offset_rate_at_epoch_sps * time_wrt_ephemeris_epoch_s
         + offset_acceleration_sps2 * math.pow(time_wrt_ephemeris_epoch_s, 2)
     )
     offset_rate_sps = (
-        offset_rate_sps + 2 * offset_acceleration_sps2 * time_wrt_ephemeris_epoch_s
+        offset_rate_at_epoch_sps + 2 * offset_acceleration_sps2 * time_wrt_ephemeris_epoch_s
     )
-    return offset_s, offset_rate_sps
+    if np.isnan(offset_s):
+        bp = 0
+    return constants.cGpsIcdSpeedOfLight_mps*offset_s, constants.cGpsIcdSpeedOfLight_mps*offset_rate_sps

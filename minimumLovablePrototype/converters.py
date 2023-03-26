@@ -20,7 +20,6 @@ def compressed_to_uncompressed(file: Path):
         log.info(f"Uncompressed {file} to {uncompressed_file}")
         return uncompressed_file
     if str(file).endswith(".zip"):
-        uncompressed_file = Path(str(file).replace(".zip", ""))
         with zipfile.ZipFile(file, mode="r") as archive:
             assert (
                 len(archive.namelist()) == 1

@@ -13,7 +13,7 @@ import converters
 import helpers
 import constants
 import aux_file_discovery as aux
-
+import process_ephemerides as eph
 log = helpers.get_logger(__name__)
 
 
@@ -134,6 +134,7 @@ def build_records(rinex_3_obs_file, rinex_3_ephemerides_file):
     obs = parse_rinex.load(rinex_3_obs_file, use_caching=True)
 
     # Flatten the xarray DataSet into a pandas DataFrame:
+    log.info("Converting Dataset into flat Dataframe of observations")
     flat_obs = pd.DataFrame()
     for obs_label, sat_time_obs_array in obs.data_vars.items():
         df = sat_time_obs_array.to_dataframe(name="obs_value").reset_index()
@@ -143,16 +144,15 @@ def build_records(rinex_3_obs_file, rinex_3_ephemerides_file):
 
     def format_flat_rows(row):
         return [
-            helpers.timestamp_2_gpst_ns(pd.Timestamp(row[0])),
+            pd.Timestamp(row[0]),
             str(row[1]),
             row[2],
             str(row[3]),
         ]
-
     flat_obs = flat_obs.apply(format_flat_rows, axis=1, result_type="expand")
     flat_obs.rename(
         columns={
-            0: "time_of_reception_in_receiver_time_ns",
+            0: "time_of_reception_in_receiver_time",
             1: "satellite",
             2: "observation_value",
             3: "observation_type",
@@ -160,29 +160,37 @@ def build_records(rinex_3_obs_file, rinex_3_ephemerides_file):
         inplace=True,
     )
 
-    nav = parse_rinex.load(rinex_3_ephemerides_file, use_caching=True)
-
     # Compute time-of-emission in satellite time (we don't have satellite clock offset from constellation time yet)
     def compute_time_of_emission_in_satellite_time(row):
-        if row["observation_type"].startswith("C"):
-            return row[
-                "time_of_reception_in_receiver_time_ns"
-            ] - constants.cNanoSecondsPerSecond * (
-                row["observation_value"] / constants.cGpsIcdSpeedOfLight_mps
-            )
-        return np.float64("NaN")
+        row = row.dropna()
+        pseudorange = row.iloc[row.index.str.startswith("C")].mean()
+        return  constants.cNanoSecondsPerSecond * pseudorange / constants.cGpsIcdSpeedOfLight_mps
+    log.info("Computing times of emission in satellite time")
+    per_sat = flat_obs.pivot(index=["time_of_reception_in_receiver_time", "satellite"], columns=["observation_type"], values="observation_value").reset_index()
+    code_phase_columns = [c for c in per_sat.columns if c[0] == "C"]
+    per_sat["time_of_emission_in_satellite_time"] = per_sat["time_of_reception_in_receiver_time"] \
+                                                     - pd.to_timedelta(per_sat[code_phase_columns].mean(axis=1, skipna=True).divide(constants.cGpsIcdSpeedOfLight_mps), unit="s")
 
-    flat_obs["time_of_emission_in_satellite_time_gpst_ns"] = flat_obs.apply(
-        compute_time_of_emission_in_satellite_time, axis=1
+    def compute_and_apply_satellite_clock_offsets(row, ephemerides):
+        offset_m, offset_rate_mps = eph.compute_satellite_clock_offset_and_clock_offset_rate(
+            ephemerides,
+            row["satellite"],
+            pd.Timestamp(row["time_of_emission_in_satellite_time"])
+        )
+        time_of_emission_in_system_time = pd.Timestamp(row["time_of_emission_in_satellite_time"] - pd.Timedelta(constants.cNanoSecondsPerSecond*offset_m/constants.cGpsIcdSpeedOfLight_mps))
+        offset_m, offset_rate_mps = eph.compute_satellite_clock_offset_and_clock_offset_rate(
+            ephemerides,
+            row["satellite"],
+            time_of_emission_in_system_time
+        )
+        return pd.Series([offset_m, offset_rate_mps, time_of_emission_in_system_time])
+    log.info("Computing satellite clock offsets")
+    ephemerides = eph.convert_rnx3_nav_file_to_dataframe(rinex_3_ephemerides_file)
+    per_sat[["satellite_clock_offset_at_time_of_emission_m", "satellite_clock_offset_rate_at_time_of_emission_mps", "time_of_emission_in_system_time"]] = per_sat.apply(
+        compute_and_apply_satellite_clock_offsets, axis=1, args=(ephemerides,)
     )
 
-    # Compute broadcast satellite clock - constellation time offsets
-    def compute_satellite_clock_offsets(row, nav):
-        return np.float64("NaN")
 
-    flat_obs["satellite_clock_offset_ns"] = flat_obs.apply(
-        compute_satellite_clock_offsets, axis=1, args=(nav,)
-    )
 
 
 def process(observation_file_path: Path, output_format="jsonseq"):
