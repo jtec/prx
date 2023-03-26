@@ -15,8 +15,8 @@ def set_up_test():
         # test run having crashed:
         shutil.rmtree(test_directory)
     os.makedirs(test_directory)
-    test_obs_file = test_directory.joinpath("TLSE00FRA_R_20230010000_10S_01S_MO.crx.gz")
-    test_nav_file = test_directory.joinpath("BRDC00IGS_R_20230010000_01D_MN.rnx.gz")
+    test_obs_file = test_directory.joinpath("TLSE00FRA_R_20230010100_10S_01S_MO.crx.gz")
+    test_nav_file = test_directory.joinpath("BRDC00IGS_R_20230010000_01D_MN.rnx.zip")
 
     shutil.copy(
         helpers.prx_root().joinpath(f"datasets/TLSE_2023001/{test_obs_file.name}"),

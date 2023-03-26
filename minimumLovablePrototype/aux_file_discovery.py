@@ -40,7 +40,7 @@ def try_downloading_ephemerides_from_bkg(
         local_file = converters.compressed_to_uncompressed(local_compressed_file)
         os.remove(local_compressed_file)
         log.info(f"Downloaded broadcast ephemerides file from {url}")
-        local_file = repair_with_gfzrnx(local_file)
+        local_file = helpers.repair_with_gfzrnx(local_file)
         files.append(local_file)
         # Assuming that the downloaded files cover the whole day:
         t_coverage_start, t_coverage_end = rinex_3_ephemerides_file_coverage_time(
