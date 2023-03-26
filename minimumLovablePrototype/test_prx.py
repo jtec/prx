@@ -35,9 +35,7 @@ def input_for_test():
     # Also provide ephemerides so the test does not have to download them:
     ephemerides_file = "BRDC00IGS_R_20230010000_01D_MN.rnx.zip"
     shutil.copy(
-        helpers.prx_root().joinpath(
-            f"datasets/TLSE_2023001/{ephemerides_file}"
-        ),
+        helpers.prx_root().joinpath(f"datasets/TLSE_2023001/{ephemerides_file}"),
         test_file.parent.joinpath(ephemerides_file),
     )
     assert test_file.parent.joinpath(ephemerides_file).exists()

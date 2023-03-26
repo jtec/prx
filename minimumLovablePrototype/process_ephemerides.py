@@ -146,8 +146,12 @@ def compute_satellite_clock_offset_and_clock_offset_rate(
         + offset_acceleration_sps2 * math.pow(time_wrt_ephemeris_epoch_s, 2)
     )
     offset_rate_sps = (
-        offset_rate_at_epoch_sps + 2 * offset_acceleration_sps2 * time_wrt_ephemeris_epoch_s
+        offset_rate_at_epoch_sps
+        + 2 * offset_acceleration_sps2 * time_wrt_ephemeris_epoch_s
     )
     if np.isnan(offset_s):
         bp = 0
-    return constants.cGpsIcdSpeedOfLight_mps*offset_s, constants.cGpsIcdSpeedOfLight_mps*offset_rate_sps
+    return (
+        constants.cGpsIcdSpeedOfLight_mps * offset_s,
+        constants.cGpsIcdSpeedOfLight_mps * offset_rate_sps,
+    )

@@ -14,6 +14,7 @@ import helpers
 import constants
 import aux_file_discovery as aux
 import process_ephemerides as eph
+
 log = helpers.get_logger(__name__)
 
 
@@ -149,6 +150,7 @@ def build_records(rinex_3_obs_file, rinex_3_ephemerides_file):
             row[2],
             str(row[3]),
         ]
+
     flat_obs = flat_obs.apply(format_flat_rows, axis=1, result_type="expand")
     flat_obs.rename(
         columns={
@@ -164,33 +166,64 @@ def build_records(rinex_3_obs_file, rinex_3_ephemerides_file):
     def compute_time_of_emission_in_satellite_time(row):
         row = row.dropna()
         pseudorange = row.iloc[row.index.str.startswith("C")].mean()
-        return  constants.cNanoSecondsPerSecond * pseudorange / constants.cGpsIcdSpeedOfLight_mps
-    log.info("Computing times of emission in satellite time")
-    per_sat = flat_obs.pivot(index=["time_of_reception_in_receiver_time", "satellite"], columns=["observation_type"], values="observation_value").reset_index()
-    code_phase_columns = [c for c in per_sat.columns if c[0] == "C"]
-    per_sat["time_of_emission_in_satellite_time"] = per_sat["time_of_reception_in_receiver_time"] \
-                                                     - pd.to_timedelta(per_sat[code_phase_columns].mean(axis=1, skipna=True).divide(constants.cGpsIcdSpeedOfLight_mps), unit="s")
+        return (
+            constants.cNanoSecondsPerSecond
+            * pseudorange
+            / constants.cGpsIcdSpeedOfLight_mps
+        )
 
-    def compute_and_apply_satellite_clock_offsets(row, ephemerides):
-        offset_m, offset_rate_mps = eph.compute_satellite_clock_offset_and_clock_offset_rate(
-            ephemerides,
-            row["satellite"],
-            pd.Timestamp(row["time_of_emission_in_satellite_time"])
-        )
-        time_of_emission_in_system_time = pd.Timestamp(row["time_of_emission_in_satellite_time"] - pd.Timedelta(constants.cNanoSecondsPerSecond*offset_m/constants.cGpsIcdSpeedOfLight_mps))
-        offset_m, offset_rate_mps = eph.compute_satellite_clock_offset_and_clock_offset_rate(
-            ephemerides,
-            row["satellite"],
-            time_of_emission_in_system_time
-        )
-        return pd.Series([offset_m, offset_rate_mps, time_of_emission_in_system_time])
-    log.info("Computing satellite clock offsets")
-    ephemerides = eph.convert_rnx3_nav_file_to_dataframe(rinex_3_ephemerides_file)
-    per_sat[["satellite_clock_offset_at_time_of_emission_m", "satellite_clock_offset_rate_at_time_of_emission_mps", "time_of_emission_in_system_time"]] = per_sat.apply(
-        compute_and_apply_satellite_clock_offsets, axis=1, args=(ephemerides,)
+    log.info("Computing times of emission in satellite time")
+    per_sat = flat_obs.pivot(
+        index=["time_of_reception_in_receiver_time", "satellite"],
+        columns=["observation_type"],
+        values="observation_value",
+    ).reset_index()
+    code_phase_columns = [c for c in per_sat.columns if c[0] == "C"]
+    per_sat["time_of_emission_in_satellite_time"] = per_sat[
+        "time_of_reception_in_receiver_time"
+    ] - pd.to_timedelta(
+        per_sat[code_phase_columns]
+        .mean(axis=1, skipna=True)
+        .divide(constants.cGpsIcdSpeedOfLight_mps),
+        unit="s",
     )
 
+    def compute_and_apply_satellite_clock_offsets(row, ephemerides):
+        (
+            offset_m,
+            offset_rate_mps,
+        ) = eph.compute_satellite_clock_offset_and_clock_offset_rate(
+            ephemerides,
+            row["satellite"],
+            pd.Timestamp(row["time_of_emission_in_satellite_time"]),
+        )
+        time_of_emission_in_system_time = pd.Timestamp(
+            row["time_of_emission_in_satellite_time"]
+            - pd.Timedelta(
+                constants.cNanoSecondsPerSecond
+                * offset_m
+                / constants.cGpsIcdSpeedOfLight_mps
+            )
+        )
+        (
+            offset_m,
+            offset_rate_mps,
+        ) = eph.compute_satellite_clock_offset_and_clock_offset_rate(
+            ephemerides, row["satellite"], time_of_emission_in_system_time
+        )
+        return pd.Series([offset_m, offset_rate_mps, time_of_emission_in_system_time])
 
+    log.info("Computing satellite clock offsets")
+    ephemerides = eph.convert_rnx3_nav_file_to_dataframe(rinex_3_ephemerides_file)
+    per_sat[
+        [
+            "satellite_clock_offset_at_time_of_emission_m",
+            "satellite_clock_offset_rate_at_time_of_emission_mps",
+            "time_of_emission_in_system_time",
+        ]
+    ] = per_sat.apply(
+        compute_and_apply_satellite_clock_offsets, axis=1, args=(ephemerides,)
+    )
 
 
 def process(observation_file_path: Path, output_format="jsonseq"):
