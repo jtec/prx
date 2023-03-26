@@ -10,8 +10,6 @@ log = helpers.get_logger(__name__)
 
 
 # Can speed up RINEX parsing by using parsing results previously obtained and saved to disk.
-
-
 def load(rinex_file: Path, use_caching=False):
     return load_from_pickle_cache(rinex_file, use_caching)
 
@@ -38,6 +36,7 @@ def load_from_pickle_cache(rinex_file: Path, use_caching=False):
                 os.remove(cache_file)
                 return load_from_pickle_cache(rinex_file, use_caching)
     log.info(f"Parsing {rinex_file} ...")
+    helpers.repair_with_gfzrnx(rinex_file)
     parsed = georinex.load(rinex_file)
     if use_caching:
         try:
@@ -70,6 +69,7 @@ def load_from_netcdf_cache(rinex_file: Path, use_caching=False):
                 )
                 os.remove(cache_file)
                 return load_from_netcdf_cache(rinex_file, use_caching)
+    helpers.repair_with_gfzrnx(rinex_file)
     parsed = georinex.load(rinex_file)
     if use_caching:
         try:

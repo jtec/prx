@@ -23,19 +23,6 @@ def is_rinex_3_mixed_mgex_broadcast_ephemerides_file(file: Path):
     return str(file).endswith("MN.rnx")
 
 
-def repair_with_gfzrnx(file):
-    gfzrnx_binaries = glob.glob(
-        str(helpers.prx_root().joinpath("tools/gfzrnx/**gfzrnx**")), recursive=True
-    )
-    for gfzrnx_binary in gfzrnx_binaries:
-        command = f" {gfzrnx_binary} -finp {file} -fout {file}  -chk -kv -f"
-        result = subprocess.run(command, capture_output=True, shell=True)
-        if result.returncode == 0:
-            log.info(f"Ran gfzrnx file repair on {file}")
-            return file
-    assert False, "gdzrnx file repair run failed!"
-
-
 def try_downloading_ephemerides_from_bkg(
     t_start: pd.Timestamp, t_end: pd.Timestamp, folder: Path
 ):
