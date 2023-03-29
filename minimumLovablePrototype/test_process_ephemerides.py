@@ -99,8 +99,10 @@ def test_compute_satellite_clock_offset():
          5.171890000000e+05 4.000000000000e+00 0.000000000000e+00 0.000000000000e+00
     """
     # copied from the following file
-    rinex_3_navigation_file = helpers.prx_root().joinpath(
-        f"datasets/TLSE_2022001/BRDC00IGS_R_20220010000_01D_GN.rnx"
+    rinex_3_navigation_file = converters.anything_to_rinex_3(
+        helpers.prx_root().joinpath(
+        f"datasets/TLSE_2022001/BRDC00IGS_R_20220010000_01D_GN.zip"
+        )
     )
     (
         computed_offset_m,
