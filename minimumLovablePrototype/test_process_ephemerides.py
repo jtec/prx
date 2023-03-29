@@ -18,22 +18,44 @@ import helpers
 import converters
 import parse_rinex
 import constants
+import shutil
+import pytest
+import os
 
+# This function sets up a temporary directory, copies a zipped rinex navigation file into that directory
+# and returns its path. The @pytest.fixture annotation allows us to pass the function as an input
+# to test functions. When running a test function, pytest will then first run this function, pass
+# whatever is passed to `yield` to the test function, and run the code after `yield` after the test,
+# even  if the test crashes.
+@pytest.fixture
+def input_for_test():
+    test_directory = Path(f"./tmp_test_directory_{__name__}").resolve()
+    if test_directory.exists():
+        # Make sure the expected file has not been generated before and is still on disk due to e.g. a previous
+        # test run having crashed:
+        shutil.rmtree(test_directory)
+    os.makedirs(test_directory)
+    rnx3_nav_file = "BRDC00IGS_R_20220010000_01D_GN.zip"
+    test_file = test_directory.joinpath(rnx3_nav_file)
+    shutil.copy(
+        helpers.prx_root().joinpath(
+            f"datasets/TLSE_2022001/{rnx3_nav_file}"
+        ),
+        test_file,
+    )
+    assert test_file.exists()
 
-def test_compare_rnx3_sat_pos_with_magnitude():
+    yield test_file
+    shutil.rmtree(test_file.parent)
+
+def test_compare_rnx3_sat_pos_with_magnitude(input_for_test):
     """Loads a RNX3 file, compute a position for different satellites and time, and compare to MAGNITUDE results
     Test will be a success if the difference in position is lower than threshold_pos_error_m = 0.01
     """
+    path_to_rnx3_nav_file = converters.anything_to_rinex_3(input_for_test)
+
     threshold_pos_error_m = 0.01
 
-    # filepath towards RNX3 NAV file
-    path_to_rnx3_nav_file = (
-        Path(__file__)
-        .resolve()
-        .parent.parent.joinpath(
-            "datasets", "TLSE_2022001", "BRDC00IGS_R_20220010000_01D_GN.rnx"
-        )
-    )
     # select sv and time
     sv = np.array("G01", dtype="<U3")
     gps_week = 2190
@@ -42,19 +64,7 @@ def test_compare_rnx3_sat_pos_with_magnitude():
     # MAGNITUDE position
     sv_pos_magnitude = np.array([13053451.235, -12567273.060, 19015357.126])
 
-    # check existence of RNX3 file, and if not, try to find and unzip a compressed version
-    if not path_to_rnx3_nav_file.exists():
-        # check existence of zipped file
-        path_to_zip_file = path_to_rnx3_nav_file.with_suffix(".zip")
-        if path_to_zip_file.exists():
-            print("Unzipping RNX3 NAV file...")
-            # unzip file
-            with zipfile.ZipFile(path_to_zip_file, "r") as zip_ref:
-                zip_ref.extractall(path_to_rnx3_nav_file.resolve().parent)
-        else:
-            print(f"File {path_to_rnx3_nav_file} (or zipped version) does not exist")
-
-    # Compute RNX3 satellite position
+     # Compute RNX3 satellite position
     # Select right ephemeris
     date = np.datetime64(tow_to_datetime(gps_week, gps_tow))
     ephemerides = eph.convert_rnx3_nav_file_to_dataframe(path_to_rnx3_nav_file)
