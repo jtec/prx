@@ -83,7 +83,7 @@ def test_compare_rnx3_sat_pos_with_magnitude(input_for_test):
     assert np.linalg.norm(sv_pos_rnx3 - sv_pos_magnitude) < threshold_pos_error_m
 
 
-def astestos_compute_satellite_clock_offset():
+def test_compute_satellite_clock_offset():
     # GPS, GAL, QZSS, BDS, IRNSS broadcast satellite clock system time offsets are all given
     # as parameters of a polynomial of order 2, so this test should cover those constellations.
     # When computing the satellite clock offset of GPS-001 for January 1st 2022 at 1am GPST
@@ -103,8 +103,8 @@ def astestos_compute_satellite_clock_offset():
         f"datasets/TLSE_2022001/BRDC00IGS_R_20220010000_01D_GN.rnx"
     )
     (
-        computed_offset_s,
-        computed_offset_rate_sps,
+        computed_offset_m,
+        computed_offset_rate_mps,
     ) = eph.compute_satellite_clock_offset_and_clock_offset_rate(
         eph.convert_rnx3_nav_file_to_dataframe(rinex_3_navigation_file),
         "G01",
@@ -112,19 +112,19 @@ def astestos_compute_satellite_clock_offset():
     )
     # We expect the following clock offset and clock offset rate computed by hand from the parameters above.
     delta_t_s = constants.cSecondsPerHour
-    expected_offset = (
+    expected_offset_m = constants.cGpsIcdSpeedOfLight_mps * (
         4.691267386079e-04
         + (-1.000444171950e-11 * delta_t_s)
-        + math.pow(0.000000000000e00, 2)
+        + 0.000000000000e00 * math.pow(delta_t_s, 2)
     )
-    expected_offset_rate = -1.000444171950e-11
+    expected_offset_rate_mps = constants.cGpsIcdSpeedOfLight_mps * (-1.000444171950e-11 + 2 * 0.000000000000e00 * delta_t_s)
     # Expect micrometers and micrometers/s accuracy here:
     assert (
-        constants.cGpsIcdSpeedOfLight_mps * (expected_offset - computed_offset_s) < 1e-6
+        constants.cGpsIcdSpeedOfLight_mps * (expected_offset_m - computed_offset_m) < 1e-6
     )
     assert (
         constants.cGpsIcdSpeedOfLight_mps
-        * (expected_offset_rate - computed_offset_rate_sps)
+        * (expected_offset_rate_mps - computed_offset_rate_mps)
         < 1e-6
     )
 
