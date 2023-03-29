@@ -83,7 +83,7 @@ def test_compare_rnx3_sat_pos_with_magnitude(input_for_test):
     assert np.linalg.norm(sv_pos_rnx3 - sv_pos_magnitude) < threshold_pos_error_m
 
 
-def test_compute_satellite_clock_offset():
+def test_compute_satellite_clock_offset(input_for_test):
     # GPS, GAL, QZSS, BDS, IRNSS broadcast satellite clock system time offsets are all given
     # as parameters of a polynomial of order 2, so this test should cover those constellations.
     # When computing the satellite clock offset of GPS-001 for January 1st 2022 at 1am GPST
@@ -99,11 +99,7 @@ def test_compute_satellite_clock_offset():
          5.171890000000e+05 4.000000000000e+00 0.000000000000e+00 0.000000000000e+00
     """
     # copied from the following file
-    rinex_3_navigation_file = converters.anything_to_rinex_3(
-        helpers.prx_root().joinpath(
-        f"datasets/TLSE_2022001/BRDC00IGS_R_20220010000_01D_GN.zip"
-        )
-    )
+    rinex_3_navigation_file = converters.anything_to_rinex_3(input_for_test)
     (
         computed_offset_m,
         computed_offset_rate_mps,
@@ -121,14 +117,8 @@ def test_compute_satellite_clock_offset():
     )
     expected_offset_rate_mps = constants.cGpsIcdSpeedOfLight_mps * (-1.000444171950e-11 + 2 * 0.000000000000e00 * delta_t_s)
     # Expect micrometers and micrometers/s accuracy here:
-    assert (
-        constants.cGpsIcdSpeedOfLight_mps * (expected_offset_m - computed_offset_m) < 1e-6
-    )
-    assert (
-        constants.cGpsIcdSpeedOfLight_mps
-        * (expected_offset_rate_mps - computed_offset_rate_mps)
-        < 1e-6
-    )
+    assert expected_offset_m - computed_offset_m < 1e-6
+    assert expected_offset_rate_mps - computed_offset_rate_mps < 1e-6
 
 
 def test_compute_satellite_clock_offset_glonass():
