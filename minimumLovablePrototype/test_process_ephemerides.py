@@ -126,8 +126,8 @@ def test_compute_satellite_clock_offset(input_for_test):
     )
     expected_offset_rate_mps = constants.cGpsIcdSpeedOfLight_mps * (-1.000444171950e-11 + 2 * 0.000000000000e00 * delta_t_s)
     # Expect micrometers and micrometers/s accuracy here:
-    assert expected_offset_m - computed_offset_m < 1e-6
-    assert expected_offset_rate_mps - computed_offset_rate_mps < 1e-6
+    assert abs(expected_offset_m - computed_offset_m) < 1e-6
+    assert abs(expected_offset_rate_mps - computed_offset_rate_mps) < 1e-6
 
 
 def test_compute_satellite_clock_offset_glonass(input_for_test):
@@ -144,8 +144,8 @@ def test_compute_satellite_clock_offset_glonass(input_for_test):
     # copied from the following file
     rinex_3_navigation_file = converters.anything_to_rinex_3(input_for_test["all_constellations_nav_file"])
     (
-        computed_offset_s,
-        computed_offset_rate_sps,
+        computed_offset_m,
+        computed_offset_rate_mps,
     ) = eph.compute_satellite_clock_offset_and_clock_offset_rate(
         eph.convert_rnx3_nav_file_to_dataframe(rinex_3_navigation_file),
         "R01",
@@ -153,16 +153,14 @@ def test_compute_satellite_clock_offset_glonass(input_for_test):
     )
     # We expect the following clock offset and clock offset rate computed by hand from the parameters above.
     delta_t_s = constants.cSecondsPerHour
-    expected_offset = (
+    expected_offset_m = constants.cGpsIcdSpeedOfLight_mps * (
         7.305294275284e-06 + (0.0 * delta_t_s) + math.pow(0.000000000000e00, 2)
     )
-    expected_offset_rate = 0
+    expected_offset_rate_mps = 0
     # Expect micrometers and micrometers/s accuracy here:
     assert (
-        constants.cGpsIcdSpeedOfLight_mps * (expected_offset - computed_offset_s) < 1e-6
+        abs(expected_offset_m - computed_offset_m) < 1e-6
     )
     assert (
-        constants.cGpsIcdSpeedOfLight_mps
-        * (expected_offset_rate - computed_offset_rate_sps)
-        < 1e-6
+        abs(expected_offset_rate_mps - computed_offset_rate_mps) < 1e-6
     )
