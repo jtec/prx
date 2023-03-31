@@ -31,28 +31,37 @@ import os
 def input_for_test():
     test_directory = Path(f"./tmp_test_directory_{__name__}").resolve()
     if test_directory.exists():
-        # Make sure the expected file has not been generated before and is still on disk due to e.g. a previous
-        # test run having crashed:
+        # Start from empty directory, might avoid hiding some subtle bugs, e.g.
+        # file decompression not working properly
         shutil.rmtree(test_directory)
     os.makedirs(test_directory)
-    rnx3_nav_file = "BRDC00IGS_R_20220010000_01D_GN.zip"
-    test_file = test_directory.joinpath(rnx3_nav_file)
+    gps_rnx3_nav_test_file = test_directory.joinpath("BRDC00IGS_R_20220010000_01D_GN.zip")
     shutil.copy(
         helpers.prx_root().joinpath(
-            f"datasets/TLSE_2022001/{rnx3_nav_file}"
+            f"datasets/TLSE_2022001/{gps_rnx3_nav_test_file.name}"
         ),
-        test_file,
+        gps_rnx3_nav_test_file,
     )
-    assert test_file.exists()
+    assert gps_rnx3_nav_test_file.exists()
 
-    yield test_file
-    shutil.rmtree(test_file.parent)
+    all_constellations_rnx3_nav_test_file = test_directory.joinpath("BRDC00IGS_R_20220010000_01D_MN.zip")
+    shutil.copy(
+        helpers.prx_root().joinpath(
+            f"datasets/TLSE_2022001/{all_constellations_rnx3_nav_test_file.name}"
+        ),
+        all_constellations_rnx3_nav_test_file,
+    )
+    assert all_constellations_rnx3_nav_test_file.exists()
+
+    yield {"gps_nav_file": gps_rnx3_nav_test_file, "all_constellations_nav_file": all_constellations_rnx3_nav_test_file}
+    shutil.rmtree(test_directory)
+
 
 def test_compare_rnx3_sat_pos_with_magnitude(input_for_test):
     """Loads a RNX3 file, compute a position for different satellites and time, and compare to MAGNITUDE results
     Test will be a success if the difference in position is lower than threshold_pos_error_m = 0.01
     """
-    path_to_rnx3_nav_file = converters.anything_to_rinex_3(input_for_test)
+    path_to_rnx3_nav_file = converters.anything_to_rinex_3(input_for_test["gps_nav_file"])
 
     threshold_pos_error_m = 0.01
 
@@ -99,7 +108,7 @@ def test_compute_satellite_clock_offset(input_for_test):
          5.171890000000e+05 4.000000000000e+00 0.000000000000e+00 0.000000000000e+00
     """
     # copied from the following file
-    rinex_3_navigation_file = converters.anything_to_rinex_3(input_for_test)
+    rinex_3_navigation_file = converters.anything_to_rinex_3(input_for_test["gps_nav_file"])
     (
         computed_offset_m,
         computed_offset_rate_mps,
@@ -121,7 +130,7 @@ def test_compute_satellite_clock_offset(input_for_test):
     assert expected_offset_rate_mps - computed_offset_rate_mps < 1e-6
 
 
-def test_compute_satellite_clock_offset_glonass():
+def test_compute_satellite_clock_offset_glonass(input_for_test):
     # Glonass broadcast system time clock offsets are given as a clock offset in seconds
     # plus a relative frequency offset.
     # When computing the satellite clock offset of Glonass-001 for January 1st 2022 at 1am GLONASST
@@ -133,11 +142,7 @@ def test_compute_satellite_clock_offset_glonass():
          1.381343408203E+04 2.848098754883E+00 0.000000000000E+00 0.000000000000E+00
     """
     # copied from the following file
-    rinex_3_navigation_file = converters.anything_to_rinex_3(
-        helpers.prx_root().joinpath(
-            f"datasets/TLSE_2022001/BRDC00IGS_R_20220010000_01D_MN.zip"
-        )
-    )
+    rinex_3_navigation_file = converters.anything_to_rinex_3(input_for_test["all_constellations_nav_file"])
     (
         computed_offset_s,
         computed_offset_rate_sps,
