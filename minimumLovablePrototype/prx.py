@@ -224,6 +224,7 @@ def build_records(rinex_3_obs_file, rinex_3_ephemerides_file):
     ] = per_sat.apply(
         compute_and_apply_satellite_clock_offsets, axis=1, args=(ephemerides,)
     )
+    return per_sat
 
 
 def process(observation_file_path: Path, output_format="jsonseq"):
