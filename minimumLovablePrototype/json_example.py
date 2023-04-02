@@ -6,7 +6,7 @@ import example_observations
 
 
 def generate_example_file(
-    file_path=Path("__file__").resolve().parent.joinpath(Path("example.jsonl"))
+    file_path=Path("__file__").resolve().parent.joinpath(Path("example.jsonl")),
 ) -> Path:
     header, observations = example_observations.generate()
     # write header and observations to json file
@@ -60,7 +60,7 @@ def fields_to_arrays(flat_obs):
 
 
 def replace_flat_by_array(flat_dict, array_field, flat_fields):
-    assert len(flat_fields) > 0
+    assert len(flat_fields) > 0, "Array of flat field names is empty"
     dict_with_array = flat_dict.copy()
     dict_with_array[array_field] = []
     for flat_field in flat_fields:
