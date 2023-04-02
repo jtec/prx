@@ -6,7 +6,7 @@ import example_observations
 
 
 def generate_example_file(
-    file_path=Path("__file__").resolve().parent.joinpath(Path("example.csv"))
+    file_path=Path("__file__").resolve().parent.joinpath(Path("example.csv")),
 ) -> Path:
     header, observations = example_observations.generate()
     # write observations to csv file

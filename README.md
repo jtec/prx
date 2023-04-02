@@ -14,6 +14,9 @@ To create the virtual environment, run
 `pipenv install` in the `prx` repository root. This has to be run every time an update to the `Pipfile` and `Pipfile.lock`
 files is done (for example, after a `git fetch`)
 
+### Jumping to the pipenv virtual environment
+Run `pipenv shell` to activate the virtual environment in a terminal.
+
 ### Using the pipenv virtual environment in PyCharm
 Run `pipenv --venv` to find the path of the virtual environment, which we'll call `<venv-path>`
 Under `File` -> `Settings` -> `Project` -> `Python Interpreter` add `<venv-path>` as python interpreter.

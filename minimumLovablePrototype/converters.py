@@ -3,33 +3,36 @@ import glob
 import itertools
 import subprocess
 import gzip
-import logging
+import zipfile
 import prx
+import helpers
 
-logging.basicConfig(
-    format="%(asctime)s,%(msecs)03d %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s",
-    datefmt="%Y-%m-%d:%H:%M:%S",
-    level=logging.DEBUG,
-)
-
-logger = logging.getLogger(__name__)
+log = helpers.get_logger(__name__)
 
 
 def compressed_to_uncompressed(file: Path):
-    assert file.exists()
+    assert file.exists(), "File does not exist"
     if str(file).endswith(".gz"):
         uncompressed_file = Path(str(file).replace(".gz", ""))
         with gzip.open(file, "rb") as compressed_file:
             with open(uncompressed_file, "wb") as output_file:
                 output_file.write(compressed_file.read())
-        logger.info(f"Uncompressed {file} to {uncompressed_file}")
+        log.info(f"Uncompressed {file} to {uncompressed_file}")
         return uncompressed_file
-    else:
-        return None
+    if str(file).endswith(".zip"):
+        with zipfile.ZipFile(file, mode="r") as archive:
+            assert (
+                len(archive.namelist()) == 1
+            ), "Not expecting more than one file in archive here."
+            uncompressed_file = file.parent.joinpath(archive.namelist()[0])
+            archive.extract(uncompressed_file.name, uncompressed_file.parent)
+        log.info(f"Uncompressed {file} to {uncompressed_file}")
+        return uncompressed_file
+    return None
 
 
-def is_compact_rinex(file: Path):
-    assert file.exists()
+def is_compact_rinex_obs_file(file: Path):
+    assert file.exists(), "File does not exist"
     if not str(file).endswith(".crx"):
         return False
     with open(file) as f:
@@ -39,59 +42,94 @@ def is_compact_rinex(file: Path):
     return True
 
 
-def compact_rinex_to_rinex(file: Path):
-    assert file.exists()
-    if not is_compact_rinex(file):
+def compact_rinex_obs_file_to_rinex_obs_file(file: Path):
+    assert file.exists(), "File does not exist"
+    if not is_compact_rinex_obs_file(file):
         return None
     crx2rnx_binaries = glob.glob(
-        str(prx.prx_root().joinpath("tools/RNXCMP/**/CRX2RNX*")), recursive=True
+        str(helpers.prx_root().joinpath("tools/RNXCMP/**/CRX2RNX*")), recursive=True
     )
     for crx2rnx_binary in crx2rnx_binaries:
         command = f" {crx2rnx_binary} {file}"
         result = subprocess.run(command, capture_output=True, shell=True)
         if result.returncode == 0:
             expanded_file = Path(str(file).replace(".crx", ".rnx"))
-            logger.info(f"Converted compact Rinex to Rinex: {expanded_file}")
+            log.info(f"Converted compact Rinex to Rinex: {expanded_file}")
             return expanded_file
     return None
 
 
 def rinex_2_to_rinex_3(file: Path):
-    assert file.exists()
-    return None
+    if is_rinex_2_obs_file(file) or is_rinex_2_nav_file(file):
+        log.debug(f"RINEX 2 not supported: {file}")
+        return None
 
 
-def is_rinex_3(file: Path):
-    assert file.exists()
-    with open(file) as f:
-        first_line = f.readline()
+def file_exists_and_can_read_first_line(file: Path):
+    assert file.exists(), f"Provided file path {file} does not exist"
+    try:
+        with open(file) as f:
+            return f.readline()
+    except UnicodeDecodeError as e_unicode:
+        return None
+
+
+def is_rinex_3_obs_file(file: Path):
+    first_line = file_exists_and_can_read_first_line(file)
+    if first_line is None:
+        return False
     if "RINEX VERSION" not in first_line or "3.0" not in first_line:
         return False
     return True
 
 
+def is_rinex_3_nav_file(file: Path):
+    first_line = file_exists_and_can_read_first_line(file)
+    if first_line is None:
+        return False
+    if "NAVIGATION DATA" not in first_line or "3.0" not in first_line:
+        return False
+    return True
+
+
+def is_rinex_2_obs_file(file: Path):
+    first_line = file_exists_and_can_read_first_line(file)
+    if first_line is None:
+        return False
+    if "RINEX VERSION" not in first_line or "2.0" not in first_line:
+        return False
+    return True
+
+
+def is_rinex_2_nav_file(file: Path):
+    first_line = file_exists_and_can_read_first_line(file)
+    if first_line is None:
+        return False
+    if "NAV" not in first_line or "2." not in first_line:
+        return False
+    return True
+
+
 def anything_to_rinex_3(file: Path):
-    assert file.exists()
+    assert file.exists(), "File does not exist"
     file = Path(file)
     converters = [
-        compact_rinex_to_rinex,
+        compact_rinex_obs_file_to_rinex_obs_file,
         compressed_to_uncompressed,
         rinex_2_to_rinex_3,
     ]
-    output = None
     input = file
     converter_calls = 0
     max_number_of_conversions = 10
     for converter in itertools.cycle(converters):
+        if is_rinex_3_obs_file(input) or is_rinex_3_nav_file(input):
+            return input
         converter_calls += 1
         output = converter(input)
         if output is not None:
-            if is_rinex_3(output):
-                return output
             input = output
         if converter_calls > max_number_of_conversions * len(converters):
-            logging.error(
+            log.error(
                 f"Tried converting file {file.name} {max_number_of_conversions} times, still not RINEX 3, giving up."
             )
             return None
-    return None
