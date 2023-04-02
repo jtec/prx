@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 import glob
 import subprocess
+import math
 
 logging.basicConfig(
     format="%(asctime)s,%(msecs)03d %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s",
@@ -37,6 +38,24 @@ def md5_of_file_content(file: Path):
 def timestamp_2_gpst_ns(ts: pd.Timestamp):
     delta = ts - constants.cGpstEpoch
     return delta.delta
+
+def time_delta_to_weeks_and_seconds(time_delta: pd.Timedelta):
+    weeks = math.floor(time_delta.seconds/constants.cSecondsPerWeek)
+    week_seconds = time_delta.seconds - weeks * constants.cSecondsPerWeek
+    return weeks, week_seconds
+
+def timestamp_2_weeks_and_seconds(ts: pd.Timestamp, time_scale: str):
+    if time_scale == "GPST":
+        ts - constants.cGpstEpoch
+    "S": "SBAST",
+    "E": "GST",
+    "C": "BDT",
+    "R": "GLONASST",
+    "J": "QZSST",
+    "I": "IRNWT",
+    delta = ts - constants.cGpstEpoch
+    return delta.delta
+
 
 
 def rinex_header_time_string_2_timestamp_ns(time_string: str) -> np.datetime64:

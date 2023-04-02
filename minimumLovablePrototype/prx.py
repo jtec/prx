@@ -119,8 +119,9 @@ def build_header(input_files):
     return prx_header
 
 
-def check_assumptions(rinex_3_obs_file):
+def check_assumptions(rinex_3_obs_file, rinex_3_nav_file):
     obs_header = georinex.rinexheader(rinex_3_obs_file)
+    nav_header = georinex.rinexheader(rinex_3_nav_file)
     if "RCV CLOCK OFFS APPL" in obs_header.keys():
         assert (
             obs_header["RCV CLOCK OFFS APPL"].strip() == "0"
@@ -131,7 +132,7 @@ def check_assumptions(rinex_3_obs_file):
 
 
 def build_records(rinex_3_obs_file, rinex_3_ephemerides_file):
-    check_assumptions(rinex_3_obs_file)
+    check_assumptions(rinex_3_obs_file, rinex_3_ephemerides_file)
     obs = parse_rinex.load(rinex_3_obs_file, use_caching=True)
 
     # Flatten the xarray DataSet into a pandas DataFrame:
@@ -163,15 +164,6 @@ def build_records(rinex_3_obs_file, rinex_3_ephemerides_file):
     )
 
     # Compute time-of-emission in satellite time (we don't have satellite clock offset from constellation time yet)
-    def compute_time_of_emission_in_satellite_time(row):
-        row = row.dropna()
-        pseudorange = row.iloc[row.index.str.startswith("C")].mean()
-        return (
-            constants.cNanoSecondsPerSecond
-            * pseudorange
-            / constants.cGpsIcdSpeedOfLight_mps
-        )
-
     log.info("Computing times of emission in satellite time")
     per_sat = flat_obs.pivot(
         index=["time_of_reception_in_receiver_time", "satellite"],
@@ -197,7 +189,7 @@ def build_records(rinex_3_obs_file, rinex_3_ephemerides_file):
             row["satellite"],
             pd.Timestamp(row["time_of_emission_in_satellite_time"]),
         )
-        time_of_emission_in_system_time = pd.Timestamp(
+        time_of_emission_in_constellation_time = pd.Timestamp(
             row["time_of_emission_in_satellite_time"]
             - pd.Timedelta(
                 constants.cNanoSecondsPerSecond
@@ -209,9 +201,9 @@ def build_records(rinex_3_obs_file, rinex_3_ephemerides_file):
             offset_m,
             offset_rate_mps,
         ) = eph.compute_satellite_clock_offset_and_clock_offset_rate(
-            ephemerides, row["satellite"], time_of_emission_in_system_time
+            ephemerides, row["satellite"], time_of_emission_in_constellation_time
         )
-        return pd.Series([offset_m, offset_rate_mps, time_of_emission_in_system_time])
+        return pd.Series([offset_m, offset_rate_mps, time_of_emission_in_constellation_time])
 
     log.info("Computing satellite clock offsets")
     ephemerides = eph.convert_rnx3_nav_file_to_dataframe(rinex_3_ephemerides_file)
@@ -223,6 +215,19 @@ def build_records(rinex_3_obs_file, rinex_3_ephemerides_file):
         ]
     ] = per_sat.apply(
         compute_and_apply_satellite_clock_offsets, axis=1, args=(ephemerides,)
+    )
+
+    def compute_sat_state(row, ephemerides):
+        nav_df = eph.select_nav_ephemeris(ephemerides, row['satellite'], row['time_of_emission_in_system_time'])
+
+        # call findsat from gnss_lib_py
+        sv_posvel_rnx3_df = find_sat(nav_df, gps_tow, gps_week)
+
+        broadcast_position_in_constellation_frame = 0
+        return broadcast_position_in_constellation_frame
+
+    per_sat["satellite_position_m"] = per_sat.apply(
+        compute_sat_state, axis=1, args=(ephemerides,)
     )
     return per_sat
 

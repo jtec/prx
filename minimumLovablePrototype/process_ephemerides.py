@@ -1,24 +1,7 @@
 import math
-
-import georinex
-import georinex as gr
-import xarray
-from gnss_lib_py.utils.constants import WEEKSEC
-from gnss_lib_py.utils.time_conversions import (
-    datetime_to_tow,
-    get_leap_seconds,
-    tow_to_datetime,
-)
 from gnss_lib_py.utils.sim_gnss import find_sat
-from gnss_lib_py.parsers.precise_ephemerides import (
-    parse_sp3,
-    multi_gnss_from_precise_eph,
-    extract_sp3,
-)
 import pandas as pd
 import numpy as np
-from pathlib import Path
-from datetime import datetime, timedelta
 import parse_rinex
 import constants
 
@@ -42,7 +25,19 @@ constellation_2_system_time_scale = {
 
 
 def satellite_id_2_system_time_scale(satellite_id):
-    return constellation_2_system_time_scale[satellite_id[0]]
+    assert len(satellite_id) == 3, f"Satellite unexpectedly not three characters long: {satellite_id}"
+    return constellation_2_system_time_scale[constellation(satellite_id)]
+
+
+def constellation(satellite_id: str):
+    assert len(satellite_id) == 3, f"Satellite unexpectedly not three characters long: {satellite_id}"
+    return satellite_id[0]
+
+def compute_satellite_state(ephemerides, satellite, t_system_time):
+    sat_ephemeris = select_nav_ephemeris(ephemerides, satellite, t_system_time)
+    if constellation(satellite) == "G":
+        sv_posvel = find_sat(ephemerides, week_second, week)
+    return sv_posvel
 
 
 def convert_nav_dataset_to_dataframe(nav_ds):
