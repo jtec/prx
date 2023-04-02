@@ -2,6 +2,8 @@ import numpy as np
 import pandas as pd
 
 cGpstEpoch = pd.Timestamp(np.datetime64("1980-01-06T00:00:00.000000000"))
+cGstEpoch = pd.Timestamp(np.datetime64("1999-08-22T00:00:00.000000000"))
+
 cNanoSecondsPerSecond = 1e9
 cMicrosecondsPerSecond = 1e6
 cSecondsPerDay = 86400

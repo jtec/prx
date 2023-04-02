@@ -22,6 +22,7 @@ import shutil
 import pytest
 import os
 
+
 # This function sets up a temporary directory, copies a zipped rinex navigation file into that directory
 # and returns its path. The @pytest.fixture annotation allows us to pass the function as an input
 # to test functions. When running a test function, pytest will then first run this function, pass
@@ -73,19 +74,16 @@ def test_compare_rnx3_sat_pos_with_magnitude(input_for_test):
     # MAGNITUDE position
     sv_pos_magnitude = np.array([13053451.235, -12567273.060, 19015357.126])
 
-     # Compute RNX3 satellite position
+    # Compute broadcast satellite position
     # Select right ephemeris
-    date = np.datetime64(tow_to_datetime(gps_week, gps_tow))
     ephemerides = eph.convert_rnx3_nav_file_to_dataframe(path_to_rnx3_nav_file)
-    nav_df = eph.select_nav_ephemeris(ephemerides, sv, date)
-
-    # call findsat from gnss_lib_py
-    sv_posvel_rnx3_df = find_sat(nav_df, gps_tow, gps_week)
+    date = np.datetime64(tow_to_datetime(gps_week, gps_tow))
+    sv_posvel = eph.compute_satellite_state(ephemerides, sv, date)
     sv_pos_rnx3 = np.array(
         [
-            sv_posvel_rnx3_df["x"].values[0],
-            sv_posvel_rnx3_df["y"].values[0],
-            sv_posvel_rnx3_df["z"].values[0],
+            sv_posvel["x"].values[0],
+            sv_posvel["y"].values[0],
+            sv_posvel["z"].values[0],
         ]
     )
 
