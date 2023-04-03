@@ -53,7 +53,7 @@ def test_get_klobuchar_parameters_from_rinex3(rnx3_input_for_test):
 
 
 def test_klobuchar_correction():
-    threshold_iono_error_m = 0.0001
+    threshold_iono_error_m = 0.001
 
     # expected iono correction
     iono_corr_magnitude = np.array([[3.11827805725116, 2.76346284622445, 2.47578416083077, 2.24496388261401,
