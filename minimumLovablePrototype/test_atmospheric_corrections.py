@@ -1,33 +1,48 @@
 import numpy as np
 import atmospheric_corrections as atmo
-import process_ephemerides as eph
 from pathlib import Path
-import zipfile
+import shutil
+import pytest
+import helpers
+import converters
+import os
+import parse_rinex
 
-def test_get_klobuchar_parameters_from_rinex3():
+
+@pytest.fixture
+def rnx3_input_for_test():
+    test_directory = Path(f"./tmp_test_directory_{__name__}").resolve()
+    if test_directory.exists():
+        # Start from empty directory, might avoid hiding some subtle bugs, e.g.
+        # file decompression not working properly
+        shutil.rmtree(test_directory)
+    os.makedirs(test_directory)
+
+    rnx3_nav_test_file = test_directory.joinpath("BRDC00IGS_R_20220010000_01D_MN.zip")
+    shutil.copy(
+        helpers.prx_root().joinpath(
+            f"datasets/TLSE_2022001/{rnx3_nav_test_file.name}"
+        ),
+        rnx3_nav_test_file,
+    )
+    assert rnx3_nav_test_file.exists()
+
+    yield {"rnx3_nav_file": rnx3_nav_test_file}
+    shutil.rmtree(test_directory)
+
+
+def test_get_klobuchar_parameters_from_rinex3(rnx3_input_for_test):
     # filepath towards RNX3 NAV file
-    path_to_rnx3_nav_file = Path(__file__).resolve().parent.parent.joinpath("datasets", "TLSE_2022001",
-                                                                            "BRDC00IGS_R_20220010000_01D_GN.rnx")
+    path_to_rnx3_nav_file = converters.anything_to_rinex_3(rnx3_input_for_test["rnx3_nav_file"])
 
     # expected GPSA and GPSB parameters from header
     gps_a_expected = np.array([1.1176e-08, -7.4506e-09, -5.9605e-08, 1.1921e-07])
     gps_b_expected = np.array([1.1674e+05, -2.2938e+05, -1.3107e+05, 1.0486e+06])
 
-    # check existence of RNX3 file, and if not, try to find and unzip a compressed version
-    if not path_to_rnx3_nav_file.exists():
-        # check existence of zipped file
-        path_to_zip_file = path_to_rnx3_nav_file.with_suffix(".zip")
-        if path_to_zip_file.exists():
-            print("Unzipping RNX3 NAV file...")
-            # unzip file
-            with zipfile.ZipFile(path_to_zip_file, 'r') as zip_ref:
-                zip_ref.extractall(path_to_rnx3_nav_file.resolve().parent)
-        else:
-            print(f"File {path_to_rnx3_nav_file} (or zipped version) does not exist")
-
     # Compute RNX3 satellite position
     # load RNX3 NAV file
-    nav_ds = eph.convert_rnx3_nav_file_to_dataset(path_to_rnx3_nav_file)
+    # nav_ds = eph.convert_rnx3_nav_file_to_dataset(path_to_rnx3_nav_file)
+    nav_ds = parse_rinex.load(path_to_rnx3_nav_file, use_caching=True)
 
     # recover klobuchar parameters
     gps_a = nav_ds.ionospheric_corr_GPS[0:4]
@@ -36,8 +51,9 @@ def test_get_klobuchar_parameters_from_rinex3():
     assert((gps_a == gps_a_expected).all())
     assert((gps_b == gps_b_expected).all())
 
+
 def test_klobuchar_correction():
-    threshold_iono_error_m = 0.01
+    threshold_iono_error_m = 0.0001
 
     # expected iono correction
     iono_corr_magnitude = np.array([[3.11827805725116, 2.76346284622445, 2.47578416083077, 2.24496388261401,
@@ -65,7 +81,7 @@ def test_klobuchar_correction():
     lat_u_rad = 0.760277591246057
     lon_u_rad = 0.025846486197371
 
-    tow_s = np.arange(519300, 530100+1, 900) # added +1 to stop parameter, in order to have the last tow
+    tow_s = np.arange(519300, 530100+1, 900)  # added +1 to stop parameter, in order to have the last tow
 
     el_s_rad = np.array([[0.389610854319298, 0.481591693955173, 0.574237498820712, 0.667572412962547, 0.761560089319323,
                           0.856042601539353, 0.950629038638004, 1.04447640837162, 1.13581910197266, 1.22087957072990,
@@ -93,6 +109,6 @@ def test_klobuchar_correction():
                           0.860891557472562, 0.782742408016806, 0.723188958927464]])
 
     # compute iono correction from Klobuchar model
-    iono_corr = atmo.compute_klobuchar_correction(tow_s, gps_a, gps_b, el_s_rad, az_s_rad, lat_u_rad, lon_u_rad)
+    iono_corr = atmo.compute_klobuchar_l1_correction(tow_s, gps_a, gps_b, el_s_rad, az_s_rad, lat_u_rad, lon_u_rad)
 
     assert (np.max(np.fabs(iono_corr - iono_corr_magnitude)) < threshold_iono_error_m)
