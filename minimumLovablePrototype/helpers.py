@@ -1,6 +1,10 @@
 import hashlib
 from pathlib import Path
 import logging
+
+import numpy
+import matplotlib.pyplot as plt
+
 import constants
 import numpy as np
 import pandas as pd
@@ -35,30 +39,32 @@ def md5_of_file_content(file: Path):
     return hash_md5.hexdigest()
 
 
-def timestamp_2_gpst_ns(ts: pd.Timestamp):
-    delta = ts - constants.cGpstEpoch
-    return delta.delta
-
-def time_delta_to_weeks_and_seconds(time_delta: pd.Timedelta):
-    weeks = math.floor(time_delta.seconds/constants.cSecondsPerWeek)
-    week_seconds = time_delta.seconds - weeks * constants.cSecondsPerWeek
-    return weeks, week_seconds
-
-def timestamp_2_weeks_and_seconds(ts: pd.Timestamp, time_scale: str):
-    if time_scale == "GPST":
-        ts - constants.cGpstEpoch
-    "S": "SBAST",
-    "E": "GST",
-    "C": "BDT",
-    "R": "GLONASST",
-    "J": "QZSST",
-    "I": "IRNWT",
-    delta = ts - constants.cGpstEpoch
-    return delta.delta
+def timestamp_2_timedelta(timestamp: pd.Timestamp, time_scale):
+    assert type(timestamp) == pd.Timestamp, "timestamp must be of type pd.Timestamp"
+    # RINEX 3 adds the offset between GPST and GST/QZSST/IRNSST epochs, so we can use the GPST epoch here.
+    # The SBAST epoch is the same as the GPST epoch.
+    if time_scale == "GPST" or time_scale == "SBAST" or time_scale == "QZSST" or time_scale == "IRNSST" or time_scale == "GST":
+        return timestamp - constants.cGpstUtcEpoch
+    if time_scale == "BDT":
+        # TODO double-check the offset between BDT and GPST
+        return (timestamp - constants.cGpstUtcEpoch) - \
+            pd.Timedelta(1356*constants.cSecondsPerWeek, "seconds") \
+            - pd.Timedelta(14, "seconds")
+    # The GLONASS epoch is (probably) the UTC epoch, to keep the Timedelta within the same order of magnitude
+    # as for the other constellations, we use an arbitrary epoch here.
+    if time_scale == "GLONASST":
+        return timestamp - constants.cArbitraryGlonassUtcEpoch
+    assert False, f"Time scale {time_scale} not supported."
 
 
+def timedelta_2_weeks_and_seconds(time_delta: pd.Timedelta):
+    assert type(time_delta) == pd.Timedelta, "time_delta must be of type pd.Timedelta"
+    weeks = math.floor(time_delta.delta/constants.cNanoSecondsPerWeek)
+    week_nanoseconds = time_delta.delta - weeks * constants.cNanoSecondsPerWeek
+    return weeks, np.float64(week_nanoseconds) / constants.cNanoSecondsPerSecond
 
-def rinex_header_time_string_2_timestamp_ns(time_string: str) -> np.datetime64:
+
+def rinex_header_time_string_2_timestamp(time_string: str) -> pd.Timestamp:
     elements = time_string.split()
     time_scale = elements[-1]
     assert time_scale == "GPS", "Time scales other than GPST not supported yet"
@@ -86,3 +92,21 @@ def repair_with_gfzrnx(file):
             log.info(f"Ran gfzrnx file repair on {file}")
             return file
     assert False, "gdzrnx file repair run failed!"
+
+
+def plot_float_spacing(a, b):
+    floats = np.geomspace(a, b, num=100)
+    space_between_float64s = np.spacing(floats)
+    plt.plot(floats, space_between_float64s)
+    plt.grid()
+    plt.title(f"Smallest spacing between float64 numbers using np.spacing \n {a} to today's GPST in seconds.")
+    plt.xlabel("float64 number")
+    plt.ylabel("Space")
+    plt.xscale("log")
+    plt.yscale("log")
+    plt.savefig(Path(__file__).parent.joinpath("float_spacing.png"), dpi=300)
+
+
+if __name__ == "__main__":
+    today_gpst_s = pd.Timestamp.now() - constants.cGpstEpoch
+    plot_float_spacing(1e-6, today_gpst_s.total_seconds())

@@ -4,6 +4,7 @@ import pandas as pd
 import numpy as np
 import parse_rinex
 import constants
+import helpers
 
 
 def convert_rnx3_nav_file_to_dataframe(path):
@@ -20,24 +21,39 @@ constellation_2_system_time_scale = {
     "C": "BDT",
     "R": "GLONASST",
     "J": "QZSST",
-    "I": "IRNWT",
+    "I": "IRNSST",
 }
 
 
 def satellite_id_2_system_time_scale(satellite_id):
-    assert len(satellite_id) == 3, f"Satellite unexpectedly not three characters long: {satellite_id}"
+    assert len(satellite_id) == 3, f"Satellite ID unexpectedly not three characters long: {satellite_id}"
     return constellation_2_system_time_scale[constellation(satellite_id)]
 
 
+def compute_glonass_pv(sat_ephemeris: pd.DataFrame, t_system_time: pd.Timedelta):
+    """Compute GLONASS satellite position and velocity from ephemerides"""
+    toe = sat_ephemeris["ephemeris_reference_time_system_time"]
+    t = t_system_time - toe
+    p0 = sat_ephemeris[['X', 'Y', 'Z']].values.flatten()
+    v0 = sat_ephemeris[['dX', 'dY', 'dZ']].values.flatten()
+    a0 = sat_ephemeris[['dX2', 'dY2', 'dZ2']].values.flatten()
+
+
+
 def constellation(satellite_id: str):
-    assert len(satellite_id) == 3, f"Satellite unexpectedly not three characters long: {satellite_id}"
+    assert len(satellite_id) == 3, f"Satellite ID unexpectedly not three characters long: {satellite_id}"
     return satellite_id[0]
 
-def compute_satellite_state(ephemerides, satellite, t_system_time):
-    sat_ephemeris = select_nav_ephemeris(ephemerides, satellite, t_system_time)
-    if constellation(satellite) == "G":
-        sv_posvel = find_sat(ephemerides, week_second, week)
-    return sv_posvel
+
+def compute_satellite_state(ephemerides: pd.DataFrame, satellite_id: str, t_system_time: pd.Timedelta):
+    sat_ephemeris = select_nav_ephemeris(ephemerides, satellite_id, t_system_time)
+    if constellation(satellite_id) == "G":
+        week, week_second = helpers.timedelta_2_weeks_and_seconds(t_system_time)
+        sv_posvel = find_sat(sat_ephemeris, week_second, week)
+        return sv_posvel[["x", "y", "z"]].values.flatten(), sv_posvel[["vx", "vy", "vz"]].values.flatten()
+    if constellation(satellite_id) == "R":
+        sv_posvel = compute_glonass_pv(sat_ephemeris, t_system_time)
+    assert False, f"Constellation of {satellite_id} not supported"
 
 
 def convert_nav_dataset_to_dataframe(nav_ds):
@@ -47,20 +63,34 @@ def convert_nav_dataset_to_dataframe(nav_ds):
     nav_df.dropna(how="all", inplace=True)
     nav_df.reset_index(inplace=True)
     nav_df["source"] = nav_ds.filename
+    # georinex adds suffixes to satellite IDs if it sees multiple ephemerides for the same satellite and the same timstamp.
+    # The downstream code expects three-letter satellite IDs, to remove suffixes.
+    nav_df["sv"] = nav_df.apply(
+        lambda row: row["sv"][:3], axis=1
+    )
 
     nav_df["time_scale"] = nav_df.apply(
         lambda row: satellite_id_2_system_time_scale(row["sv"]), axis=1
     )
+    nav_df["time"] = nav_df.apply(
+        lambda row: helpers.timestamp_2_timedelta(row["time"], row["time_scale"]), axis=1
+    )
 
-    # TODO Can we be sure that this is always GPST?
-    gpst_s = (
-        pd.to_numeric(nav_df["time"] - constants.cGpstEpoch)
-        / constants.cNanoSecondsPerSecond
-    )
-    # Week second:
-    nav_df["t_oc"] = gpst_s - constants.cSecondsPerWeek * np.floor(
-        gpst_s / constants.cSecondsPerWeek
-    )
+    def extract_toe(row):
+        week_field = {
+            "GPST": "GPSWeek",
+            "GST": "GALWeek",
+            "BDT": "BDTWeek",
+            "SBAST": "GPSWeek",
+            "QZSST": "GPSWeek",
+            "IRNSST": "GPSWeek",
+        }
+        if row["time_scale"] != "GLONASST":
+            full_seconds = row[week_field[row["time_scale"]]] * constants.cSecondsPerWeek + row["Toe"]
+            return pd.Timedelta(full_seconds, "seconds")
+        if row["time_scale"] == "GLONASST":
+            return row["time"]
+    nav_df["ephemeris_reference_time_system_time"] = nav_df.apply(extract_toe, axis=1)
 
     nav_df.rename(
         columns={
@@ -82,17 +112,11 @@ def convert_nav_dataset_to_dataframe(nav_ds):
     return nav_df
 
 
-def select_nav_ephemeris(nav_dataframe, satellite_id, gpst_datetime):
-    """select an ephemeris from a RNX3 nav dataframe for a particular sv and time, and return the ephemeris.
-
-    Input examples:
-    nav_dataset = convert_nav_dataset_to_dataframe(path_to_rnx3_nav_file)
-    satellite_id = np.array('G01', dtype='<U3') # satellite ID for a single satellite,
-    gpst_datetime = np.datetime64('2022-01-01T00:00:00.000'), np.datetime64(tow_to_datetime(gps_week, gps_tow))
-
-    Output:
-    nav_dataframe: a pandas.dataframe containing the selected ephemeris
+def select_nav_ephemeris(nav_dataframe: pd.DataFrame, satellite_id: str, t_system: pd.Timedelta):
     """
+    select an ephemeris from a RINEX 3 ephemeris dataframe for a particular sv and time, and return the ephemeris.
+    """
+    assert type(t_system) == pd.Timedelta, f"t_system is not a pandas.Timedelta, but {type(t_system)}"
     ephemerides_of_requested_sat = nav_dataframe.loc[
         (nav_dataframe["sv"] == satellite_id)
     ]
@@ -100,12 +124,12 @@ def select_nav_ephemeris(nav_dataframe, satellite_id, gpst_datetime):
     ephemerides_of_requested_sat = ephemerides_of_requested_sat.sort_values(by=["time"])
     ephemerides_of_requested_sat_before_requested_time = (
         ephemerides_of_requested_sat.loc[
-            ephemerides_of_requested_sat["time"] < gpst_datetime
+            ephemerides_of_requested_sat["time"] < t_system
         ]
     )
     assert (
         ephemerides_of_requested_sat_before_requested_time.shape[0] > 0
-    ), f"Did not find ephemeris with timestamp before {gpst_datetime}"
+    ), f"Did not find ephemeris with timestamp before {t_system}"
     return ephemerides_of_requested_sat_before_requested_time.iloc[[-1]]
 
 
@@ -117,10 +141,12 @@ def compute_satellite_clock_offset_and_clock_offset_rate(
     ephemeris_df = select_nav_ephemeris(
         parsed_rinex_3_nav_file, satellite, time_constellation_time_ns.to_datetime64()
     )
-    # Convert to float64 seconds here, as pandas.Timedelta has only nanosecond resolution
+    # Convert to 64-bi float seconds here, as pandas.Timedelta has only nanosecond resolution
     time_wrt_ephemeris_epoch_s = pd.Timedelta(
         time_constellation_time_ns - ephemeris_df["time"].iloc[0]
     ).total_seconds()
+    # Clock offset is sub-second, and float64 has roughly 1e-15 precision at 1s, so we get roughly 10 micrometers floating-point
+    # error here.
     if satellite[0] == "R":
         offset_at_epoch_s = ephemeris_df["SVclockBias"].iloc[0]
         offset_rate_at_epoch_sps = ephemeris_df["SVrelFreqBias"].iloc[0]
