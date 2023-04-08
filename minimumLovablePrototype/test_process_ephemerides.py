@@ -1,22 +1,12 @@
 import math
-
 import pandas as pd
-from gnss_lib_py.utils.time_conversions import (
-    datetime_to_tow,
-    tow_to_datetime,
-    get_leap_seconds,
-)
 from gnss_lib_py.utils.sim_gnss import find_sat
 import numpy as np
 from pathlib import Path
-from datetime import datetime
-import georinex as gr
 import process_ephemerides as eph
-import zipfile
 
 import helpers
 import converters
-import parse_rinex
 import constants
 import shutil
 import pytest
@@ -62,39 +52,56 @@ def test_compare_rnx3_sat_pos_with_magnitude(input_for_test):
     """Loads a RNX3 file, compute a position for different satellites and time, and compare to MAGNITUDE results
     Test will be a success if the difference in position is lower than threshold_pos_error_m = 0.01
     """
-    path_to_rnx3_nav_file = converters.anything_to_rinex_3(input_for_test["gps_nav_file"])
-
-    threshold_pos_error_m = 0.01
+    path_to_rnx3_nav_file = converters.anything_to_rinex_3(input_for_test["all_constellations_nav_file"])
+    ephemerides = eph.convert_rnx3_nav_file_to_dataframe(path_to_rnx3_nav_file)
 
     # select sv and time
-    sv = np.array("G01", dtype="<U3")
-    gps_week = 2190
-    gps_tow = 523800
+    sv = "G01"
+    gpst_week = 2190
+    gpst_tow = 523800
 
     # MAGNITUDE position
     sv_pos_magnitude = np.array([13053451.235, -12567273.060, 19015357.126])
 
     # Compute broadcast satellite position
     # Select right ephemeris
-    ephemerides = eph.convert_rnx3_nav_file_to_dataframe(path_to_rnx3_nav_file)
-    date = np.datetime64(tow_to_datetime(gps_week, gps_tow))
-    sv_posvel = eph.compute_satellite_state(ephemerides, sv, date)
-    sv_pos_rnx3 = np.array(
-        [
-            sv_posvel["x"].values[0],
-            sv_posvel["y"].values[0],
-            sv_posvel["z"].values[0],
-        ]
-    )
+    t_gpst_for_which_to_compute_position = pd.Timedelta(gpst_week*constants.cSecondsPerWeek + gpst_tow, "seconds")
+    p_ecef, v_ecef = eph.compute_satellite_state(ephemerides, sv, t_gpst_for_which_to_compute_position)
 
-    assert np.linalg.norm(sv_pos_rnx3 - sv_pos_magnitude) < threshold_pos_error_m
+    threshold_pos_error_m = 0.01
+    assert np.linalg.norm(p_ecef - sv_pos_magnitude) < threshold_pos_error_m
+
+
+def test_glonass_position_and_velocity(input_for_test):
+    # Using the following GLONASS ephemeris
+    """
+    R01 2022 01 01 00 15 00 7.305294275284e-06-0.000000000000e+00 5.184000000000e+05
+         2.051218896484e+04-9.885606765747e-01 2.793967723846e-09 0.000000000000e+00
+         1.273344482422e+04-5.559444427490e-01-3.725290298462e-09 1.000000000000e+00
+         8.218795898438e+03 3.327781677246e+00 9.313225746155e-10 0.000000000000e+00
+                             .999999999999e+09 1.500000000000e+01
+    """
+    # Copied from the following RINEX navigation file
+    path_to_rnx3_nav_file = converters.anything_to_rinex_3(input_for_test["all_constellations_nav_file"])
+    ephemerides = eph.convert_rnx3_nav_file_to_dataframe(path_to_rnx3_nav_file)
+
+    # We compute orbital position and velocity of
+    sv = "R01"
+    # for the following time
+    t_orbit = (pd.Timestamp(np.datetime64("2022-01-01T00:15:00.000000000")) - constants.cArbitraryGlonassUtcEpoch) + pd.Timedelta(1, "nanoseconds")
+
+    # there we go:
+    p_ecef, v_ecef = eph.compute_satellite_state(ephemerides, sv, t_orbit)
+
+    threshold_pos_error_m = 0.01
+    assert np.linalg.norm(p_ecef - sv_pos_magnitude) < threshold_pos_error_m
 
 
 def test_compute_satellite_clock_offset(input_for_test):
     # GPS, GAL, QZSS, BDS, IRNSS broadcast satellite clock system time offsets are all given
     # as parameters of a polynomial of order 2, so this test should cover those constellations.
-    # When computing the satellite clock offset of GPS-001 for January 1st 2022 at 1am GPST
-    # We expect the clock offset to be computed from the following RINEX 3 ephemeris
+    # When computing the satellite clock offset of GPS-001 for January 1st 2022 at 1am GPST,
+    # we expect the clock offset to be computed from the following RINEX 3 ephemeris
     """
     G01 2022 01 01 00 00 00 4.691267386079e-04-1.000444171950e-11 0.000000000000e+00
          3.900000000000e+01-1.411250000000e+02 3.988380417768e-09-6.242942382352e-01

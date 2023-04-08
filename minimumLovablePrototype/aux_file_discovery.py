@@ -100,8 +100,8 @@ def discover_or_download_auxiliary_files(observation_file_path=Path()):
     rinex_3_obs_file = converters.anything_to_rinex_3(observation_file_path)
     header = georinex.rinexheader(rinex_3_obs_file)
     ephs = discover_or_download_ephemerides(
-        helpers.rinex_header_time_string_2_timestamp_ns(header["TIME OF FIRST OBS"]),
-        helpers.rinex_header_time_string_2_timestamp_ns(header["TIME OF LAST OBS"]),
+        helpers.rinex_header_time_string_2_timestamp(header["TIME OF FIRST OBS"]),
+        helpers.rinex_header_time_string_2_timestamp(header["TIME OF LAST OBS"]),
         rinex_3_obs_file.parent,
         list(header["fields"].keys()),
     )
