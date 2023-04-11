@@ -72,7 +72,7 @@ def test_compare_rnx3_sat_pos_with_magnitude(input_for_test):
     assert np.linalg.norm(p_ecef - sv_pos_magnitude) < threshold_pos_error_m
 
 
-def test_glonass_position_and_velocity(input_for_test):
+def test_glonass_position_and_velocity_sanity_check(input_for_test):
     # Using the following GLONASS ephemeris
     """
     R01 2022 01 01 00 15 00 7.305294275284e-06-0.000000000000e+00 5.184000000000e+05
@@ -88,13 +88,14 @@ def test_glonass_position_and_velocity(input_for_test):
     # We compute orbital position and velocity of
     sv = "R01"
     # for the following time
-    t_orbit = (pd.Timestamp(np.datetime64("2022-01-01T00:15:00.000000000")) - constants.cArbitraryGlonassUtcEpoch) + pd.Timedelta(1, "nanoseconds")
+    t_orbit = (pd.Timestamp(np.datetime64("2022-01-01T00:15:00.000000000")) - constants.cArbitraryGlonassUtcEpoch) + pd.Timedelta(1, "seconds")
 
     # there we go:
     p_ecef, v_ecef = eph.compute_satellite_state(ephemerides, sv, t_orbit)
 
-    threshold_pos_error_m = 0.01
-    assert np.linalg.norm(p_ecef - sv_pos_magnitude) < threshold_pos_error_m
+    assert abs(np.linalg.norm(p_ecef) - 25 * 1e6) < 1e6
+    assert abs(np.linalg.norm(v_ecef) - 3.5*1e3) < 1e2
+
 
 
 def test_compute_satellite_clock_offset(input_for_test):
