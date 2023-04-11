@@ -30,14 +30,44 @@ def satellite_id_2_system_time_scale(satellite_id):
     return constellation_2_system_time_scale[constellation(satellite_id)]
 
 
+def glonass_xdot(x, a):
+    p = x[0:3]
+    v = x[3:6]
+    mu = 398600.44 * 1e9
+    a_e = 6378136.0
+    J_2 = 1082625.7 * 1e-9
+    omega = .7292115 * 1e-5
+    pdot = v
+    vdot = np.zeros(3)
+    r = np.linalg.norm(p)
+    c1 = -mu/math.pow(p[0], 3) - (3/2)*math.pow(J_2, 2) * (mu*math.pow(a_e, 2)/math.pow(r, 5)) * (1 - 5*math.pow(p[2]/r, 2))
+    vdot[0] = c1 * p[0] + math.pow(omega, 2)*p[0] + 2*omega*v[1] + a[0]
+    vdot[1] = c1 * p[1] + math.pow(omega, 2)*p[1] - 2*omega*v[0] + a[1]
+    vdot[2] = c1 * p[2] + a[2]
+    return np.concatenate((pdot, vdot))
+
+
 def compute_glonass_pv(sat_ephemeris: pd.DataFrame, t_system_time: pd.Timedelta):
     """Compute GLONASS satellite position and velocity from ephemerides"""
-    toe = sat_ephemeris["ephemeris_reference_time_system_time"]
-    t = t_system_time - toe
-    p0 = sat_ephemeris[['X', 'Y', 'Z']].values.flatten()
-    v0 = sat_ephemeris[['dX', 'dY', 'dZ']].values.flatten()
-    a0 = sat_ephemeris[['dX2', 'dY2', 'dZ2']].values.flatten()
+    toe = sat_ephemeris["ephemeris_reference_time_system_time"].values[0]
+    p = sat_ephemeris[['X', 'Y', 'Z']].values.flatten()
+    v = sat_ephemeris[['dX', 'dY', 'dZ']].values.flatten()
+    x = np.concatenate((p, v))
+    a = sat_ephemeris[['dX2', 'dY2', 'dZ2']].values.flatten()
+    t = toe
 
+    assert t_system_time >= t, f"Time for which orbit is to be computed {t_system_time} is before ephemeris reference time {t}, should we be we propagating GLONASS orbits backwards in time?"
+    while abs((t - t_system_time).delta) > 1:
+        max_time_step_s = 60
+        h = min(max_time_step_s, float((t_system_time - t).delta) / constants.cNanoSecondsPerSecond)
+        k1 = glonass_xdot(x, a)
+        k2 = glonass_xdot(x + k1 * h/2, a)
+        k3 = glonass_xdot(x + k2 * h/2, a)
+        k4 = glonass_xdot(x + k3 * h, a)
+        x = x + h/6 * (k1 + 2*k2 + 2*k3 + k4)
+        t += pd.Timedelta(h, 'seconds')
+
+    return x[0:3], x[3:6]
 
 
 def constellation(satellite_id: str):
@@ -52,7 +82,9 @@ def compute_satellite_state(ephemerides: pd.DataFrame, satellite_id: str, t_syst
         sv_posvel = find_sat(sat_ephemeris, week_second, week)
         return sv_posvel[["x", "y", "z"]].values.flatten(), sv_posvel[["vx", "vy", "vz"]].values.flatten()
     if constellation(satellite_id) == "R":
-        sv_posvel = compute_glonass_pv(sat_ephemeris, t_system_time)
+        # Note that this satellite state is w.r.t. PZ -90.02
+        p, v = compute_glonass_pv(sat_ephemeris, t_system_time)
+        return p, v
     assert False, f"Constellation of {satellite_id} not supported"
 
 
@@ -89,7 +121,7 @@ def convert_nav_dataset_to_dataframe(nav_ds):
             full_seconds = row[week_field[row["time_scale"]]] * constants.cSecondsPerWeek + row["Toe"]
             return pd.Timedelta(full_seconds, "seconds")
         if row["time_scale"] == "GLONASST":
-            return row["time"]
+            return pd.Timedelta(row["time"])
     nav_df["ephemeris_reference_time_system_time"] = nav_df.apply(extract_toe, axis=1)
 
     nav_df.rename(
