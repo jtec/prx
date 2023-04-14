@@ -21,7 +21,11 @@ from pathlib import Path
 from datetime import datetime, timedelta
 import parse_rinex
 import constants
+import prx
+import helpers
 
+carrier_frequencies_dict = prx.carrier_frequencies_hz()
+log = helpers.get_logger(__name__)
 
 def convert_rnx3_nav_file_to_dataframe(path):
     # parse RNX3 NAV file using georinex module
@@ -105,7 +109,7 @@ def select_nav_ephemeris(nav_dataframe, satellite_id, gpst_datetime):
     ephemerides_of_requested_sat = ephemerides_of_requested_sat.sort_values(by=["time"])
     ephemerides_of_requested_sat_before_requested_time = (
         ephemerides_of_requested_sat.loc[
-            ephemerides_of_requested_sat["time"] < gpst_datetime
+            ephemerides_of_requested_sat["time"] <= gpst_datetime
         ]
     )
     assert (
@@ -154,3 +158,45 @@ def compute_satellite_clock_offset_and_clock_offset_rate(
         constants.cGpsIcdSpeedOfLight_mps * offset_s,
         constants.cGpsIcdSpeedOfLight_mps * offset_rate_sps,
     )
+
+
+def compute_total_group_delay(
+    parsed_rinex_3_nav_file: pd.DataFrame,
+    time_constellation_time_ns: pd.Timestamp,
+    satellite: str,
+    obs_type: str,
+):
+    """compute the total group delay from a parsed rnx3 file, for a specific satellite, time and observation type
+
+    Input examples:
+    parsed_rinex_3_nav_file = ph.convert_rnx3_nav_file_to_dataframe(rinex_3_navigation_file)
+    satellite = "G01" # satellite ID for a single satellite,
+    time_constellation_time_ns = pd.Timestamp(np.datetime64("2022-01-01T01:00:00.000000000"))
+    obs_type = "C1C" # RNX3 observation code
+
+    Output:
+    nav_dataframe: a pandas.dataframe containing the selected ephemeris
+    """
+    ephemeris_df = select_nav_ephemeris(
+        parsed_rinex_3_nav_file, satellite, time_constellation_time_ns.to_datetime64()
+    )
+
+    # compute the scale factor, depending on the constellation and frequency
+    constellation = satellite[0]
+    frequency_code = obs_type[1]
+    match constellation:
+        case "G":
+            match frequency_code:
+                case "1":
+                    gamma = 1
+                case "2":
+                    gamma = (carrier_frequencies_dict["G"]["L1"] / carrier_frequencies_dict["G"]["L2"])**2
+                case _:
+                    gamma = np.nan
+        case _:
+            gamma = np.nan
+
+    if np.isnan(gamma):
+        log.info(f"Could not retrieve total group delay for satellite id: {satellite} and obs: {obs_type}")
+
+    return ephemeris_df.TGD.values[0] * gamma
