@@ -176,6 +176,10 @@ def compute_total_group_delay(
 
     Output:
     nav_dataframe: a pandas.dataframe containing the selected ephemeris
+
+    Reference:
+    - GPS: IS-GPS-200N.pdf, §20.3.3.3.3.2
+    - Galileo: Galileo_OS_SIS_ICD_v2.0.pdf, §5.1.5
     """
     ephemeris_df = select_nav_ephemeris(
         parsed_rinex_3_nav_file, satellite, time_constellation_time_ns.to_datetime64()
@@ -186,6 +190,7 @@ def compute_total_group_delay(
     frequency_code = obs_type[1]
     match constellation:
         case "G":
+            group_delay = ephemeris_df.TGD.values[0]
             match frequency_code:
                 case "1":
                     gamma = 1
@@ -193,10 +198,21 @@ def compute_total_group_delay(
                     gamma = (carrier_frequencies_dict["G"]["L1"] / carrier_frequencies_dict["G"]["L2"])**2
                 case _:
                     gamma = np.nan
+        case "E":
+            match frequency_code:
+                case "1":
+                    group_delay = ephemeris_df.BGDe5b.values[0]
+                    gamma = 1
+                case "5":
+                    group_delay = ephemeris_df.BGDe5a.values[0]
+                    gamma = (carrier_frequencies_dict["E"]["L1"] / carrier_frequencies_dict["E"]["L5"]) ** 2
+                case "7":
+                    group_delay = ephemeris_df.BGDe5b.values[0]
+                    gamma = (carrier_frequencies_dict["E"]["L7"] / carrier_frequencies_dict["E"]["L7"]) ** 2
         case _:
             gamma = np.nan
 
     if np.isnan(gamma):
         log.info(f"Could not retrieve total group delay for satellite id: {satellite} and obs: {obs_type}")
 
-    return ephemeris_df.TGD.values[0] * gamma
+    return group_delay * gamma

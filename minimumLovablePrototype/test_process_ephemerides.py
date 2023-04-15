@@ -239,3 +239,44 @@ def test_compute_gps_group_delay_rnx3(input_for_test):
     assert (tgd_c1p_s == tgd_c1p_s_expected).all()
     assert (tgd_c2p_s == tgd_c2p_s_expected).all()
     assert (np.isnan(tgd_c5x_s))
+
+
+def test_compute_gal_group_delay_rnx3(input_for_test):
+    """
+    E25 2022 01 01 00 00 00-5.587508785538e-04-1.278976924368e-12 0.000000000000e+00
+         9.600000000000e+01 1.960625000000e+02 2.576178736756e-09 1.034878564309e+00
+         9.007751941681e-06 3.147422103211e-04 1.221708953381e-05 5.440630062103e+03
+         5.184000000000e+05 1.303851604462e-08 2.996653673305e+00 9.313225746155e-09
+         9.752953840989e-01 8.875000000000e+01-5.349579038983e-01-5.132356640398e-09
+        -2.260808457461e-10 2.580000000000e+02 2.190000000000e+03 0.000000000000e+00
+         3.120000000000e+00 0.000000000000e+00 **4.423782229424e-09** 0.000000000000e+00
+         5.191430000000e+05 0.000000000000e+00 0.000000000000e+00 0.000000000000e+00
+    E25 2022 01 01 00 00 00-5.587504128930e-04-1.278976924370e-12 0.000000000000e+00
+         9.600000000000e+01 1.960625000000e+02 2.576178736760e-09 1.034878564310e+00
+         9.007751941680e-06 3.147422103210e-04 1.221708953380e-05 5.440630062100e+03
+         5.184000000000e+05 1.303851604460e-08 2.996653673310e+00 9.313225746150e-09
+         9.752953840990e-01 8.875000000000e+01-5.349579038980e-01-5.132356640400e-09
+        -2.260808457460e-10 5.160000000000e+02 2.190000000000e+03
+         3.120000000000e+00 0.000000000000e+00 4.423782229420e-09 **4.889443516730e-09**
+         5.190640000000e+05
+     """
+    # parse rinex3 nav file
+    rinex_3_navigation_file = converters.anything_to_rinex_3(input_for_test["all_constellations_nav_file"])
+    eph_rnx3_df = eph.convert_rnx3_nav_file_to_dataframe(rinex_3_navigation_file)
+
+    tgd_e1_s = eph.compute_total_group_delay(
+        eph_rnx3_df, pd.Timestamp(np.datetime64("2022-01-01T01:30:00.000000000")), "E25", "C1C"),
+    tgd_e5a_s = eph.compute_total_group_delay(
+        eph_rnx3_df, pd.Timestamp(np.datetime64("2022-01-01T01:30:00.000000000")), "E25", "C5X"),
+    tgd_e5b_s = eph.compute_total_group_delay(
+        eph_rnx3_df, pd.Timestamp(np.datetime64("2022-01-01T01:30:00.000000000")), "E25", "C7X"),
+
+    tgd_e1_s_expected = 4.889443516730e-09
+    tgd_e5a_s_expected = 4.423782229424e-09 * \
+                         (carrier_frequencies_dict["E"]["L1"] / carrier_frequencies_dict["E"]["L5"]) ** 2
+    tgd_e5b_s_expected = 4.889443516730e-09 * \
+                         (carrier_frequencies_dict["E"]["L7"] / carrier_frequencies_dict["E"]["L7"]) ** 2
+
+    assert (abs(tgd_e1_s[0] - tgd_e1_s_expected) * constants.cGpsIcdSpeedOfLight_mps < 1e-3)
+    assert (abs(tgd_e5a_s[0] - tgd_e5a_s_expected) * constants.cGpsIcdSpeedOfLight_mps < 1e-3)
+    assert (abs(tgd_e5b_s[0] - tgd_e5b_s_expected) * constants.cGpsIcdSpeedOfLight_mps < 1e-3)
