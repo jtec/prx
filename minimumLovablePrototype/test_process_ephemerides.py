@@ -1,23 +1,12 @@
 import math
-
 import pandas as pd
-from gnss_lib_py.utils.time_conversions import (
-    datetime_to_tow,
-    tow_to_datetime,
-    get_leap_seconds,
-)
+from gnss_lib_py.utils.time_conversions import tow_to_datetime
 from gnss_lib_py.utils.sim_gnss import find_sat
 import numpy as np
 from pathlib import Path
-from datetime import datetime
-import georinex as gr
 import process_ephemerides as eph
-import prx
-import zipfile
-
 import helpers
 import converters
-import parse_rinex
 import constants
 import shutil
 import pytest
@@ -68,7 +57,7 @@ def test_compare_rnx3_sat_pos_with_magnitude(input_for_test):
     threshold_pos_error_m = 0.01
 
     # select sv and time
-    sv = np.array("G01", dtype="<U3")
+    sv = "G01"
     gps_week = 2190
     gps_tow = 523800
 
@@ -273,7 +262,7 @@ def test_compute_gal_group_delay_rnx3(input_for_test):
     tgd_e5a_s_expected = 4.423782229424e-09 * \
                          (constants.carrier_frequencies_hz()["E"]["L1"] / constants.carrier_frequencies_hz()["E"]["L5"]) ** 2
     tgd_e5b_s_expected = 4.889443516730e-09 * \
-                         (constants.carrier_frequencies_hz()["E"]["L7"] / constants.carrier_frequencies_hz()["E"]["L7"]) ** 2
+                         (constants.carrier_frequencies_hz()["E"]["L1"] / constants.carrier_frequencies_hz()["E"]["L7"]) ** 2
 
     assert (abs(tgd_e1_s[0] - tgd_e1_s_expected) * constants.cGpsIcdSpeedOfLight_mps < 1e-3)
     assert (abs(tgd_e5a_s[0] - tgd_e5a_s_expected) * constants.cGpsIcdSpeedOfLight_mps < 1e-3)
