@@ -35,7 +35,7 @@ def try_downloading_ephemerides_from_bkg(
             f"/{time.year}/{time.day_of_year:03}/BRDC00IGS_R_{time.year}{time.day_of_year:03}0000_01D_MN.rnx.gz"
         )
         local_compressed_file = folder.joinpath(remote_file.name)
-        url = "https://igs.bkg.bund.de/root_ftp/IGS/BRDC/" + str(remote_file)
+        url = "https://igs.bkg.bund.de/root_ftp/IGS/BRDC" + str(remote_file.as_posix())
         urllib.request.urlretrieve(url, local_compressed_file)
         local_file = converters.compressed_to_uncompressed(local_compressed_file)
         os.remove(local_compressed_file)
