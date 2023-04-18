@@ -23,8 +23,6 @@ import shutil
 import pytest
 import os
 
-carrier_frequencies_dict = prx.carrier_frequencies_hz()
-
 
 # This function sets up a temporary directory, copies a zipped rinex navigation file into that directory
 # and returns its path. The @pytest.fixture annotation allows us to pass the function as an input
@@ -233,7 +231,7 @@ def test_compute_gps_group_delay_rnx3(input_for_test):
     tgd_c1c_s_expected = pd.Series(data=[-1.769512891770e-08, -1.769512891770e-08, -1.769512891769e-08])
     tgd_c1p_s_expected = pd.Series(data=[-1.769512891770e-08, -1.769512891770e-08, -1.769512891769e-08])
     tgd_c2p_s_expected = pd.Series(data=[-1.769512891770e-08, -1.769512891770e-08, -1.769512891769e-08]) * \
-                         (carrier_frequencies_dict["G"]["L1"] / carrier_frequencies_dict["G"]["L2"]) ** 2
+                         (constants.carrier_frequencies_hz()["G"]["L1"] / constants.carrier_frequencies_hz()["G"]["L2"]) ** 2
 
     assert (tgd_c1c_s == tgd_c1c_s_expected).all()
     assert (tgd_c1p_s == tgd_c1p_s_expected).all()
@@ -273,9 +271,9 @@ def test_compute_gal_group_delay_rnx3(input_for_test):
 
     tgd_e1_s_expected = 4.889443516730e-09
     tgd_e5a_s_expected = 4.423782229424e-09 * \
-                         (carrier_frequencies_dict["E"]["L1"] / carrier_frequencies_dict["E"]["L5"]) ** 2
+                         (constants.carrier_frequencies_hz()["E"]["L1"] / constants.carrier_frequencies_hz()["E"]["L5"]) ** 2
     tgd_e5b_s_expected = 4.889443516730e-09 * \
-                         (carrier_frequencies_dict["E"]["L7"] / carrier_frequencies_dict["E"]["L7"]) ** 2
+                         (constants.carrier_frequencies_hz()["E"]["L7"] / constants.carrier_frequencies_hz()["E"]["L7"]) ** 2
 
     assert (abs(tgd_e1_s[0] - tgd_e1_s_expected) * constants.cGpsIcdSpeedOfLight_mps < 1e-3)
     assert (abs(tgd_e5a_s[0] - tgd_e5a_s_expected) * constants.cGpsIcdSpeedOfLight_mps < 1e-3)

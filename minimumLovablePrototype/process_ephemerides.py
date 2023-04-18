@@ -24,7 +24,7 @@ import constants
 import prx
 import helpers
 
-carrier_frequencies_dict = prx.carrier_frequencies_hz()
+
 log = helpers.get_logger(__name__)
 
 def convert_rnx3_nav_file_to_dataframe(path):
@@ -195,7 +195,7 @@ def compute_total_group_delay(
                 case "1":
                     gamma = 1
                 case "2":
-                    gamma = (carrier_frequencies_dict["G"]["L1"] / carrier_frequencies_dict["G"]["L2"])**2
+                    gamma = (constants.carrier_frequencies_hz()["G"]["L1"] / constants.carrier_frequencies_hz()["G"]["L2"])**2
                 case _:
                     gamma = np.nan
         case "E":
@@ -205,10 +205,10 @@ def compute_total_group_delay(
                     gamma = 1
                 case "5":
                     group_delay = ephemeris_df.BGDe5a.values[0]
-                    gamma = (carrier_frequencies_dict["E"]["L1"] / carrier_frequencies_dict["E"]["L5"]) ** 2
+                    gamma = (constants.carrier_frequencies_hz()["E"]["L1"] / constants.carrier_frequencies_hz()["E"]["L5"]) ** 2
                 case "7":
                     group_delay = ephemeris_df.BGDe5b.values[0]
-                    gamma = (carrier_frequencies_dict["E"]["L7"] / carrier_frequencies_dict["E"]["L7"]) ** 2
+                    gamma = (constants.carrier_frequencies_hz()["E"]["L7"] / constants.carrier_frequencies_hz()["E"]["L7"]) ** 2
         case _:
             gamma = np.nan
 
