@@ -159,7 +159,7 @@ def compute_satellite_clock_offset_and_clock_offset_rate(
     )
 
 
-def compute_total_group_delay(
+def compute_total_group_delay_rnx3(
         parsed_rinex_3_nav_file: pd.DataFrame,
         time_constellation_time_ns: pd.Timestamp,
         satellite: str,
@@ -179,6 +179,11 @@ def compute_total_group_delay(
     Reference:
     - GPS: IS-GPS-200N.pdf, §20.3.3.3.3.2
     - Galileo: Galileo_OS_SIS_ICD_v2.0.pdf, §5.1.5
+    - Beidou B1I, B2I, B3I: Beidou_ICD_B1I_v3.0.pdf, §5.2.4.10
+    - Beidou B1Cp, B1Cd: Beidou_ICD_B1C_v1.0.pdf, §7.6.2 (not supported by rnx3)
+    - Beidou B2bi: Beidou_ICD_B2b_v1.0.pdf, §7.5.2 (not supported by rnx3)
+
+    Note: rinex v3 nav files only supports a subset of observations.
     """
     ephemeris_df = select_nav_ephemeris(
         parsed_rinex_3_nav_file, satellite, time_constellation_time_ns.to_datetime64(), obs_type=obs_type
@@ -211,6 +216,23 @@ def compute_total_group_delay(
                     group_delay = ephemeris_df.BGDe5b.values[0]
                     gamma = (constants.carrier_frequencies_hz()["E"]["L1"] / constants.carrier_frequencies_hz()["E"][
                         "L7"]) ** 2
+                case _:
+                    group_delay = np.nan
+                    gamma = np.nan
+        case "C":
+            match obs_type:
+                case "C2I":  # called B1I in Beidou ICD
+                    group_delay = ephemeris_df.TGD1.values[0]
+                    gamma = 1
+                case "C7I":  # called B2I in Beidou ICD
+                    group_delay = ephemeris_df.TGD2.values[0]
+                    gamma = 1
+                case "C6I":  # called B3I in Beidou ICD
+                    group_delay = 0
+                    gamma = 1
+                case _:
+                    group_delay = np.nan
+                    gamma = np.nan
         case _:
             gamma = np.nan
 
