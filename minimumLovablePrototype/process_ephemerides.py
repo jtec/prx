@@ -89,15 +89,15 @@ def select_nav_ephemeris(nav_dataframe, satellite_id, gpst_datetime, obs_type=No
 
     # if the considered satellite is Galileo, there is a need to check which type of ephemeris has to be retrieved (
     # F/NAV or I/NAV)
-    if not (obs_type is None) and satellite_id[0] == 'E':
+    if obs_type is not None and satellite_id[0] == 'E':
         frequency_letter = obs_type[1]
         match frequency_letter:
             case '1' | '7':  # DataSrc >= 512
                 ephemerides_of_requested_sat = \
-                    ephemerides_of_requested_sat.loc[ephemerides_of_requested_sat.DataSrc >= 512]
+                    ephemerides_of_requested_sat.loc[ephemerides_of_requested_sat.DataSrc >= constants.cGalileoFnavDataSourceIndicator]
             case '5':  # DataSrc < 512
                 ephemerides_of_requested_sat = \
-                    ephemerides_of_requested_sat.loc[ephemerides_of_requested_sat.DataSrc < 512]
+                    ephemerides_of_requested_sat.loc[ephemerides_of_requested_sat.DataSrc < constants.cGalileoFnavDataSourceIndicator]
             case _:  # other galileo signals not supported in rnx3
                 log.info(f"Could not retrieve ephemeris for satellite id: {satellite_id} and obs: {obs_type}")
         # in case of sv values such as 'E25_1', replace by 'E25'

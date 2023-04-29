@@ -16,6 +16,8 @@ cPrxReferenceFrame = {"name": "IGS14", "epoch": "2005.001"}
 cPrxJsonTextSequenceFileExtension = "jsonseq"
 cPrxCsvFileExtension = "csv"
 
+# the 8th and 9th bit of the `data source` parameter in the Galileo navigation message allows to identify the type of message (F/NAV vs I/NAV)
+cGalileoFnavDataSourceIndicator = 512
 
 
 # From RINEX Version 3.05, 1 December, 2020.
