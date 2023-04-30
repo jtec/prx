@@ -1,10 +1,6 @@
 import hashlib
 from pathlib import Path
 import logging
-
-import numpy
-import matplotlib.pyplot as plt
-
 import constants
 import numpy as np
 import pandas as pd
@@ -94,19 +90,5 @@ def repair_with_gfzrnx(file):
     assert False, "gdzrnx file repair run failed!"
 
 
-def plot_float_spacing(a, b):
-    floats = np.geomspace(a, b, num=100)
-    space_between_float64s = np.spacing(floats)
-    plt.plot(floats, space_between_float64s)
-    plt.grid()
-    plt.title(f"Smallest spacing between float64 numbers using np.spacing \n {a} to today's GPST in seconds.")
-    plt.xlabel("float64 number")
-    plt.ylabel("Space")
-    plt.xscale("log")
-    plt.yscale("log")
-    plt.savefig(Path(__file__).parent.joinpath("float_spacing.png"), dpi=300)
-
-
-if __name__ == "__main__":
-    today_gpst_s = pd.Timestamp.now() - constants.cGpstEpoch
-    plot_float_spacing(1e-6, today_gpst_s.total_seconds())
+def deg_2_rad(angle_deg):
+    return angle_deg * np.pi / 180
