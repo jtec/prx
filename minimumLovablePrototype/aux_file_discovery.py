@@ -35,7 +35,7 @@ def try_downloading_ephemerides_from_bkg(
             f"/{time.year}/{time.day_of_year:03}/BRDC00IGS_R_{time.year}{time.day_of_year:03}0000_01D_MN.rnx.gz"
         )
         local_compressed_file = folder.joinpath(remote_file.name)
-        url = "https://igs.bkg.bund.de/root_ftp/IGS/BRDC/" + str(remote_file)
+        url = "https://igs.bkg.bund.de/root_ftp/IGS/BRDC" + str(remote_file.as_posix())
         urllib.request.urlretrieve(url, local_compressed_file)
         local_file = converters.compressed_to_uncompressed(local_compressed_file)
         os.remove(local_compressed_file)
@@ -100,8 +100,8 @@ def discover_or_download_auxiliary_files(observation_file_path=Path()):
     rinex_3_obs_file = converters.anything_to_rinex_3(observation_file_path)
     header = georinex.rinexheader(rinex_3_obs_file)
     ephs = discover_or_download_ephemerides(
-        helpers.rinex_header_time_string_2_timestamp(header["TIME OF FIRST OBS"]),
-        helpers.rinex_header_time_string_2_timestamp(header["TIME OF LAST OBS"]),
+        helpers.rinex_header_time_string_2_timestamp_ns(header["TIME OF FIRST OBS"]),
+        helpers.rinex_header_time_string_2_timestamp_ns(header["TIME OF LAST OBS"]),
         rinex_3_obs_file.parent,
         list(header["fields"].keys()),
     )
