@@ -59,8 +59,14 @@ def timedelta_2_weeks_and_seconds(time_delta: pd.Timedelta):
     week_nanoseconds = time_delta.delta - weeks * constants.cNanoSecondsPerWeek
     return weeks, np.float64(week_nanoseconds) / constants.cNanoSecondsPerSecond
 
+def timedelta_2_seconds(time_delta: pd.Timedelta):
+    assert type(time_delta) == pd.Timedelta, "time_delta must be of type pd.Timedelta"
+    integer_seconds = np.float64(round(time_delta.total_seconds()))
+    fractional_seconds = np.float64(time_delta.delta - integer_seconds * constants.cNanoSecondsPerSecond)
+    return integer_seconds + fractional_seconds
 
-def rinex_header_time_string_2_timestamp(time_string: str) -> pd.Timestamp:
+
+def rinex_header_time_string_2_timestamp_ns(time_string: str) -> pd.Timestamp:
     elements = time_string.split()
     time_scale = elements[-1]
     assert time_scale == "GPS", "Time scales other than GPST not supported yet"

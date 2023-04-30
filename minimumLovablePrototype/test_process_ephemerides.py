@@ -1,17 +1,8 @@
 import math
 import pandas as pd
-<<<<<<< HEAD
-=======
-from gnss_lib_py.utils.time_conversions import tow_to_datetime
->>>>>>> origin/main
-from gnss_lib_py.utils.sim_gnss import find_sat
 import numpy as np
 from pathlib import Path
 import process_ephemerides as eph
-<<<<<<< HEAD
-
-=======
->>>>>>> origin/main
 import helpers
 import converters
 import constants
@@ -55,7 +46,6 @@ def input_for_test():
     shutil.rmtree(test_directory)
 
 
-<<<<<<< HEAD
 def test_compare_rnx3_gps_sat_pos_with_magnitude(input_for_test):
     """Loads a RNX3 file, compute a position for different satellites and time, and compare to MAGNITUDE results
     Test will be a success if the difference in position is lower than threshold_pos_error_m = 0.01
@@ -67,40 +57,19 @@ def test_compare_rnx3_gps_sat_pos_with_magnitude(input_for_test):
     sv = "G01"
     gpst_week = 2190
     gpst_tow = 523800
-=======
-def test_compare_rnx3_sat_pos_with_magnitude(input_for_test):
-    """Loads a RNX3 file, compute a position for different satellites and time, and compare to MAGNITUDE results
-    Test will be a success if the difference in position is lower than threshold_pos_error_m = 0.01
-    """
-    path_to_rnx3_nav_file = converters.anything_to_rinex_3(input_for_test["gps_nav_file"])
 
-    threshold_pos_error_m = 0.01
-
-    # select sv and time
-    sv = "G01"
-    gps_week = 2190
-    gps_tow = 523800
->>>>>>> origin/main
 
     # MAGNITUDE position
     sv_pos_magnitude = np.array([13053451.235, -12567273.060, 19015357.126])
 
-<<<<<<< HEAD
     # Compute broadcast satellite position
     # Select right ephemeris
     t_gpst_for_which_to_compute_position = pd.Timedelta(gpst_week*constants.cSecondsPerWeek + gpst_tow, "seconds")
-    p_ecef, v_ecef = eph.compute_satellite_state(ephemerides, sv, t_gpst_for_which_to_compute_position)
+    p_ecef, v_ecef, _, _  = eph.compute_satellite_state(ephemerides, sv, t_gpst_for_which_to_compute_position)
 
     threshold_pos_error_m = 0.01
     assert np.linalg.norm(p_ecef - sv_pos_magnitude) < threshold_pos_error_m
 
-=======
-    # Compute RNX3 satellite position
-    # Select right ephemeris
-    date = np.datetime64(tow_to_datetime(gps_week, gps_tow))
-    ephemerides = eph.convert_rnx3_nav_file_to_dataframe(path_to_rnx3_nav_file)
-    nav_df = eph.select_nav_ephemeris(ephemerides, sv, date)
->>>>>>> origin/main
 
 def test_galileo_position_and_velocity_sanity_check(input_for_test):
     # Using the following Galileo ephemeris
@@ -149,7 +118,7 @@ def test_beidou_position_and_velocity_sanity_check(input_for_test):
     ephemerides = eph.convert_rnx3_nav_file_to_dataframe(path_to_rnx3_nav_file)
 
     # We compute orbital position and velocity of
-    sv = "C02"
+    sv = "C01"
 
     # For the following BDT time a few minutes after the ephemeris reference time
     gst_week = 834
@@ -180,16 +149,16 @@ def test_glonass_position_and_velocity_sanity_check(input_for_test):
     # We compute orbital position and velocity of
     sv = "R01"
     # for the following time
-    t_orbit = (pd.Timestamp(np.datetime64("2022-01-01T00:15:00.000000000")) - constants.cArbitraryGlonassUtcEpoch) + pd.Timedelta(1, "seconds")
+    t_orbit = (pd.Timestamp("2022-01-01T00:15:00.000000000") - constants.cArbitraryGlonassUtcEpoch) + pd.Timedelta(1, "seconds")
 
     # there we go:
-    p_ecef, v_ecef = eph.compute_satellite_state(ephemerides, sv, t_orbit)
+    p_ecef, v_ecef, _, _ = eph.compute_satellite_state(ephemerides, sv, t_orbit)
 
     assert abs(np.linalg.norm(p_ecef) - 25 * 1e6) < 1e6
     assert abs(np.linalg.norm(v_ecef) - 3.5*1e3) < 1e2
 
 
-def test_compute_satellite_clock_offset(input_for_test):
+def test_compute_gps_satellite_clock_offset(input_for_test):
     # GPS, GAL, QZSS, BDS, IRNSS broadcast satellite clock system time offsets are all given
     # as parameters of a polynomial of order 2, so this test should cover those constellations.
     # When computing the satellite clock offset of GPS-001 for January 1st 2022 at 1am GPST,
@@ -212,7 +181,8 @@ def test_compute_satellite_clock_offset(input_for_test):
     ) = eph.compute_satellite_clock_offset_and_clock_offset_rate(
         eph.convert_rnx3_nav_file_to_dataframe(rinex_3_navigation_file),
         "G01",
-        pd.Timestamp(np.datetime64("2022-01-01T01:00:00.000000000")),
+        helpers.timestamp_2_timedelta(
+        pd.Timestamp("2022-01-01T01:00:00.000000000"), 'GPST'),
     )
     # We expect the following clock offset and clock offset rate computed by hand from the parameters above.
     delta_t_s = constants.cSecondsPerHour
@@ -226,50 +196,6 @@ def test_compute_satellite_clock_offset(input_for_test):
     assert abs(expected_offset_m - computed_offset_m) < 1e-6
     assert abs(expected_offset_rate_mps - computed_offset_rate_mps) < 1e-6
 
-<<<<<<< HEAD
-=======
-    assert np.linalg.norm(sv_pos_rnx3 - sv_pos_magnitude) < threshold_pos_error_m
-
-
-def test_compute_satellite_clock_offset(input_for_test):
-    # GPS, GAL, QZSS, BDS, IRNSS broadcast satellite clock system time offsets are all given
-    # as parameters of a polynomial of order 2, so this test should cover those constellations.
-    # When computing the satellite clock offset of GPS-001 for January 1st 2022 at 1am GPST
-    # We expect the clock offset to be computed from the following RINEX 3 ephemeris
-    """
-    G01 2022 01 01 00 00 00 4.691267386079e-04-1.000444171950e-11 0.000000000000e+00
-         3.900000000000e+01-1.411250000000e+02 3.988380417768e-09-6.242942382352e-01
-        -7.363036274910e-06 1.121813920327e-02 4.695728421211e-06 5.153674995422e+03
-         5.184000000000e+05-3.166496753693e-08-1.036611240093e+00 1.955777406693e-07
-         9.864187694897e-01 2.997500000000e+02 8.840876015687e-01-8.133553080847e-09
-        -3.778728827795e-10 1.000000000000e+00 2.190000000000e+03 0.000000000000e+00
-         2.000000000000e+00 0.000000000000e+00 5.122274160385e-09 3.900000000000e+01
-         5.171890000000e+05 4.000000000000e+00 0.000000000000e+00 0.000000000000e+00
-    """
-    # copied from the following file
-    rinex_3_navigation_file = converters.anything_to_rinex_3(input_for_test["gps_nav_file"])
-    (
-        computed_offset_m,
-        computed_offset_rate_mps,
-    ) = eph.compute_satellite_clock_offset_and_clock_offset_rate(
-        eph.convert_rnx3_nav_file_to_dataframe(rinex_3_navigation_file),
-        "G01",
-        pd.Timestamp(np.datetime64("2022-01-01T01:00:00.000000000")),
-    )
-    # We expect the following clock offset and clock offset rate computed by hand from the parameters above.
-    delta_t_s = constants.cSecondsPerHour
-    expected_offset_m = constants.cGpsIcdSpeedOfLight_mps * (
-            4.691267386079e-04
-            + (-1.000444171950e-11 * delta_t_s)
-            + 0.000000000000e00 * math.pow(delta_t_s, 2)
-    )
-    expected_offset_rate_mps = constants.cGpsIcdSpeedOfLight_mps * (
-            -1.000444171950e-11 + 2 * 0.000000000000e00 * delta_t_s)
-    # Expect micrometers and micrometers/s accuracy here:
-    assert abs(expected_offset_m - computed_offset_m) < 1e-6
-    assert abs(expected_offset_rate_mps - computed_offset_rate_mps) < 1e-6
-
->>>>>>> origin/main
 
 def test_compute_satellite_clock_offset_glonass(input_for_test):
     # Glonass broadcast system time clock offsets are given as a clock offset in seconds
@@ -290,31 +216,21 @@ def test_compute_satellite_clock_offset_glonass(input_for_test):
     ) = eph.compute_satellite_clock_offset_and_clock_offset_rate(
         eph.convert_rnx3_nav_file_to_dataframe(rinex_3_navigation_file),
         "R01",
-        pd.Timestamp(np.datetime64("2022-01-01T01:00:00.000000000")),
+        helpers.timestamp_2_timedelta(
+        pd.Timestamp("2022-01-01T01:00:00.000000000"), "GLONASST")
     )
     # We expect the following clock offset and clock offset rate computed by hand from the parameters above.
     delta_t_s = constants.cSecondsPerHour
     expected_offset_m = constants.cGpsIcdSpeedOfLight_mps * (
-<<<<<<< HEAD
         7.305294275284e-06 + (0.0 * delta_t_s) + math.pow(0.000000000000e00, 2)
-=======
-            7.305294275284e-06 + (0.0 * delta_t_s) + math.pow(0.000000000000e00, 2)
->>>>>>> origin/main
     )
     expected_offset_rate_mps = 0
     # Expect micrometers and micrometers/s accuracy here:
     assert (
-<<<<<<< HEAD
         abs(expected_offset_m - computed_offset_m) < 1e-6
     )
     assert (
         abs(expected_offset_rate_mps - computed_offset_rate_mps) < 1e-6
-    )
-=======
-            abs(expected_offset_m - computed_offset_m) < 1e-6
-    )
-    assert (
-            abs(expected_offset_rate_mps - computed_offset_rate_mps) < 1e-6
     )
 
 
@@ -350,31 +266,31 @@ def test_compute_gps_group_delay_rnx3(input_for_test):
 
     # retrieve total group delays for 4 different observation codes, at 3 different times
     tgd_c1c_s = pd.Series(data=[
-        eph.compute_total_group_delay_rnx3(eph_rnx3_df, pd.Timestamp(np.datetime64("2022-01-01T00:00:00.000000000")),
+        eph.compute_total_group_delay_rnx3(eph_rnx3_df, pd.Timestamp("2022-01-01T00:00:00.000000000"),
                                            "G02", "C1C"),
-        eph.compute_total_group_delay_rnx3(eph_rnx3_df, pd.Timestamp(np.datetime64("2022-01-01T01:30:00.000000000")),
+        eph.compute_total_group_delay_rnx3(eph_rnx3_df, pd.Timestamp("2022-01-01T01:30:00.000000000"),
                                            "G02", "C1C"),
-        eph.compute_total_group_delay_rnx3(eph_rnx3_df, pd.Timestamp(np.datetime64("2022-01-01T02:15:00.000000000")),
+        eph.compute_total_group_delay_rnx3(eph_rnx3_df, pd.Timestamp("2022-01-01T02:15:00.000000000"),
                                            "G02", "C1C"),
     ])
     tgd_c1p_s = pd.Series(data=[
-        eph.compute_total_group_delay_rnx3(eph_rnx3_df, pd.Timestamp(np.datetime64("2022-01-01T00:00:00.000000000")),
+        eph.compute_total_group_delay_rnx3(eph_rnx3_df, pd.Timestamp("2022-01-01T00:00:00.000000000"),
                                            "G02", "C1P"),
-        eph.compute_total_group_delay_rnx3(eph_rnx3_df, pd.Timestamp(np.datetime64("2022-01-01T01:30:00.000000000")),
+        eph.compute_total_group_delay_rnx3(eph_rnx3_df, pd.Timestamp("2022-01-01T01:30:00.000000000"),
                                            "G02", "C1P"),
-        eph.compute_total_group_delay_rnx3(eph_rnx3_df, pd.Timestamp(np.datetime64("2022-01-01T02:15:00.000000000")),
+        eph.compute_total_group_delay_rnx3(eph_rnx3_df, pd.Timestamp("2022-01-01T02:15:00.000000000"),
                                            "G02", "C1P"),
     ])
     tgd_c2p_s = pd.Series(data=[
-        eph.compute_total_group_delay_rnx3(eph_rnx3_df, pd.Timestamp(np.datetime64("2022-01-01T00:00:00.000000000")),
+        eph.compute_total_group_delay_rnx3(eph_rnx3_df, pd.Timestamp("2022-01-01T00:00:00.000000000"),
                                            "G02", "C2P"),
-        eph.compute_total_group_delay_rnx3(eph_rnx3_df, pd.Timestamp(np.datetime64("2022-01-01T01:30:00.000000000")),
+        eph.compute_total_group_delay_rnx3(eph_rnx3_df, pd.Timestamp("2022-01-01T01:30:00.000000000"),
                                            "G02", "C2P"),
-        eph.compute_total_group_delay_rnx3(eph_rnx3_df, pd.Timestamp(np.datetime64("2022-01-01T02:15:00.000000000")),
+        eph.compute_total_group_delay_rnx3(eph_rnx3_df, pd.Timestamp("2022-01-01T02:15:00.000000000"),
                                            "G02", "C2P"),
     ])
     tgd_c5x_s = eph.compute_total_group_delay_rnx3(eph_rnx3_df,
-                                                   pd.Timestamp(np.datetime64("2022-01-01T00:00:00.000000000")), "G02",
+                                                   pd.Timestamp("2022-01-01T00:00:00.000000000"), "G02",
                                                    "C5X")
 
     # total group delay is on the 7th line, 3rd position
@@ -413,16 +329,16 @@ def test_compute_gal_group_delay_rnx3(input_for_test):
     eph_rnx3_df = eph.convert_rnx3_nav_file_to_dataframe(rinex_3_navigation_file)
 
     tgd_e1_s = eph.compute_total_group_delay_rnx3(eph_rnx3_df,
-                                                  pd.Timestamp(np.datetime64("2022-01-01T01:30:00.000000000")), "E25",
+                                                  pd.Timestamp("2022-01-01T01:30:00.000000000"), "E25",
                                                   "C1C")
     tgd_e5a_s = eph.compute_total_group_delay_rnx3(eph_rnx3_df,
-                                                   pd.Timestamp(np.datetime64("2022-01-01T01:30:00.000000000")), "E25",
+                                                   pd.Timestamp("2022-01-01T01:30:00.000000000"), "E25",
                                                    "C5X")
     tgd_e5b_s = eph.compute_total_group_delay_rnx3(eph_rnx3_df,
-                                                   pd.Timestamp(np.datetime64("2022-01-01T01:30:00.000000000")), "E25",
+                                                   pd.Timestamp("2022-01-01T01:30:00.000000000"), "E25",
                                                    "C7X")
     tgd_e6b_s = eph.compute_total_group_delay_rnx3(eph_rnx3_df,
-                                                   pd.Timestamp(np.datetime64("2022-01-01T01:30:00.000000000")), "E25",
+                                                   pd.Timestamp("2022-01-01T01:30:00.000000000"), "E25",
                                                    "C6B")
 
     tgd_e1_s_expected = 4.889443516730e-09
@@ -435,6 +351,7 @@ def test_compute_gal_group_delay_rnx3(input_for_test):
     assert (abs(tgd_e5a_s - tgd_e5a_s_expected) * constants.cGpsIcdSpeedOfLight_mps < 1e-3)
     assert (abs(tgd_e5b_s - tgd_e5b_s_expected) * constants.cGpsIcdSpeedOfLight_mps < 1e-3)
     assert np.isnan(tgd_e6b_s)
+
 
 def test_compute_bds_group_delay_rnx3(input_for_test):
     """
@@ -461,28 +378,28 @@ def test_compute_bds_group_delay_rnx3(input_for_test):
 
     # B1I -> C2I
     tgd_c2i_s = eph.compute_total_group_delay_rnx3(eph_rnx3_df,
-                                                   pd.Timestamp(np.datetime64("2022-01-01T00:30:00.000000000")), "C01",
+                                                   pd.Timestamp("2022-01-01T00:30:00.000000000"), "C01",
                                                    "C2I")
     # B2I -> C7I
     tgd_c7i_s = eph.compute_total_group_delay_rnx3(eph_rnx3_df,
-                                                   pd.Timestamp(np.datetime64("2022-01-01T00:30:00.000000000")), "C01",
+                                                   pd.Timestamp("2022-01-01T00:30:00.000000000"), "C01",
                                                    "C7I")
     # B3I -> C6I
     tgd_c6i_s = eph.compute_total_group_delay_rnx3(eph_rnx3_df,
-                                                   pd.Timestamp(np.datetime64("2022-01-01T00:30:00.000000000")), "C01",
+                                                   pd.Timestamp("2022-01-01T00:30:00.000000000"), "C01",
                                                    "C6I")
 
     # B1Cd -> C1D
     tgd_c1d_s = eph.compute_total_group_delay_rnx3(eph_rnx3_df,
-                                                   pd.Timestamp(np.datetime64("2022-01-01T00:30:00.000000000")), "C01",
+                                                   pd.Timestamp("2022-01-01T00:30:00.000000000"), "C01",
                                                    "C1D")
     # B1Cp -> C1P
     tgd_c1p_s = eph.compute_total_group_delay_rnx3(eph_rnx3_df,
-                                                   pd.Timestamp(np.datetime64("2022-01-01T00:30:00.000000000")), "C01",
+                                                   pd.Timestamp("2022-01-01T00:30:00.000000000"), "C01",
                                                    "C1P")
     # B2bi -> C7D
     tgd_c5x_s = eph.compute_total_group_delay_rnx3(eph_rnx3_df,
-                                                   pd.Timestamp(np.datetime64("2022-01-01T00:30:00.000000000")), "C01",
+                                                   pd.Timestamp("2022-01-01T00:30:00.000000000"), "C01",
                                                    "C7D")
 
     tgd_c2i_s_expected = -5.800000000000E-09
@@ -495,4 +412,3 @@ def test_compute_bds_group_delay_rnx3(input_for_test):
     assert (np.isnan(tgd_c1d_s))
     assert (np.isnan(tgd_c1p_s))
     assert (np.isnan(tgd_c5x_s))
->>>>>>> origin/main
