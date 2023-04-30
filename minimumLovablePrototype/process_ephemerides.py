@@ -207,10 +207,11 @@ def compute_satellite_clock_offset_and_clock_offset_rate(
     ephemeris_df = select_nav_ephemeris(
         parsed_rinex_3_nav_file, satellite, time_constellation_time_ns
     )
-    # Convert to 64-bi float seconds here, as pandas.Timedelta has only nanosecond resolution
-    time_wrt_ephemeris_epoch_s = pd.Timedelta(
+    # Convert to 64-bit float seconds here, as pandas.Timedelta has only nanosecond resolution
+    time_wrt_ephemeris_epoch_s = \
+        helpers.timedelta_2_seconds(
         time_constellation_time_ns - ephemeris_df["time"].iloc[0]
-    ).total_seconds()
+    )
     # Clock offset is sub-second, and float64 has roughly 1e-15 precision at 1s, so we get roughly 10 micrometers floating-point
     # error here.
     if satellite[0] == "R":
@@ -245,7 +246,7 @@ def compute_satellite_clock_offset_and_clock_offset_rate(
 
 def compute_total_group_delay_rnx3(
         parsed_rinex_3_nav_file: pd.DataFrame,
-        time_constellation_time_ns: pd.Timestamp,
+        time_constellation_time_ns: pd.Timedelta,
         satellite: str,
         obs_type: str,
 ):
@@ -270,7 +271,7 @@ def compute_total_group_delay_rnx3(
     Note: rinex v3 nav files only supports a subset of observations.
     """
     ephemeris_df = select_nav_ephemeris(
-        parsed_rinex_3_nav_file, satellite, time_constellation_time_ns.to_datetime64(), obs_type=obs_type
+        parsed_rinex_3_nav_file, satellite, time_constellation_time_ns, obs_type=obs_type
     )
 
     # compute the scale factor, depending on the constellation and frequency

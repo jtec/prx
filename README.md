@@ -31,6 +31,13 @@ Let's say you wrote some code that uses `import new_package`. To have `new packa
 The package information will be added to the `Pipenv` and `Pipenv.lock` files. Simply commit 
 those changes along with the new code that relies on the new package.
 
+## Testing
+
+Run `pytest` in the `prx` repository root to run all tests.
+Run `pytest -x` to stop after the first test that fails.
+Run `pytest ---durations=10` to run all tests and have pytest list teh 10 longest running tests.
+
+
 ## Coding style
 We use https://google.github.io/styleguide/pyguide.html as our python style guide.
 
