@@ -48,7 +48,7 @@ def input_for_test():
     shutil.rmtree(test_directory)
 
 
-def test_compare_rnx3_sat_pos_with_magnitude(input_for_test):
+def test_compare_rnx3_gps_sat_pos_with_magnitude(input_for_test):
     """Loads a RNX3 file, compute a position for different satellites and time, and compare to MAGNITUDE results
     Test will be a success if the difference in position is lower than threshold_pos_error_m = 0.01
     """
@@ -70,6 +70,68 @@ def test_compare_rnx3_sat_pos_with_magnitude(input_for_test):
 
     threshold_pos_error_m = 0.01
     assert np.linalg.norm(p_ecef - sv_pos_magnitude) < threshold_pos_error_m
+
+
+def test_galileo_position_and_velocity_sanity_check(input_for_test):
+    # Using the following Galileo ephemeris
+    """
+    E01 2022 01 01 00 30 00-5.500090774149e-04-8.029132914089e-12 0.000000000000e+00
+         9.900000000000e+01 1.554687500000e+02 2.642252917583e-09-3.049008177372e+00
+         7.327646017075e-06 2.901279367507e-04 1.342035830021e-05 5.440621290207e+03
+         5.202000000000e+05 0.000000000000e+00 2.999553080386e+00 1.676380634308e-08
+         9.757125000792e-01 6.134375000000e+01-1.229150455736e-01-5.152714631247e-09
+        -2.246522148093e-10 2.580000000000e+02 2.190000000000e+03
+         3.120000000000e+00 0.000000000000e+00 4.656612873077e-10 0.000000000000e+00
+         5.209900000000e+05
+    """
+    # Copied from the following RINEX navigation file
+    path_to_rnx3_nav_file = converters.anything_to_rinex_3(input_for_test["all_constellations_nav_file"])
+    ephemerides = eph.convert_rnx3_nav_file_to_dataframe(path_to_rnx3_nav_file)
+
+    # We compute orbital position and velocity of
+    sv = "E01"
+
+    # For the following GST time a few minutes after the ephemeris reference time
+    gst_week = 2190
+    gst_tow = 520200 + 5 * constants.cSecondsPerMinute
+    t_orbit_gst_ns = pd.Timedelta(gst_week*constants.cSecondsPerWeek + gst_tow, "seconds")
+
+    p_ecef, v_ecef, clock_offset, clock_offset_rate = eph.compute_satellite_state(ephemerides, sv, t_orbit_gst_ns)
+
+    assert abs(np.linalg.norm(p_ecef) - 29.994 * 1e6) < 1e6
+    assert abs(np.linalg.norm(v_ecef) - 3*1e3) < 1e2
+
+
+def test_beidou_position_and_velocity_sanity_check(input_for_test):
+    # Using the following Beidou ephemeris
+    """
+    C01 2022 01 01 00 00 00-2.854013582692e-04 4.026112776501e-11 0.000000000000e+00
+         1.000000000000e+00 7.552500000000e+02-4.922705050425e-09 5.928667085353e-01
+         2.444302663207e-05 6.108939414844e-04 2.280483022332e-05 6.493410568237e+03
+         5.184000000000e+05-2.812594175339e-07-2.969991558287e+00-6.519258022308e-08
+         8.077489154703e-02-7.019375000000e+02-1.279165335399e+00 6.122397879589e-09
+        -1.074687622196e-09 0.000000000000e+00 8.340000000000e+02 0.000000000000e+00
+         2.000000000000e+00 0.000000000000e+00-5.800000000000e-09-1.020000000000e-08
+         5.184276000000e+05 0.000000000000e+00
+    """
+    # Copied from the following RINEX navigation file
+    path_to_rnx3_nav_file = converters.anything_to_rinex_3(input_for_test["all_constellations_nav_file"])
+    ephemerides = eph.convert_rnx3_nav_file_to_dataframe(path_to_rnx3_nav_file)
+
+    # We compute orbital position and velocity of
+    sv = "C02"
+
+    # For the following BDT time a few minutes after the ephemeris reference time
+    gst_week = 834
+    gst_tow = 518400 + 5 * constants.cSecondsPerMinute
+    t_orbit_gst_ns = pd.Timedelta(gst_week * constants.cSecondsPerWeek + gst_tow, "seconds")
+
+    p_ecef, v_ecef, clock_offset, clock_offset_rate = eph.compute_satellite_state(ephemerides, sv, t_orbit_gst_ns)
+
+    # Compare to semi-major-axis:
+    assert abs(np.linalg.norm(p_ecef) - (6.493410568237e+03)**2) < 1e6
+    # C01 is on a geosynchronous orbit, so its velocity in ECEF should be smaller than those on MEO orbits
+    assert abs(np.linalg.norm(v_ecef) - 2 * 1e2) < 1e1
 
 
 def test_glonass_position_and_velocity_sanity_check(input_for_test):
@@ -95,7 +157,6 @@ def test_glonass_position_and_velocity_sanity_check(input_for_test):
 
     assert abs(np.linalg.norm(p_ecef) - 25 * 1e6) < 1e6
     assert abs(np.linalg.norm(v_ecef) - 3.5*1e3) < 1e2
-
 
 
 def test_compute_satellite_clock_offset(input_for_test):
