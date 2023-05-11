@@ -186,12 +186,14 @@ def build_records(rinex_3_obs_file, rinex_3_ephemerides_file):
 
 
 def process(observation_file_path: Path, output_format="jsonseq"):
+    # Make this work even if someone passes a path string:
+    observation_file_path = Path(observation_file_path)
     log.info(
         f"Starting processing {observation_file_path.name} (full path {observation_file_path})"
     )
     rinex_3_obs_file = converters.anything_to_rinex_3(observation_file_path)
     prx_file = str(rinex_3_obs_file).replace(".rnx", "")
-    aux_files = aux.discover_or_download_auxiliary_files(observation_file_path)
+    aux_files = aux.discover_or_download_auxiliary_files(rinex_3_obs_file)
     write_prx_file(
         build_header([rinex_3_obs_file, aux_files["broadcast_ephemerides"]]),
         build_records(rinex_3_obs_file, aux_files["broadcast_ephemerides"]),
