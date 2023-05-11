@@ -52,7 +52,6 @@ def timestamp_2_timedelta(timestamp: pd.Timestamp, time_scale):
         return timestamp - constants.cArbitraryGlonassUtcEpoch
     assert False, f"Time scale {time_scale} not supported."
 
-
 def timedelta_2_weeks_and_seconds(time_delta: pd.Timedelta):
     assert type(time_delta) == pd.Timedelta, "time_delta must be of type pd.Timedelta"
     weeks = math.floor(time_delta.delta/constants.cNanoSecondsPerWeek)
