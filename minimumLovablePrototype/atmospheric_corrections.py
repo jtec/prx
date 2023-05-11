@@ -57,3 +57,8 @@ def compute_klobuchar_l1_correction(tow_s, gps_a, gps_b, elevation_rad, azimuth_
                                     constants.cGpsIcdSpeedOfLight_mps * 5e-9 * F)
 
     return iono_correction_l1_m
+
+
+def compute_unb3m_correction(lat_rad, height_m, day_of_year, elevation_rad):
+    unb3m_correction_m = np.nan
+    return unb3m_correction_m

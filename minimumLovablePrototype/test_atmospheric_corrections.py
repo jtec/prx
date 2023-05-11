@@ -1,4 +1,6 @@
 import numpy as np
+import pandas as pd
+
 import atmospheric_corrections as atmo
 from pathlib import Path
 import shutil
@@ -112,3 +114,31 @@ def test_klobuchar_correction():
     iono_corr = atmo.compute_klobuchar_l1_correction(tow_s, gps_a, gps_b, el_s_rad, az_s_rad, lat_u_rad, lon_u_rad)
 
     assert (np.max(np.fabs(iono_corr - iono_corr_magnitude)) < threshold_iono_error_m)
+
+
+def test_unb3m_corrections():
+    tropo_parameters_expected = pd.read_csv(helpers.prx_root().joinpath(
+        "tools/UNB3m_pack/tunb3m_.txt"),
+        sep=" ", skipinitialspace=True, skiprows=3, header=None, usecols=[0,1,2,3,8]
+    )
+    tropo_parameters_expected.rename({0: 'latitude_deg',
+                                      1: 'height_m',
+                                      2: 'day_of_year',
+                                      3: 'elevation_deg',
+                                      4: 'temperature_K',
+                                      5: 'pressure_mbar',
+                                      6: 'water_vapor_pressure_mbar',
+                                      7: 'mean_water_vapor_temperature_K',
+                                      8: 'total_slant_delay_m',
+                                      9: 'total_slant_delay_rate_m_per_rad'},
+                                     axis=1, inplace=True)
+
+    # tested parameter range
+    lat_rad = np.deg2rad(tropo_parameters_expected["latitude_deg"])
+    height_m = tropo_parameters_expected["height_m"]
+    day_of_year = tropo_parameters_expected["day_of_year"]
+    elevation_rad = np.deg2rad(tropo_parameters_expected["elevation_deg"])
+
+    unb3m_correction = atmo.compute_unb3m_correction(lat_rad, height_m, day_of_year, elevation_rad)
+
+    assert(unb3m_correction == tropo_parameters_expected.total_slant_delay_m)
