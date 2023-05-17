@@ -23,7 +23,7 @@ constellation_2_system_time_scale = {
     "C": "BDT",
     "R": "GLONASST",
     "J": "QZSST",
-    "I": "IRNWT",
+    "I": "IRNSST",
 }
 
 

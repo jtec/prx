@@ -139,16 +139,19 @@ def build_records(rinex_3_obs_file, rinex_3_ephemerides_file):
         ) = eph.compute_satellite_clock_offset_and_clock_offset_rate(
             ephemerides,
             row["satellite"],
+            helpers.timestamp_2_timedelta(pd.Timestamp(row["time_of_emission_in_satellite_time"]),
+                                          eph.satellite_id_2_system_time_scale(row["satellite"])),
+        )
+        time_of_emission_in_constellation_time = helpers.timestamp_2_timedelta(
             pd.Timestamp(row["time_of_emission_in_satellite_time"]),
-        )
-        time_of_emission_in_constellation_time = pd.Timestamp(
-            row["time_of_emission_in_satellite_time"]
-            - pd.Timedelta(
-                constants.cNanoSecondsPerSecond
-                * offset_m
-                / constants.cGpsIcdSpeedOfLight_mps
+            eph.satellite_id_2_system_time_scale(row["satellite"]),
             )
+        - pd.Timedelta(
+            constants.cNanoSecondsPerSecond
+            * offset_m
+            / constants.cGpsIcdSpeedOfLight_mps
         )
+
         (
             offset_m,
             offset_rate_mps,
@@ -171,10 +174,6 @@ def build_records(rinex_3_obs_file, rinex_3_ephemerides_file):
 
     def compute_sat_state(row, ephemerides):
         nav_df = eph.select_nav_ephemeris(ephemerides, row['satellite'], row['time_of_emission_in_system_time'])
-
-        # call findsat from gnss_lib_py
-        sv_posvel_rnx3_df = find_sat(nav_df, gps_tow, gps_week)
-
         broadcast_position_in_constellation_frame = 0
         return broadcast_position_in_constellation_frame
 
