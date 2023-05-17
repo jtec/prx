@@ -61,187 +61,187 @@ def compute_klobuchar_l1_correction(tow_s, gps_a, gps_b, elevation_rad, azimuth_
     return iono_correction_l1_m
 
 
-def compute_unb3m_correction(LATRAD, HEIGHTM, DAYOFYEAR, ELEVRAD):
+def compute_unb3m_correction(latitude_user_rad, height_user_m, day_of_year, elevation_sat_rad):
     # This function is the python version of the matlab function UNB3M.m provided in the UNB3m_pack [1]
     #
     # INPUTS: numpy arrays of the same shape are expected
     #
     # OUTPUTS:
-    # - HZD  : Hydrostatic zenith delay (m)
-    # - HMF  : Hydrostatic Niell mapping function
-    # - WZD  : Non-hyd. zenith delay (m)
-    # - WMF  :  Non-hyd. Niell mapping function
-    # - RTROP: Total slant delay (m)
+    # - tropo_zhd_m  : Hydrostatic zenith delay (m)
+    # - tropo_hydrostatic_mapping  : Hydrostatic Niell mapping function
+    # - tropo_zwd_m  : Non-hyd. (wet) zenith delay (m)
+    # - tropo_wet_mapping  :  Non-hyd. (wet) Niell mapping function
+    # - tropo_delay_m : Total slant delay (m)
     #
     # [1] https://gge.ext.unb.ca/Resources/unb3m/unb3m.html
 
-    assert LATRAD.shape == HEIGHTM.shape, ">> atmospheric_corrections.compute_unb3m_correction: input arguments " \
-                                          "should be arrays of the same shape "
-    assert LATRAD.shape == DAYOFYEAR.shape, ">> atmospheric_corrections.compute_unb3m_correction: input arguments " \
-                                            "should be arrays of the same shape "
-    assert LATRAD.shape == ELEVRAD.shape, ">> atmospheric_corrections.compute_unb3m_correction: input arguments " \
-                                          "should be arrays of the same shape "
+    assert latitude_user_rad.shape == height_user_m.shape, \
+        ">> atmospheric_corrections.compute_unb3m_correction: input arguments should be arrays of the same shape"
+    assert latitude_user_rad.shape == day_of_year.shape, \
+        ">> atmospheric_corrections.compute_unb3m_correction: input arguments should be arrays of the same shape"
+    assert latitude_user_rad.shape == elevation_sat_rad.shape, \
+        ">> atmospheric_corrections.compute_unb3m_correction: input arguments should be arrays of the same shape"
 
     # Initialize UNB3m look-up table
-    AVG = np.array([[15.0, 1013.25, 299.65, 75.00, 6.30, 2.77],
+    avg = np.array([[15.0, 1013.25, 299.65, 75.00, 6.30, 2.77],
                     [30.0, 1017.25, 294.15, 80.00, 6.05, 3.15],
                     [45.0, 1015.75, 283.15, 76.00, 5.58, 2.57],
                     [60.0, 1011.75, 272.15, 77.50, 5.39, 1.81],
                     [75.0, 1013.00, 263.65, 82.50, 4.53, 1.55]])
-    AMP = np.array([[15.0,  0.00,  0.00,  0.00, 0.00, 0.00],
+    amp = np.array([[15.0, 0.00, 0.00, 0.00, 0.00, 0.00],
                     [30.0, -3.75,  7.00,  0.00, 0.25, 0.33],
                     [45.0, -2.25, 11.00, -1.00, 0.32, 0.46],
                     [60.0, -1.75, 15.00, -2.50, 0.81, 0.74],
                     [75.0, -0.50, 14.50,  2.50, 0.62, 0.30]])
-    EXCEN2 = 6.6943799901413e-03
-    MD = 28.9644
-    MW = 18.0152
-    K1 = 77.604
-    K2 = 64.79
-    K3 = 3.776e5
-    R = 8314.34
-    C1 = 2.2768e-03
-    K2PRIM = K2 - K1 * (MW / MD)
-    RD = R / MD
+    eccentricity = 6.6943799901413e-03
+    md = 28.9644
+    mw = 18.0152
+    k1 = 77.604
+    k2 = 64.79
+    k3 = 3.776e5
+    r = 8314.34
+    c1 = 2.2768e-03
+    k2_prime = k2 - k1 * (mw / md)
+    rd = r / md
     # DTR = 1.745329251994329e-02
-    DOY2RAD = 0.31415926535897935601e01 * 2 / 365.25
+    day_of_year_to_rad = 0.31415926535897935601e01 * 2 / 365.25
 
     # initialize NMF tables
-    ABC_AVG = np.array([[15.0, 1.2769934e-3, 2.9153695e-3, 62.610505e-3],
+    abc_avg = np.array([[15.0, 1.2769934e-3, 2.9153695e-3, 62.610505e-3],
                         [30.0, 1.2683230e-3, 2.9152299e-3, 62.837393e-3],
                         [45.0, 1.2465397e-3, 2.9288445e-3, 63.721774e-3],
                         [60.0, 1.2196049e-3, 2.9022565e-3, 63.824265e-3],
                         [75.0, 1.2045996e-3, 2.9024912e-3, 64.258455e-3]])
-    ABC_AMP = np.array([[15.0, 0.0,          0.0,          0.0],
+    abc_amp = np.array([[15.0, 0.0, 0.0, 0.0],
                         [30.0, 1.2709626e-5, 2.1414979e-5, 9.0128400e-5],
                         [45.0, 2.6523662e-5, 3.0160779e-5, 4.3497037e-5],
                         [60.0, 3.4000452e-5, 7.2562722e-5, 84.795348e-5],
                         [75.0, 4.1202191e-5, 11.723375e-5, 170.37206e-5]])
-    A_HT = 2.53e-5
-    B_HT = 5.49e-3
-    C_HT = 1.14e-3
-    HT_TOPCON = 1 + A_HT / (1 + B_HT / (1 + C_HT))
+    a_ht = 2.53e-5
+    b_ht = 5.49e-3
+    c_ht = 1.14e-3
+    ht_topcon = 1 + a_ht / (1 + b_ht / (1 + c_ht))
 
-    ABC_W2P0 = np.array([[15.0, 5.8021897e-4, 1.4275268e-3, 4.3472961e-2],
+    abc_w2p0 = np.array([[15.0, 5.8021897e-4, 1.4275268e-3, 4.3472961e-2],
                          [30.0, 5.6794847e-4, 1.5138625e-3, 4.6729510e-2],
                          [45.0, 5.8118019e-4, 1.4572752e-3, 4.3908931e-2],
                          [60.0, 5.9727542e-4, 1.5007428e-3, 4.4626982e-2],
                          [75.0, 6.1641693e-4, 1.7599082e-3, 5.4736038e-2]])
 
-    LATDEG = np.rad2deg(LATRAD)
+    latitude_user_deg = np.rad2deg(latitude_user_rad)
 
     # Deal with southern hemisphere and yearly variation
-    TD_O_Y = DAYOFYEAR
-    TD_O_Y = np.where(LATDEG < 0, TD_O_Y + 182.625, TD_O_Y)
+    t_doy = day_of_year
+    t_doy = np.where(latitude_user_deg < 0, t_doy + 182.625, t_doy)
 
-    COSPHS = np.cos((TD_O_Y - 28) * DOY2RAD)
+    cos_phs = np.cos((t_doy - 28) * day_of_year_to_rad)
 
     # Initialize pointers to lookup table
-    LAT = np.abs(LATDEG)
-    P1 = np.fix((LAT - 15) / 15) + 1 - 1
-    P1 = np.where(LAT >= 75, 4, P1)
-    P1 = np.where(LAT <= 15, 0, P1)
-    P1 = P1.astype("int")
-    P2 = P1 + 1
-    P2 = np.where(LAT >= 75, 4, P2)
-    P2 = np.where(LAT <= 15, 0, P2)
-    M = (LAT - AVG[P1, 0]) / (AVG[P2, 0] - AVG[P1, 0])
-    M = np.where(LAT >= 75, 0, M)
-    M = np.where(LAT <= 15, 0, M)
+    lat_abs = np.abs(latitude_user_deg)
+    p1 = np.fix((lat_abs - 15) / 15) + 1 - 1
+    p1 = np.where(lat_abs >= 75, 4, p1)
+    p1 = np.where(lat_abs <= 15, 0, p1)
+    p1 = p1.astype("int")
+    p2 = p1 + 1
+    p2 = np.where(lat_abs >= 75, 4, p2)
+    p2 = np.where(lat_abs <= 15, 0, p2)
+    m = (lat_abs - avg[p1, 0]) / (avg[p2, 0] - avg[p1, 0])
+    m = np.where(lat_abs >= 75, 0, m)
+    m = np.where(lat_abs <= 15, 0, m)
 
     # Compute average surface tropo values by interpolation
-    PAVG = M * (AVG[P2, 1] - AVG[P1, 1]) + AVG[P1, 1]
-    TAVG = M * (AVG[P2, 2] - AVG[P1, 2]) + AVG[P1, 2]
-    EAVG = M * (AVG[P2, 3] - AVG[P1, 3]) + AVG[P1, 3]
-    BETAAVG = M * (AVG[P2, 4] - AVG[P1, 4]) + AVG[P1, 4]
-    LAMBDAAVG = M * (AVG[P2, 5] - AVG[P1, 5]) + AVG[P1, 5]
+    p_avg = m * (avg[p2, 1] - avg[p1, 1]) + avg[p1, 1]
+    t_avg = m * (avg[p2, 2] - avg[p1, 2]) + avg[p1, 2]
+    e_avg = m * (avg[p2, 3] - avg[p1, 3]) + avg[p1, 3]
+    beta_avg = m * (avg[p2, 4] - avg[p1, 4]) + avg[p1, 4]
+    lambda_avg = m * (avg[p2, 5] - avg[p1, 5]) + avg[p1, 5]
 
     # Compute variation of average surface tropo values
-    PAMP = M * (AMP[P2, 1] - AMP[P1, 1]) + AMP[P1, 1]
-    TAMP = M * (AMP[P2, 2] - AMP[P1, 2]) + AMP[P1, 2]
-    EAMP = M * (AMP[P2, 3] - AMP[P1, 3]) + AMP[P1, 3]
-    BETAAMP = M * (AMP[P2, 4] - AMP[P1, 4]) + AMP[P1, 4]
-    LAMBDAAMP = M * (AMP[P2, 5] - AMP[P1, 5]) + AMP[P1, 5]
+    p_amp = m * (amp[p2, 1] - amp[p1, 1]) + amp[p1, 1]
+    t_amp = m * (amp[p2, 2] - amp[p1, 2]) + amp[p1, 2]
+    e_amp = m * (amp[p2, 3] - amp[p1, 3]) + amp[p1, 3]
+    beta_amb = m * (amp[p2, 4] - amp[p1, 4]) + amp[p1, 4]
+    lambda_amp = m * (amp[p2, 5] - amp[p1, 5]) + amp[p1, 5]
 
     # Compute surface tropo values
-    P0 = PAVG - PAMP * COSPHS
-    T0 = TAVG - TAMP * COSPHS
-    E0 = EAVG - EAMP * COSPHS
-    BETA = BETAAVG - BETAAMP * COSPHS
-    BETA = BETA / 1000
-    LAMBDA = LAMBDAAVG - LAMBDAAMP * COSPHS
+    p_0 = p_avg - p_amp * cos_phs
+    t_0 = t_avg - t_amp * cos_phs
+    e_0 = e_avg - e_amp * cos_phs
+    beta = beta_avg - beta_amb * cos_phs
+    beta = beta / 1000
+    LAMBDA = lambda_avg - lambda_amp * cos_phs
 
     # Transform from relative humidity to WVP (IERS Conventions 2003)
-    ES = 0.01 * np.exp(1.2378847e-5 * (T0 ** 2) - 1.9121316e-2 * T0 + 3.393711047e1 - 6.3431645e3 * (T0 ** -1))
-    FW = 1.00062 + 3.14e-6 * P0 + 5.6e-7 * ((T0 - 273.15) ** 2)
-    E0 = (E0 / 100) * ES * FW
+    es = 0.01 * np.exp(1.2378847e-5 * (t_0 ** 2) - 1.9121316e-2 * t_0 + 3.393711047e1 - 6.3431645e3 * (t_0 ** -1))
+    fw = 1.00062 + 3.14e-6 * p_0 + 5.6e-7 * ((t_0 - 273.15) ** 2)
+    e_0 = (e_0 / 100) * es * fw
 
     # Compute power value for pressure & water vapour
-    EP = 9.80665 / 287.054 / BETA
+    ep = 9.80665 / 287.054 / beta
 
     # Scale surface values to required height
-    T = T0 - BETA * HEIGHTM
-    P = P0 * (T / T0) ** EP
-    E = E0 * (T / T0) ** (EP * (LAMBDA + 1))
+    t = t_0 - beta * height_user_m
+    p = p_0 * (t / t_0) ** ep
+    e = e_0 * (t / t_0) ** (ep * (LAMBDA + 1))
 
     # Compute the acceleration at the mass center of a vertical column of the atmosphere
-    GEOLAT = np.arctan((1 - EXCEN2) * np.tan(LATRAD))
-    DGREF = 1 - 2.66e-03 * np.cos(2 * GEOLAT) - 2.8e-07 * HEIGHTM
-    GM = 9.784 * DGREF
-    DEN = (LAMBDA + 1) * GM
+    geo_lat = np.arctan((1 - eccentricity) * np.tan(latitude_user_rad))
+    dgref = 1 - 2.66e-03 * np.cos(2 * geo_lat) - 2.8e-07 * height_user_m
+    gm = 9.784 * dgref
+    den = (LAMBDA + 1) * gm
 
     # Compute mean temperature of the water vapor
-    TM = T * (1 - BETA * RD / DEN)
+    t_m = t * (1 - beta * rd / den)
 
     # Compute zenith hydrostatic delay
-    HZD = C1 / DGREF * P
+    tropo_zhd_m = c1 / dgref * p
 
     # Compute zenith wet delay
-    WZD = 1e-6 * (K2PRIM + K3 / TM) * RD * E / DEN
+    tropo_zwd_m = 1e-6 * (k2_prime + k3 / t_m) * rd * e / den
 
     # Compute average NMF(H) coefficient values by interpolation
-    A_AVG = M * (ABC_AVG[P2, 1] - ABC_AVG[P1, 1]) + ABC_AVG[P1, 1]
-    B_AVG = M * (ABC_AVG[P2, 2] - ABC_AVG[P1, 2]) + ABC_AVG[P1, 2]
-    C_AVG = M * (ABC_AVG[P2, 3] - ABC_AVG[P1, 3]) + ABC_AVG[P1, 3]
+    a_avg = m * (abc_avg[p2, 1] - abc_avg[p1, 1]) + abc_avg[p1, 1]
+    b_avg = m * (abc_avg[p2, 2] - abc_avg[p1, 2]) + abc_avg[p1, 2]
+    c_avg = m * (abc_avg[p2, 3] - abc_avg[p1, 3]) + abc_avg[p1, 3]
 
     # Compute variation of average NMF(H) coefficient values
-    A_AMP = M * (ABC_AMP[P2, 1] - ABC_AMP[P1, 1]) + ABC_AMP[P1, 1]
-    B_AMP = M * (ABC_AMP[P2, 2] - ABC_AMP[P1, 2]) + ABC_AMP[P1, 2]
-    C_AMP = M * (ABC_AMP[P2, 3] - ABC_AMP[P1, 3]) + ABC_AMP[P1, 3]
+    a_amp = m * (abc_amp[p2, 1] - abc_amp[p1, 1]) + abc_amp[p1, 1]
+    b_amp = m * (abc_amp[p2, 2] - abc_amp[p1, 2]) + abc_amp[p1, 2]
+    c_amp = m * (abc_amp[p2, 3] - abc_amp[p1, 3]) + abc_amp[p1, 3]
 
     # Compute NMF(H) coefficient values
-    A = A_AVG - A_AMP * COSPHS
-    B = B_AVG - B_AMP * COSPHS
-    C = C_AVG - C_AMP * COSPHS
+    a = a_avg - a_amp * cos_phs
+    b = b_avg - b_amp * cos_phs
+    c = c_avg - c_amp * cos_phs
 
     # Compute sine of elevation angle
-    SINE = np.sin(ELEVRAD)
+    sin_e = np.sin(elevation_sat_rad)
 
     # Compute NMF(H) value
-    ALPHA = B / (SINE + C)
-    GAMMA = A / (SINE + ALPHA)
-    TOPCON = (1 + A / (1 + B / (1 + C)))
-    HMF = TOPCON / (SINE + GAMMA)
+    alpha = b / (sin_e + c)
+    gamma = a / (sin_e + alpha)
+    topcon = (1 + a / (1 + b / (1 + c)))
+    tropo_hydrostatic_mapping = topcon / (sin_e + gamma)
 
     # Compute and apply height correction
-    ALPHA = B_HT / (SINE + C_HT)
-    GAMMA = A_HT / (SINE + ALPHA)
-    HT_CORR_COEF = 1 / SINE - HT_TOPCON / (SINE + GAMMA)
-    HT_CORR = HT_CORR_COEF * HEIGHTM / 1000
-    HMF = HMF + HT_CORR
+    alpha = b_ht / (sin_e + c_ht)
+    gamma = a_ht / (sin_e + alpha)
+    ht_corr_coef = 1 / sin_e - ht_topcon / (sin_e + gamma)
+    ht_corr = ht_corr_coef * height_user_m / 1000
+    tropo_hydrostatic_mapping = tropo_hydrostatic_mapping + ht_corr
 
     # Compute average NMF(W) coefficient values by interpolation
-    A = M * (ABC_W2P0[P2, 1] - ABC_W2P0[P1, 1]) + ABC_W2P0[P1, 1]
-    B = M * (ABC_W2P0[P2, 2] - ABC_W2P0[P1, 2]) + ABC_W2P0[P1, 2]
-    C = M * (ABC_W2P0[P2, 3] - ABC_W2P0[P1, 3]) + ABC_W2P0[P1, 3]
+    a = m * (abc_w2p0[p2, 1] - abc_w2p0[p1, 1]) + abc_w2p0[p1, 1]
+    b = m * (abc_w2p0[p2, 2] - abc_w2p0[p1, 2]) + abc_w2p0[p1, 2]
+    c = m * (abc_w2p0[p2, 3] - abc_w2p0[p1, 3]) + abc_w2p0[p1, 3]
 
     # Compute NMF(W) value
-    ALPHA = B / (SINE + C)
-    GAMMA = A / (SINE + ALPHA)
-    TOPCON = (1 + A / (1 + B / (1 + C)))
-    WMF = TOPCON / (SINE + GAMMA)
+    alpha = b / (sin_e + c)
+    gamma = a / (sin_e + alpha)
+    topcon = (1 + a / (1 + b / (1 + c)))
+    tropo_wet_mapping = topcon / (sin_e + gamma)
 
     # Compute total slant delay
-    RTROP = HZD * HMF + WZD * WMF
+    tropo_delay_m = tropo_zhd_m * tropo_hydrostatic_mapping + tropo_zwd_m * tropo_wet_mapping
 
-    return RTROP, HZD, HMF, WZD, WMF
+    return tropo_delay_m, tropo_zhd_m, tropo_hydrostatic_mapping, tropo_zwd_m, tropo_wet_mapping

@@ -133,6 +133,6 @@ def test_unb3m_corrections():
     day_of_year = tropo_expected[:, 2]
     elevation_rad = np.deg2rad(tropo_expected[:, 3])
 
-    (RTROP, HZD, HMF, WZD, WMF) = atmo.compute_unb3m_correction(lat_rad, height_m, day_of_year, elevation_rad)
+    (tropo_delay_m, tropo_zhd_m, tropo_hydrostatic_mapping, tropo_zwd_m, tropo_wet_mapping) = atmo.compute_unb3m_correction(lat_rad, height_m, day_of_year, elevation_rad)
 
-    assert (np.abs(RTROP - tropo_expected[:, 8]) < tol).all()
+    assert (np.abs(tropo_delay_m - tropo_expected[:, 8]) < tol).all()
