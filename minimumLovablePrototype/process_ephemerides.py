@@ -190,7 +190,7 @@ def select_nav_ephemeris(nav_dataframe: pd.DataFrame, satellite_id: str, t_syste
     ephemerides_of_requested_sat = ephemerides_of_requested_sat.sort_values(by=["time"])
     ephemerides_of_requested_sat_before_requested_time = (
         ephemerides_of_requested_sat.loc[
-            ephemerides_of_requested_sat["time"] < t_system
+            ephemerides_of_requested_sat["time"] <= t_system
         ]
     )
     assert (
@@ -268,7 +268,7 @@ def compute_total_group_delay_rnx3(
     - Beidou B1Cp, B1Cd: Beidou_ICD_B1C_v1.0.pdf, §7.6.2 (not supported by rnx3)
     - Beidou B2bi: Beidou_ICD_B2b_v1.0.pdf, §7.5.2 (not supported by rnx3)
 
-    Note: rinex v3 nav files only supports a subset of observations.
+    Note: rinex v3 nav files only support a subset of observations.
     """
     ephemeris_df = select_nav_ephemeris(
         parsed_rinex_3_nav_file, satellite, time_constellation_time_ns, obs_type=obs_type
