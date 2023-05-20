@@ -24,7 +24,9 @@ def input_for_test():
         # file decompression not working properly
         shutil.rmtree(test_directory)
     os.makedirs(test_directory)
-    gps_rnx3_nav_test_file = test_directory.joinpath("BRDC00IGS_R_20220010000_01D_GN.zip")
+    gps_rnx3_nav_test_file = test_directory.joinpath(
+        "BRDC00IGS_R_20220010000_01D_GN.zip"
+    )
     shutil.copy(
         helpers.prx_root().joinpath(
             f"datasets/TLSE_2022001/{gps_rnx3_nav_test_file.name}"
@@ -33,7 +35,9 @@ def input_for_test():
     )
     assert gps_rnx3_nav_test_file.exists()
 
-    all_constellations_rnx3_nav_test_file = test_directory.joinpath("BRDC00IGS_R_20220010000_01D_MN.zip")
+    all_constellations_rnx3_nav_test_file = test_directory.joinpath(
+        "BRDC00IGS_R_20220010000_01D_MN.zip"
+    )
     shutil.copy(
         helpers.prx_root().joinpath(
             f"datasets/TLSE_2022001/{all_constellations_rnx3_nav_test_file.name}"
@@ -42,7 +46,10 @@ def input_for_test():
     )
     assert all_constellations_rnx3_nav_test_file.exists()
 
-    yield {"gps_nav_file": gps_rnx3_nav_test_file, "all_constellations_nav_file": all_constellations_rnx3_nav_test_file}
+    yield {
+        "gps_nav_file": gps_rnx3_nav_test_file,
+        "all_constellations_nav_file": all_constellations_rnx3_nav_test_file,
+    }
     shutil.rmtree(test_directory)
 
 
@@ -50,7 +57,9 @@ def test_compare_rnx3_gps_sat_pos_with_magnitude(input_for_test):
     """Loads a RNX3 file, compute a position for different satellites and time, and compare to MAGNITUDE results
     Test will be a success if the difference in position is lower than threshold_pos_error_m = 0.01
     """
-    path_to_rnx3_nav_file = converters.anything_to_rinex_3(input_for_test["all_constellations_nav_file"])
+    path_to_rnx3_nav_file = converters.anything_to_rinex_3(
+        input_for_test["all_constellations_nav_file"]
+    )
     ephemerides = eph.convert_rnx3_nav_file_to_dataframe(path_to_rnx3_nav_file)
 
     # select sv and time
@@ -58,14 +67,17 @@ def test_compare_rnx3_gps_sat_pos_with_magnitude(input_for_test):
     gpst_week = 2190
     gpst_tow = 523800
 
-
     # MAGNITUDE position
     sv_pos_magnitude = np.array([13053451.235, -12567273.060, 19015357.126])
 
     # Compute broadcast satellite position
     # Select right ephemeris
-    t_gpst_for_which_to_compute_position = pd.Timedelta(gpst_week*constants.cSecondsPerWeek + gpst_tow, "seconds")
-    p_ecef, v_ecef, _, _  = eph.compute_satellite_state(ephemerides, sv, t_gpst_for_which_to_compute_position)
+    t_gpst_for_which_to_compute_position = pd.Timedelta(
+        gpst_week * constants.cSecondsPerWeek + gpst_tow, "seconds"
+    )
+    p_ecef, v_ecef, _, _ = eph.compute_satellite_state(
+        ephemerides, sv, t_gpst_for_which_to_compute_position
+    )
 
     threshold_pos_error_m = 0.01
     assert np.linalg.norm(p_ecef - sv_pos_magnitude) < threshold_pos_error_m
@@ -84,7 +96,9 @@ def test_galileo_position_and_velocity_sanity_check(input_for_test):
          5.209900000000e+05
     """
     # Copied from the following RINEX navigation file
-    path_to_rnx3_nav_file = converters.anything_to_rinex_3(input_for_test["all_constellations_nav_file"])
+    path_to_rnx3_nav_file = converters.anything_to_rinex_3(
+        input_for_test["all_constellations_nav_file"]
+    )
     ephemerides = eph.convert_rnx3_nav_file_to_dataframe(path_to_rnx3_nav_file)
 
     # We compute orbital position and velocity of
@@ -93,12 +107,16 @@ def test_galileo_position_and_velocity_sanity_check(input_for_test):
     # For the following GST time a few minutes after the ephemeris reference time
     gst_week = 2190
     gst_tow = 520200 + 5 * constants.cSecondsPerMinute
-    t_orbit_gst_ns = pd.Timedelta(gst_week*constants.cSecondsPerWeek + gst_tow, "seconds")
+    t_orbit_gst_ns = pd.Timedelta(
+        gst_week * constants.cSecondsPerWeek + gst_tow, "seconds"
+    )
 
-    p_ecef, v_ecef, clock_offset, clock_offset_rate = eph.compute_satellite_state(ephemerides, sv, t_orbit_gst_ns)
+    p_ecef, v_ecef, clock_offset, clock_offset_rate = eph.compute_satellite_state(
+        ephemerides, sv, t_orbit_gst_ns
+    )
 
     assert abs(np.linalg.norm(p_ecef) - 29.994 * 1e6) < 1e6
-    assert abs(np.linalg.norm(v_ecef) - 3*1e3) < 1e2
+    assert abs(np.linalg.norm(v_ecef) - 3 * 1e3) < 1e2
 
 
 def test_beidou_position_and_velocity_sanity_check(input_for_test):
@@ -114,7 +132,9 @@ def test_beidou_position_and_velocity_sanity_check(input_for_test):
          5.184276000000e+05 0.000000000000e+00
     """
     # Copied from the following RINEX navigation file
-    path_to_rnx3_nav_file = converters.anything_to_rinex_3(input_for_test["all_constellations_nav_file"])
+    path_to_rnx3_nav_file = converters.anything_to_rinex_3(
+        input_for_test["all_constellations_nav_file"]
+    )
     ephemerides = eph.convert_rnx3_nav_file_to_dataframe(path_to_rnx3_nav_file)
 
     # We compute orbital position and velocity of
@@ -123,12 +143,16 @@ def test_beidou_position_and_velocity_sanity_check(input_for_test):
     # For the following BDT time a few minutes after the ephemeris reference time
     gst_week = 834
     gst_tow = 518400 + 5 * constants.cSecondsPerMinute
-    t_orbit_gst_ns = pd.Timedelta(gst_week * constants.cSecondsPerWeek + gst_tow, "seconds")
+    t_orbit_gst_ns = pd.Timedelta(
+        gst_week * constants.cSecondsPerWeek + gst_tow, "seconds"
+    )
 
-    p_ecef, v_ecef, clock_offset, clock_offset_rate = eph.compute_satellite_state(ephemerides, sv, t_orbit_gst_ns)
+    p_ecef, v_ecef, clock_offset, clock_offset_rate = eph.compute_satellite_state(
+        ephemerides, sv, t_orbit_gst_ns
+    )
 
     # Compare to semi-major-axis:
-    assert abs(np.linalg.norm(p_ecef) - (6.493410568237e+03)**2) < 1e6
+    assert abs(np.linalg.norm(p_ecef) - (6.493410568237e03) ** 2) < 1e6
     # C01 is on a geosynchronous orbit, so its velocity in ECEF should be smaller than those on MEO orbits
     assert abs(np.linalg.norm(v_ecef) - 2 * 1e2) < 1e1
 
@@ -143,19 +167,24 @@ def test_glonass_position_and_velocity_sanity_check(input_for_test):
                              .999999999999e+09 1.500000000000e+01
     """
     # Copied from the following RINEX navigation file
-    path_to_rnx3_nav_file = converters.anything_to_rinex_3(input_for_test["all_constellations_nav_file"])
+    path_to_rnx3_nav_file = converters.anything_to_rinex_3(
+        input_for_test["all_constellations_nav_file"]
+    )
     ephemerides = eph.convert_rnx3_nav_file_to_dataframe(path_to_rnx3_nav_file)
 
     # We compute orbital position and velocity of
     sv = "R01"
     # for the following time
-    t_orbit = (pd.Timestamp("2022-01-01T00:15:00.000000000") - constants.cArbitraryGlonassUtcEpoch) + pd.Timedelta(1, "seconds")
+    t_orbit = (
+        pd.Timestamp("2022-01-01T00:15:00.000000000")
+        - constants.cArbitraryGlonassUtcEpoch
+    ) + pd.Timedelta(1, "seconds")
 
     # there we go:
     p_ecef, v_ecef, _, _ = eph.compute_satellite_state(ephemerides, sv, t_orbit)
 
     assert abs(np.linalg.norm(p_ecef) - 25 * 1e6) < 1e6
-    assert abs(np.linalg.norm(v_ecef) - 3.5*1e3) < 1e2
+    assert abs(np.linalg.norm(v_ecef) - 3.5 * 1e3) < 1e2
 
 
 def test_compute_gps_satellite_clock_offset(input_for_test):
@@ -174,7 +203,9 @@ def test_compute_gps_satellite_clock_offset(input_for_test):
          5.171890000000e+05 4.000000000000e+00 0.000000000000e+00 0.000000000000e+00
     """
     # copied from the following file
-    rinex_3_navigation_file = converters.anything_to_rinex_3(input_for_test["gps_nav_file"])
+    rinex_3_navigation_file = converters.anything_to_rinex_3(
+        input_for_test["gps_nav_file"]
+    )
     (
         computed_offset_m,
         computed_offset_rate_mps,
@@ -182,7 +213,8 @@ def test_compute_gps_satellite_clock_offset(input_for_test):
         eph.convert_rnx3_nav_file_to_dataframe(rinex_3_navigation_file),
         "G01",
         helpers.timestamp_2_timedelta(
-        pd.Timestamp("2022-01-01T01:00:00.000000000"), 'GPST'),
+            pd.Timestamp("2022-01-01T01:00:00.000000000"), "GPST"
+        ),
     )
     # We expect the following clock offset and clock offset rate computed by hand from the parameters above.
     delta_t_s = constants.cSecondsPerHour
@@ -191,7 +223,9 @@ def test_compute_gps_satellite_clock_offset(input_for_test):
         + (-1.000444171950e-11 * delta_t_s)
         + 0.000000000000e00 * math.pow(delta_t_s, 2)
     )
-    expected_offset_rate_mps = constants.cGpsIcdSpeedOfLight_mps * (-1.000444171950e-11 + 2 * 0.000000000000e00 * delta_t_s)
+    expected_offset_rate_mps = constants.cGpsIcdSpeedOfLight_mps * (
+        -1.000444171950e-11 + 2 * 0.000000000000e00 * delta_t_s
+    )
     # Expect micrometers and micrometers/s accuracy here:
     assert abs(expected_offset_m - computed_offset_m) < 1e-6
     assert abs(expected_offset_rate_mps - computed_offset_rate_mps) < 1e-6
@@ -209,7 +243,9 @@ def test_compute_satellite_clock_offset_glonass(input_for_test):
          1.381343408203E+04 2.848098754883E+00 0.000000000000E+00 0.000000000000E+00
     """
     # copied from the following file
-    rinex_3_navigation_file = converters.anything_to_rinex_3(input_for_test["all_constellations_nav_file"])
+    rinex_3_navigation_file = converters.anything_to_rinex_3(
+        input_for_test["all_constellations_nav_file"]
+    )
     (
         computed_offset_m,
         computed_offset_rate_mps,
@@ -217,7 +253,8 @@ def test_compute_satellite_clock_offset_glonass(input_for_test):
         eph.convert_rnx3_nav_file_to_dataframe(rinex_3_navigation_file),
         "R01",
         helpers.timestamp_2_timedelta(
-        pd.Timestamp("2022-01-01T01:00:00.000000000"), "GLONASST")
+            pd.Timestamp("2022-01-01T01:00:00.000000000"), "GLONASST"
+        ),
     )
     # We expect the following clock offset and clock offset rate computed by hand from the parameters above.
     delta_t_s = constants.cSecondsPerHour
@@ -226,12 +263,8 @@ def test_compute_satellite_clock_offset_glonass(input_for_test):
     )
     expected_offset_rate_mps = 0
     # Expect micrometers and micrometers/s accuracy here:
-    assert (
-        abs(expected_offset_m - computed_offset_m) < 1e-6
-    )
-    assert (
-        abs(expected_offset_rate_mps - computed_offset_rate_mps) < 1e-6
-    )
+    assert abs(expected_offset_m - computed_offset_m) < 1e-6
+    assert abs(expected_offset_rate_mps - computed_offset_rate_mps) < 1e-6
 
 
 def test_compute_gps_group_delay_rnx3(input_for_test):
@@ -262,48 +295,125 @@ def test_compute_gps_group_delay_rnx3(input_for_test):
          5.184180000000e+05 4.000000000000e+00 0.000000000000e+00 0.000000000000e+00
     """
     # parse rinex3 nav file
-    rinex_3_navigation_file = converters.anything_to_rinex_3(input_for_test["gps_nav_file"])
+    rinex_3_navigation_file = converters.anything_to_rinex_3(
+        input_for_test["gps_nav_file"]
+    )
     eph_rnx3_df = eph.convert_rnx3_nav_file_to_dataframe(rinex_3_navigation_file)
 
     # retrieve total group delays for 4 different observation codes, at 3 different times
-    tgd_c1c_s = pd.Series(data=[
-        eph.compute_total_group_delay_rnx3(eph_rnx3_df, helpers.timestamp_2_timedelta(pd.Timestamp("2022-01-01T00:00:00.000000000"), "GPST"),
-                                           "G02", "C1C"),
-        eph.compute_total_group_delay_rnx3(eph_rnx3_df, helpers.timestamp_2_timedelta(pd.Timestamp("2022-01-01T01:30:00.000000000"), "GPST"),
-                                           "G02", "C1C"),
-        eph.compute_total_group_delay_rnx3(eph_rnx3_df, helpers.timestamp_2_timedelta(pd.Timestamp("2022-01-01T02:15:00.000000000"), "GPST"),
-                                           "G02", "C1C"),
-    ])
-    tgd_c1p_s = pd.Series(data=[
-        eph.compute_total_group_delay_rnx3(eph_rnx3_df, helpers.timestamp_2_timedelta(pd.Timestamp("2022-01-01T00:00:00.000000000"), "GPST"),
-                                           "G02", "C1P"),
-        eph.compute_total_group_delay_rnx3(eph_rnx3_df, helpers.timestamp_2_timedelta(pd.Timestamp("2022-01-01T01:30:00.000000000"), "GPST"),
-                                           "G02", "C1P"),
-        eph.compute_total_group_delay_rnx3(eph_rnx3_df, helpers.timestamp_2_timedelta(pd.Timestamp("2022-01-01T02:15:00.000000000"), "GPST"),
-                                           "G02", "C1P"),
-    ])
-    tgd_c2p_s = pd.Series(data=[
-        eph.compute_total_group_delay_rnx3(eph_rnx3_df, helpers.timestamp_2_timedelta(pd.Timestamp("2022-01-01T00:00:00.000000000"), "GPST"),
-                                           "G02", "C2P"),
-        eph.compute_total_group_delay_rnx3(eph_rnx3_df, helpers.timestamp_2_timedelta(pd.Timestamp("2022-01-01T01:30:00.000000000"), "GPST"),
-                                           "G02", "C2P"),
-        eph.compute_total_group_delay_rnx3(eph_rnx3_df, helpers.timestamp_2_timedelta(pd.Timestamp("2022-01-01T02:15:00.000000000"), "GPST"),
-                                           "G02", "C2P"),
-    ])
-    tgd_c5x_s = eph.compute_total_group_delay_rnx3(eph_rnx3_df,
-                                                   helpers.timestamp_2_timedelta(pd.Timestamp("2022-01-01T00:00:00.000000000"), "GPST"), "G02",
-                                                   "C5X")
+    tgd_c1c_s = pd.Series(
+        data=[
+            eph.compute_total_group_delay_rnx3(
+                eph_rnx3_df,
+                helpers.timestamp_2_timedelta(
+                    pd.Timestamp("2022-01-01T00:00:00.000000000"), "GPST"
+                ),
+                "G02",
+                "C1C",
+            ),
+            eph.compute_total_group_delay_rnx3(
+                eph_rnx3_df,
+                helpers.timestamp_2_timedelta(
+                    pd.Timestamp("2022-01-01T01:30:00.000000000"), "GPST"
+                ),
+                "G02",
+                "C1C",
+            ),
+            eph.compute_total_group_delay_rnx3(
+                eph_rnx3_df,
+                helpers.timestamp_2_timedelta(
+                    pd.Timestamp("2022-01-01T02:15:00.000000000"), "GPST"
+                ),
+                "G02",
+                "C1C",
+            ),
+        ]
+    )
+    tgd_c1p_s = pd.Series(
+        data=[
+            eph.compute_total_group_delay_rnx3(
+                eph_rnx3_df,
+                helpers.timestamp_2_timedelta(
+                    pd.Timestamp("2022-01-01T00:00:00.000000000"), "GPST"
+                ),
+                "G02",
+                "C1P",
+            ),
+            eph.compute_total_group_delay_rnx3(
+                eph_rnx3_df,
+                helpers.timestamp_2_timedelta(
+                    pd.Timestamp("2022-01-01T01:30:00.000000000"), "GPST"
+                ),
+                "G02",
+                "C1P",
+            ),
+            eph.compute_total_group_delay_rnx3(
+                eph_rnx3_df,
+                helpers.timestamp_2_timedelta(
+                    pd.Timestamp("2022-01-01T02:15:00.000000000"), "GPST"
+                ),
+                "G02",
+                "C1P",
+            ),
+        ]
+    )
+    tgd_c2p_s = pd.Series(
+        data=[
+            eph.compute_total_group_delay_rnx3(
+                eph_rnx3_df,
+                helpers.timestamp_2_timedelta(
+                    pd.Timestamp("2022-01-01T00:00:00.000000000"), "GPST"
+                ),
+                "G02",
+                "C2P",
+            ),
+            eph.compute_total_group_delay_rnx3(
+                eph_rnx3_df,
+                helpers.timestamp_2_timedelta(
+                    pd.Timestamp("2022-01-01T01:30:00.000000000"), "GPST"
+                ),
+                "G02",
+                "C2P",
+            ),
+            eph.compute_total_group_delay_rnx3(
+                eph_rnx3_df,
+                helpers.timestamp_2_timedelta(
+                    pd.Timestamp("2022-01-01T02:15:00.000000000"), "GPST"
+                ),
+                "G02",
+                "C2P",
+            ),
+        ]
+    )
+    tgd_c5x_s = eph.compute_total_group_delay_rnx3(
+        eph_rnx3_df,
+        helpers.timestamp_2_timedelta(
+            pd.Timestamp("2022-01-01T00:00:00.000000000"), "GPST"
+        ),
+        "G02",
+        "C5X",
+    )
 
     # total group delay is on the 7th line, 3rd position
-    tgd_c1c_s_expected = pd.Series(data=[-1.769512891770e-08, -1.769512891770e-08, -1.769512891769e-08])
-    tgd_c1p_s_expected = pd.Series(data=[-1.769512891770e-08, -1.769512891770e-08, -1.769512891769e-08])
-    tgd_c2p_s_expected = pd.Series(data=[-1.769512891770e-08, -1.769512891770e-08, -1.769512891769e-08]) * \
-                         (constants.carrier_frequencies_hz()["G"]["L1"] / constants.carrier_frequencies_hz()["G"]["L2"]) ** 2
+    tgd_c1c_s_expected = pd.Series(
+        data=[-1.769512891770e-08, -1.769512891770e-08, -1.769512891769e-08]
+    )
+    tgd_c1p_s_expected = pd.Series(
+        data=[-1.769512891770e-08, -1.769512891770e-08, -1.769512891769e-08]
+    )
+    tgd_c2p_s_expected = (
+        pd.Series(data=[-1.769512891770e-08, -1.769512891770e-08, -1.769512891769e-08])
+        * (
+            constants.carrier_frequencies_hz()["G"]["L1"]
+            / constants.carrier_frequencies_hz()["G"]["L2"]
+        )
+        ** 2
+    )
 
     assert (tgd_c1c_s == tgd_c1c_s_expected).all()
     assert (tgd_c1p_s == tgd_c1p_s_expected).all()
     assert (tgd_c2p_s == tgd_c2p_s_expected).all()
-    assert (np.isnan(tgd_c5x_s))
+    assert np.isnan(tgd_c5x_s)
 
 
 def test_compute_gal_group_delay_rnx3(input_for_test):
@@ -324,33 +434,71 @@ def test_compute_gal_group_delay_rnx3(input_for_test):
         -2.260808457460e-10 5.160000000000e+02 2.190000000000e+03
          3.120000000000e+00 0.000000000000e+00 4.423782229420e-09 **4.889443516730e-09**
          5.190640000000e+05
-     """
+    """
     # parse rinex3 nav file
-    rinex_3_navigation_file = converters.anything_to_rinex_3(input_for_test["all_constellations_nav_file"])
+    rinex_3_navigation_file = converters.anything_to_rinex_3(
+        input_for_test["all_constellations_nav_file"]
+    )
     eph_rnx3_df = eph.convert_rnx3_nav_file_to_dataframe(rinex_3_navigation_file)
 
-    tgd_e1_s = eph.compute_total_group_delay_rnx3(eph_rnx3_df,
-                                                  helpers.timestamp_2_timedelta(pd.Timestamp("2022-01-01T01:30:00.000000000"), "GST"), "E25",
-                                                  "C1C")
-    tgd_e5a_s = eph.compute_total_group_delay_rnx3(eph_rnx3_df,
-                                                   helpers.timestamp_2_timedelta(pd.Timestamp("2022-01-01T01:30:00.000000000"), "GST"), "E25",
-                                                   "C5X")
-    tgd_e5b_s = eph.compute_total_group_delay_rnx3(eph_rnx3_df,
-                                                   helpers.timestamp_2_timedelta(pd.Timestamp("2022-01-01T01:30:00.000000000"), "GST"), "E25",
-                                                   "C7X")
-    tgd_e6b_s = eph.compute_total_group_delay_rnx3(eph_rnx3_df,
-                                                   helpers.timestamp_2_timedelta(pd.Timestamp("2022-01-01T01:30:00.000000000"), "GST"), "E25",
-                                                   "C6B")
+    tgd_e1_s = eph.compute_total_group_delay_rnx3(
+        eph_rnx3_df,
+        helpers.timestamp_2_timedelta(
+            pd.Timestamp("2022-01-01T01:30:00.000000000"), "GST"
+        ),
+        "E25",
+        "C1C",
+    )
+    tgd_e5a_s = eph.compute_total_group_delay_rnx3(
+        eph_rnx3_df,
+        helpers.timestamp_2_timedelta(
+            pd.Timestamp("2022-01-01T01:30:00.000000000"), "GST"
+        ),
+        "E25",
+        "C5X",
+    )
+    tgd_e5b_s = eph.compute_total_group_delay_rnx3(
+        eph_rnx3_df,
+        helpers.timestamp_2_timedelta(
+            pd.Timestamp("2022-01-01T01:30:00.000000000"), "GST"
+        ),
+        "E25",
+        "C7X",
+    )
+    tgd_e6b_s = eph.compute_total_group_delay_rnx3(
+        eph_rnx3_df,
+        helpers.timestamp_2_timedelta(
+            pd.Timestamp("2022-01-01T01:30:00.000000000"), "GST"
+        ),
+        "E25",
+        "C6B",
+    )
 
     tgd_e1_s_expected = 4.889443516730e-09
-    tgd_e5a_s_expected = 4.423782229424e-09 * \
-                         (constants.carrier_frequencies_hz()["E"]["L1"] / constants.carrier_frequencies_hz()["E"]["L5"]) ** 2
-    tgd_e5b_s_expected = 4.889443516730e-09 * \
-                         (constants.carrier_frequencies_hz()["E"]["L1"] / constants.carrier_frequencies_hz()["E"]["L7"]) ** 2
+    tgd_e5a_s_expected = (
+        4.423782229424e-09
+        * (
+            constants.carrier_frequencies_hz()["E"]["L1"]
+            / constants.carrier_frequencies_hz()["E"]["L5"]
+        )
+        ** 2
+    )
+    tgd_e5b_s_expected = (
+        4.889443516730e-09
+        * (
+            constants.carrier_frequencies_hz()["E"]["L1"]
+            / constants.carrier_frequencies_hz()["E"]["L7"]
+        )
+        ** 2
+    )
 
-    assert (abs(tgd_e1_s - tgd_e1_s_expected) * constants.cGpsIcdSpeedOfLight_mps < 1e-3)
-    assert (abs(tgd_e5a_s - tgd_e5a_s_expected) * constants.cGpsIcdSpeedOfLight_mps < 1e-3)
-    assert (abs(tgd_e5b_s - tgd_e5b_s_expected) * constants.cGpsIcdSpeedOfLight_mps < 1e-3)
+    assert abs(tgd_e1_s - tgd_e1_s_expected) * constants.cGpsIcdSpeedOfLight_mps < 1e-3
+    assert (
+        abs(tgd_e5a_s - tgd_e5a_s_expected) * constants.cGpsIcdSpeedOfLight_mps < 1e-3
+    )
+    assert (
+        abs(tgd_e5b_s - tgd_e5b_s_expected) * constants.cGpsIcdSpeedOfLight_mps < 1e-3
+    )
     assert np.isnan(tgd_e6b_s)
 
 
@@ -374,42 +522,80 @@ def test_compute_bds_group_delay_rnx3(input_for_test):
          5.220276000000E+05 0.000000000000E+00
     """
     # parse rinex3 nav file
-    rinex_3_navigation_file = converters.anything_to_rinex_3(input_for_test["all_constellations_nav_file"])
+    rinex_3_navigation_file = converters.anything_to_rinex_3(
+        input_for_test["all_constellations_nav_file"]
+    )
     eph_rnx3_df = eph.convert_rnx3_nav_file_to_dataframe(rinex_3_navigation_file)
 
     # B1I -> C2I
-    tgd_c2i_s = eph.compute_total_group_delay_rnx3(eph_rnx3_df,
-                                                   helpers.timestamp_2_timedelta(pd.Timestamp("2022-01-01T00:30:00.000000000"), "BDT"), "C01",
-                                                   "C2I")
+    tgd_c2i_s = eph.compute_total_group_delay_rnx3(
+        eph_rnx3_df,
+        helpers.timestamp_2_timedelta(
+            pd.Timestamp("2022-01-01T00:30:00.000000000"), "BDT"
+        ),
+        "C01",
+        "C2I",
+    )
     # B2I -> C7I
-    tgd_c7i_s = eph.compute_total_group_delay_rnx3(eph_rnx3_df,
-                                                   helpers.timestamp_2_timedelta(pd.Timestamp("2022-01-01T00:30:00.000000000"), "BDT"), "C01",
-                                                   "C7I")
+    tgd_c7i_s = eph.compute_total_group_delay_rnx3(
+        eph_rnx3_df,
+        helpers.timestamp_2_timedelta(
+            pd.Timestamp("2022-01-01T00:30:00.000000000"), "BDT"
+        ),
+        "C01",
+        "C7I",
+    )
     # B3I -> C6I
-    tgd_c6i_s = eph.compute_total_group_delay_rnx3(eph_rnx3_df,
-                                                   helpers.timestamp_2_timedelta(pd.Timestamp("2022-01-01T00:30:00.000000000"), "BDT"), "C01",
-                                                   "C6I")
+    tgd_c6i_s = eph.compute_total_group_delay_rnx3(
+        eph_rnx3_df,
+        helpers.timestamp_2_timedelta(
+            pd.Timestamp("2022-01-01T00:30:00.000000000"), "BDT"
+        ),
+        "C01",
+        "C6I",
+    )
 
     # B1Cd -> C1D
-    tgd_c1d_s = eph.compute_total_group_delay_rnx3(eph_rnx3_df,
-                                                   helpers.timestamp_2_timedelta(pd.Timestamp("2022-01-01T00:30:00.000000000"), "BDT"), "C01",
-                                                   "C1D")
+    tgd_c1d_s = eph.compute_total_group_delay_rnx3(
+        eph_rnx3_df,
+        helpers.timestamp_2_timedelta(
+            pd.Timestamp("2022-01-01T00:30:00.000000000"), "BDT"
+        ),
+        "C01",
+        "C1D",
+    )
     # B1Cp -> C1P
-    tgd_c1p_s = eph.compute_total_group_delay_rnx3(eph_rnx3_df,
-                                                   helpers.timestamp_2_timedelta(pd.Timestamp("2022-01-01T00:30:00.000000000"), "BDT"), "C01",
-                                                   "C1P")
+    tgd_c1p_s = eph.compute_total_group_delay_rnx3(
+        eph_rnx3_df,
+        helpers.timestamp_2_timedelta(
+            pd.Timestamp("2022-01-01T00:30:00.000000000"), "BDT"
+        ),
+        "C01",
+        "C1P",
+    )
     # B2bi -> C7D
-    tgd_c5x_s = eph.compute_total_group_delay_rnx3(eph_rnx3_df,
-                                                   helpers.timestamp_2_timedelta(pd.Timestamp("2022-01-01T00:30:00.000000000"), "BDT"), "C01",
-                                                   "C7D")
+    tgd_c5x_s = eph.compute_total_group_delay_rnx3(
+        eph_rnx3_df,
+        helpers.timestamp_2_timedelta(
+            pd.Timestamp("2022-01-01T00:30:00.000000000"), "BDT"
+        ),
+        "C01",
+        "C7D",
+    )
 
-    tgd_c2i_s_expected = -5.800000000000E-09
-    tgd_c7i_s_expected = -1.020000000000E-08
+    tgd_c2i_s_expected = -5.800000000000e-09
+    tgd_c7i_s_expected = -1.020000000000e-08
     tgd_c6i_s_expected = 0
 
-    assert (abs(tgd_c2i_s - tgd_c2i_s_expected) * constants.cGpsIcdSpeedOfLight_mps < 1e-3)
-    assert (abs(tgd_c7i_s - tgd_c7i_s_expected) * constants.cGpsIcdSpeedOfLight_mps < 1e-3)
-    assert (abs(tgd_c6i_s - tgd_c6i_s_expected) * constants.cGpsIcdSpeedOfLight_mps < 1e-3)
-    assert (np.isnan(tgd_c1d_s))
-    assert (np.isnan(tgd_c1p_s))
-    assert (np.isnan(tgd_c5x_s))
+    assert (
+        abs(tgd_c2i_s - tgd_c2i_s_expected) * constants.cGpsIcdSpeedOfLight_mps < 1e-3
+    )
+    assert (
+        abs(tgd_c7i_s - tgd_c7i_s_expected) * constants.cGpsIcdSpeedOfLight_mps < 1e-3
+    )
+    assert (
+        abs(tgd_c6i_s - tgd_c6i_s_expected) * constants.cGpsIcdSpeedOfLight_mps < 1e-3
+    )
+    assert np.isnan(tgd_c1d_s)
+    assert np.isnan(tgd_c1p_s)
+    assert np.isnan(tgd_c5x_s)
