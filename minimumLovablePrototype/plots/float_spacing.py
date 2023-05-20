@@ -9,7 +9,9 @@ def plot_float_spacing(a, b):
     space_between_float64s = np.spacing(floats)
     plt.plot(floats, space_between_float64s)
     plt.grid()
-    plt.title(f"Smallest spacing between float64 numbers using np.spacing \n within [{a}, today's GPST in seconds].")
+    plt.title(
+        f"Smallest spacing between float64 numbers using np.spacing \n within [{a}, today's GPST in seconds]."
+    )
     plt.xlabel("float64 number")
     plt.ylabel("Space")
     plt.xscale("log")

@@ -4,7 +4,9 @@ from helpers import deg_2_rad
 import constants
 
 
-def compute_klobuchar_l1_correction(tow_s, gps_a, gps_b, elevation_rad, azimuth_rad, lat_user_rad, lon_user_rad):
+def compute_klobuchar_l1_correction(
+    tow_s, gps_a, gps_b, elevation_rad, azimuth_rad, lat_user_rad, lon_user_rad
+):
     """compute the ionospheric corrections using the Klobuchar model
 
     Inputs:
@@ -27,24 +29,39 @@ def compute_klobuchar_l1_correction(tow_s, gps_a, gps_b, elevation_rad, azimuth_
     psi = np.pi / 2 - elevation_rad - np.arcsin(Re / (Re + h) * np.cos(elevation_rad))
 
     # latitude of Ionospheric Pierce Point
-    phi_i = np.arcsin(np.sin(lat_user_rad) * np.cos(psi) + np.cos(lat_user_rad) * np.sin(psi) * np.cos(azimuth_rad))
+    phi_i = np.arcsin(
+        np.sin(lat_user_rad) * np.cos(psi)
+        + np.cos(lat_user_rad) * np.sin(psi) * np.cos(azimuth_rad)
+    )
 
     # longitude of the Ionospheric Pierce Point
     lambda_i = lon_user_rad + psi * np.sin(azimuth_rad) / np.cos(phi_i)
 
     # geomagnetic latitude of the Ionospheric Pierce Point
     phi_m = np.arcsin(
-        np.sin(phi_i) * np.sin(phi_p) + np.cos(phi_i) * np.cos(phi_p) * np.cos(lambda_i - lambda_p))
+        np.sin(phi_i) * np.sin(phi_p)
+        + np.cos(phi_i) * np.cos(phi_p) * np.cos(lambda_i - lambda_p)
+    )
 
     # local time at the Ionospheric Pierce Point
     t = np.mod(43200 * lambda_i / np.pi + tow_s, 86400)
 
     # amplitude of the iono delay
-    A_i = gps_a[0] + gps_a[1] * phi_m / np.pi + gps_a[2] * (phi_m / np.pi) ** 2 + gps_a[3] * (phi_m / np.pi) ** 3
+    A_i = (
+        gps_a[0]
+        + gps_a[1] * phi_m / np.pi
+        + gps_a[2] * (phi_m / np.pi) ** 2
+        + gps_a[3] * (phi_m / np.pi) ** 3
+    )
     A_i = np.where(A_i < 0, 0, A_i)
 
     # period of iono delay
-    P_i = gps_b[0] + gps_b[1] * phi_m / np.pi + gps_b[2] * (phi_m / np.pi) ** 2 + gps_b[3] * (phi_m / np.pi) ** 3
+    P_i = (
+        gps_b[0]
+        + gps_b[1] * phi_m / np.pi
+        + gps_b[2] * (phi_m / np.pi) ** 2
+        + gps_b[3] * (phi_m / np.pi) ** 3
+    )
     P_i = np.where(P_i < 72000, 72000, P_i)
 
     # phase of the iono delay
@@ -54,14 +71,18 @@ def compute_klobuchar_l1_correction(tow_s, gps_a, gps_b, elevation_rad, azimuth_
     F = 1 / np.sqrt(1 - (Re / (Re + h) * np.cos(elevation_rad)) ** 2)
 
     # iono time delay, in m
-    iono_correction_l1_m = np.where(np.fabs(X_i) < np.pi / 2,
-                                    constants.cGpsIcdSpeedOfLight_mps * (5e-9 + A_i * np.cos(X_i)) * F,
-                                    constants.cGpsIcdSpeedOfLight_mps * 5e-9 * F)
+    iono_correction_l1_m = np.where(
+        np.fabs(X_i) < np.pi / 2,
+        constants.cGpsIcdSpeedOfLight_mps * (5e-9 + A_i * np.cos(X_i)) * F,
+        constants.cGpsIcdSpeedOfLight_mps * 5e-9 * F,
+    )
 
     return iono_correction_l1_m
 
 
-def compute_unb3m_correction(latitude_user_rad, height_user_m, day_of_year, elevation_sat_rad):
+def compute_unb3m_correction(
+    latitude_user_rad, height_user_m, day_of_year, elevation_sat_rad
+):
     # This function is the python version of the matlab function UNB3M.m provided in the UNB3m_pack [1]
     #
     # INPUTS: numpy arrays of the same shape are expected
@@ -75,24 +96,35 @@ def compute_unb3m_correction(latitude_user_rad, height_user_m, day_of_year, elev
     #
     # [1] https://gge.ext.unb.ca/Resources/unb3m/unb3m.html
 
-    assert latitude_user_rad.shape == height_user_m.shape, \
-        ">> atmospheric_corrections.compute_unb3m_correction: input arguments should be arrays of the same shape"
-    assert latitude_user_rad.shape == day_of_year.shape, \
-        ">> atmospheric_corrections.compute_unb3m_correction: input arguments should be arrays of the same shape"
-    assert latitude_user_rad.shape == elevation_sat_rad.shape, \
-        ">> atmospheric_corrections.compute_unb3m_correction: input arguments should be arrays of the same shape"
+    assert (
+        latitude_user_rad.shape == height_user_m.shape
+    ), ">> atmospheric_corrections.compute_unb3m_correction: input arguments should be arrays of the same shape"
+    assert (
+        latitude_user_rad.shape == day_of_year.shape
+    ), ">> atmospheric_corrections.compute_unb3m_correction: input arguments should be arrays of the same shape"
+    assert (
+        latitude_user_rad.shape == elevation_sat_rad.shape
+    ), ">> atmospheric_corrections.compute_unb3m_correction: input arguments should be arrays of the same shape"
 
     # Initialize UNB3m look-up table
-    avg = np.array([[15.0, 1013.25, 299.65, 75.00, 6.30, 2.77],
-                    [30.0, 1017.25, 294.15, 80.00, 6.05, 3.15],
-                    [45.0, 1015.75, 283.15, 76.00, 5.58, 2.57],
-                    [60.0, 1011.75, 272.15, 77.50, 5.39, 1.81],
-                    [75.0, 1013.00, 263.65, 82.50, 4.53, 1.55]])
-    amp = np.array([[15.0, 0.00, 0.00, 0.00, 0.00, 0.00],
-                    [30.0, -3.75,  7.00,  0.00, 0.25, 0.33],
-                    [45.0, -2.25, 11.00, -1.00, 0.32, 0.46],
-                    [60.0, -1.75, 15.00, -2.50, 0.81, 0.74],
-                    [75.0, -0.50, 14.50,  2.50, 0.62, 0.30]])
+    avg = np.array(
+        [
+            [15.0, 1013.25, 299.65, 75.00, 6.30, 2.77],
+            [30.0, 1017.25, 294.15, 80.00, 6.05, 3.15],
+            [45.0, 1015.75, 283.15, 76.00, 5.58, 2.57],
+            [60.0, 1011.75, 272.15, 77.50, 5.39, 1.81],
+            [75.0, 1013.00, 263.65, 82.50, 4.53, 1.55],
+        ]
+    )
+    amp = np.array(
+        [
+            [15.0, 0.00, 0.00, 0.00, 0.00, 0.00],
+            [30.0, -3.75, 7.00, 0.00, 0.25, 0.33],
+            [45.0, -2.25, 11.00, -1.00, 0.32, 0.46],
+            [60.0, -1.75, 15.00, -2.50, 0.81, 0.74],
+            [75.0, -0.50, 14.50, 2.50, 0.62, 0.30],
+        ]
+    )
     eccentricity = 6.6943799901413e-03
     md = 28.9644
     mw = 18.0152
@@ -107,26 +139,38 @@ def compute_unb3m_correction(latitude_user_rad, height_user_m, day_of_year, elev
     day_of_year_to_rad = 0.31415926535897935601e01 * 2 / 365.25
 
     # initialize NMF tables
-    abc_avg = np.array([[15.0, 1.2769934e-3, 2.9153695e-3, 62.610505e-3],
-                        [30.0, 1.2683230e-3, 2.9152299e-3, 62.837393e-3],
-                        [45.0, 1.2465397e-3, 2.9288445e-3, 63.721774e-3],
-                        [60.0, 1.2196049e-3, 2.9022565e-3, 63.824265e-3],
-                        [75.0, 1.2045996e-3, 2.9024912e-3, 64.258455e-3]])
-    abc_amp = np.array([[15.0, 0.0, 0.0, 0.0],
-                        [30.0, 1.2709626e-5, 2.1414979e-5, 9.0128400e-5],
-                        [45.0, 2.6523662e-5, 3.0160779e-5, 4.3497037e-5],
-                        [60.0, 3.4000452e-5, 7.2562722e-5, 84.795348e-5],
-                        [75.0, 4.1202191e-5, 11.723375e-5, 170.37206e-5]])
+    abc_avg = np.array(
+        [
+            [15.0, 1.2769934e-3, 2.9153695e-3, 62.610505e-3],
+            [30.0, 1.2683230e-3, 2.9152299e-3, 62.837393e-3],
+            [45.0, 1.2465397e-3, 2.9288445e-3, 63.721774e-3],
+            [60.0, 1.2196049e-3, 2.9022565e-3, 63.824265e-3],
+            [75.0, 1.2045996e-3, 2.9024912e-3, 64.258455e-3],
+        ]
+    )
+    abc_amp = np.array(
+        [
+            [15.0, 0.0, 0.0, 0.0],
+            [30.0, 1.2709626e-5, 2.1414979e-5, 9.0128400e-5],
+            [45.0, 2.6523662e-5, 3.0160779e-5, 4.3497037e-5],
+            [60.0, 3.4000452e-5, 7.2562722e-5, 84.795348e-5],
+            [75.0, 4.1202191e-5, 11.723375e-5, 170.37206e-5],
+        ]
+    )
     a_ht = 2.53e-5
     b_ht = 5.49e-3
     c_ht = 1.14e-3
     ht_topcon = 1 + a_ht / (1 + b_ht / (1 + c_ht))
 
-    abc_w2p0 = np.array([[15.0, 5.8021897e-4, 1.4275268e-3, 4.3472961e-2],
-                         [30.0, 5.6794847e-4, 1.5138625e-3, 4.6729510e-2],
-                         [45.0, 5.8118019e-4, 1.4572752e-3, 4.3908931e-2],
-                         [60.0, 5.9727542e-4, 1.5007428e-3, 4.4626982e-2],
-                         [75.0, 6.1641693e-4, 1.7599082e-3, 5.4736038e-2]])
+    abc_w2p0 = np.array(
+        [
+            [15.0, 5.8021897e-4, 1.4275268e-3, 4.3472961e-2],
+            [30.0, 5.6794847e-4, 1.5138625e-3, 4.6729510e-2],
+            [45.0, 5.8118019e-4, 1.4572752e-3, 4.3908931e-2],
+            [60.0, 5.9727542e-4, 1.5007428e-3, 4.4626982e-2],
+            [75.0, 6.1641693e-4, 1.7599082e-3, 5.4736038e-2],
+        ]
+    )
 
     latitude_user_deg = np.rad2deg(latitude_user_rad)
 
@@ -172,7 +216,12 @@ def compute_unb3m_correction(latitude_user_rad, height_user_m, day_of_year, elev
     LAMBDA = lambda_avg - lambda_amp * cos_phs
 
     # Transform from relative humidity to WVP (IERS Conventions 2003)
-    es = 0.01 * np.exp(1.2378847e-5 * (t_0 ** 2) - 1.9121316e-2 * t_0 + 3.393711047e1 - 6.3431645e3 * (t_0 ** -1))
+    es = 0.01 * np.exp(
+        1.2378847e-5 * (t_0**2)
+        - 1.9121316e-2 * t_0
+        + 3.393711047e1
+        - 6.3431645e3 * (t_0**-1)
+    )
     fw = 1.00062 + 3.14e-6 * p_0 + 5.6e-7 * ((t_0 - 273.15) ** 2)
     e_0 = (e_0 / 100) * es * fw
 
@@ -220,7 +269,7 @@ def compute_unb3m_correction(latitude_user_rad, height_user_m, day_of_year, elev
     # Compute NMF(H) value
     alpha = b / (sin_e + c)
     gamma = a / (sin_e + alpha)
-    topcon = (1 + a / (1 + b / (1 + c)))
+    topcon = 1 + a / (1 + b / (1 + c))
     tropo_hydrostatic_mapping = topcon / (sin_e + gamma)
 
     # Compute and apply height correction
@@ -238,10 +287,18 @@ def compute_unb3m_correction(latitude_user_rad, height_user_m, day_of_year, elev
     # Compute NMF(W) value
     alpha = b / (sin_e + c)
     gamma = a / (sin_e + alpha)
-    topcon = (1 + a / (1 + b / (1 + c)))
+    topcon = 1 + a / (1 + b / (1 + c))
     tropo_wet_mapping = topcon / (sin_e + gamma)
 
     # Compute total slant delay
-    tropo_delay_m = tropo_zhd_m * tropo_hydrostatic_mapping + tropo_zwd_m * tropo_wet_mapping
+    tropo_delay_m = (
+        tropo_zhd_m * tropo_hydrostatic_mapping + tropo_zwd_m * tropo_wet_mapping
+    )
 
-    return tropo_delay_m, tropo_zhd_m, tropo_hydrostatic_mapping, tropo_zwd_m, tropo_wet_mapping
+    return (
+        tropo_delay_m,
+        tropo_zhd_m,
+        tropo_hydrostatic_mapping,
+        tropo_zwd_m,
+        tropo_wet_mapping,
+    )
