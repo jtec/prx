@@ -239,8 +239,9 @@ def test_compute_gps_group_delay_rnx3(input_for_test):
     Computes the total group delay (TGD) from a RNX3 NAV file containing the following ephemerides. The TGD is
     highlighted between **
 
-    This tests also validates - the choice of the right ephemeris for the correct time: 3 epochs are used - the
-    scaling of the tgd with the carrier frequency: the 3 observations types considered in IS-GPS-200N are tested (
+    This tests also validates
+    - the choice of the right ephemeris for the correct time: 3 epochs are used
+    - the scaling of the tgd with the carrier frequency: the 3 observations types considered in IS-GPS-200N are tested (
     C1C, C1P, C2P) and 1 not considered shall return NaN (C1Y)
 
     G02 2022 01 01 00 00 00-6.473939865830e-04-1.136868377220e-12 0.000000000000e+00
@@ -266,31 +267,31 @@ def test_compute_gps_group_delay_rnx3(input_for_test):
 
     # retrieve total group delays for 4 different observation codes, at 3 different times
     tgd_c1c_s = pd.Series(data=[
-        eph.compute_total_group_delay_rnx3(eph_rnx3_df, pd.Timestamp("2022-01-01T00:00:00.000000000"),
+        eph.compute_total_group_delay_rnx3(eph_rnx3_df, helpers.timestamp_2_timedelta(pd.Timestamp("2022-01-01T00:00:00.000000000"), "GPST"),
                                            "G02", "C1C"),
-        eph.compute_total_group_delay_rnx3(eph_rnx3_df, pd.Timestamp("2022-01-01T01:30:00.000000000"),
+        eph.compute_total_group_delay_rnx3(eph_rnx3_df, helpers.timestamp_2_timedelta(pd.Timestamp("2022-01-01T01:30:00.000000000"), "GPST"),
                                            "G02", "C1C"),
-        eph.compute_total_group_delay_rnx3(eph_rnx3_df, pd.Timestamp("2022-01-01T02:15:00.000000000"),
+        eph.compute_total_group_delay_rnx3(eph_rnx3_df, helpers.timestamp_2_timedelta(pd.Timestamp("2022-01-01T02:15:00.000000000"), "GPST"),
                                            "G02", "C1C"),
     ])
     tgd_c1p_s = pd.Series(data=[
-        eph.compute_total_group_delay_rnx3(eph_rnx3_df, pd.Timestamp("2022-01-01T00:00:00.000000000"),
+        eph.compute_total_group_delay_rnx3(eph_rnx3_df, helpers.timestamp_2_timedelta(pd.Timestamp("2022-01-01T00:00:00.000000000"), "GPST"),
                                            "G02", "C1P"),
-        eph.compute_total_group_delay_rnx3(eph_rnx3_df, pd.Timestamp("2022-01-01T01:30:00.000000000"),
+        eph.compute_total_group_delay_rnx3(eph_rnx3_df, helpers.timestamp_2_timedelta(pd.Timestamp("2022-01-01T01:30:00.000000000"), "GPST"),
                                            "G02", "C1P"),
-        eph.compute_total_group_delay_rnx3(eph_rnx3_df, pd.Timestamp("2022-01-01T02:15:00.000000000"),
+        eph.compute_total_group_delay_rnx3(eph_rnx3_df, helpers.timestamp_2_timedelta(pd.Timestamp("2022-01-01T02:15:00.000000000"), "GPST"),
                                            "G02", "C1P"),
     ])
     tgd_c2p_s = pd.Series(data=[
-        eph.compute_total_group_delay_rnx3(eph_rnx3_df, pd.Timestamp("2022-01-01T00:00:00.000000000"),
+        eph.compute_total_group_delay_rnx3(eph_rnx3_df, helpers.timestamp_2_timedelta(pd.Timestamp("2022-01-01T00:00:00.000000000"), "GPST"),
                                            "G02", "C2P"),
-        eph.compute_total_group_delay_rnx3(eph_rnx3_df, pd.Timestamp("2022-01-01T01:30:00.000000000"),
+        eph.compute_total_group_delay_rnx3(eph_rnx3_df, helpers.timestamp_2_timedelta(pd.Timestamp("2022-01-01T01:30:00.000000000"), "GPST"),
                                            "G02", "C2P"),
-        eph.compute_total_group_delay_rnx3(eph_rnx3_df, pd.Timestamp("2022-01-01T02:15:00.000000000"),
+        eph.compute_total_group_delay_rnx3(eph_rnx3_df, helpers.timestamp_2_timedelta(pd.Timestamp("2022-01-01T02:15:00.000000000"), "GPST"),
                                            "G02", "C2P"),
     ])
     tgd_c5x_s = eph.compute_total_group_delay_rnx3(eph_rnx3_df,
-                                                   pd.Timestamp("2022-01-01T00:00:00.000000000"), "G02",
+                                                   helpers.timestamp_2_timedelta(pd.Timestamp("2022-01-01T00:00:00.000000000"), "GPST"), "G02",
                                                    "C5X")
 
     # total group delay is on the 7th line, 3rd position
@@ -329,16 +330,16 @@ def test_compute_gal_group_delay_rnx3(input_for_test):
     eph_rnx3_df = eph.convert_rnx3_nav_file_to_dataframe(rinex_3_navigation_file)
 
     tgd_e1_s = eph.compute_total_group_delay_rnx3(eph_rnx3_df,
-                                                  pd.Timestamp("2022-01-01T01:30:00.000000000"), "E25",
+                                                  helpers.timestamp_2_timedelta(pd.Timestamp("2022-01-01T01:30:00.000000000"), "GST"), "E25",
                                                   "C1C")
     tgd_e5a_s = eph.compute_total_group_delay_rnx3(eph_rnx3_df,
-                                                   pd.Timestamp("2022-01-01T01:30:00.000000000"), "E25",
+                                                   helpers.timestamp_2_timedelta(pd.Timestamp("2022-01-01T01:30:00.000000000"), "GST"), "E25",
                                                    "C5X")
     tgd_e5b_s = eph.compute_total_group_delay_rnx3(eph_rnx3_df,
-                                                   pd.Timestamp("2022-01-01T01:30:00.000000000"), "E25",
+                                                   helpers.timestamp_2_timedelta(pd.Timestamp("2022-01-01T01:30:00.000000000"), "GST"), "E25",
                                                    "C7X")
     tgd_e6b_s = eph.compute_total_group_delay_rnx3(eph_rnx3_df,
-                                                   pd.Timestamp("2022-01-01T01:30:00.000000000"), "E25",
+                                                   helpers.timestamp_2_timedelta(pd.Timestamp("2022-01-01T01:30:00.000000000"), "GST"), "E25",
                                                    "C6B")
 
     tgd_e1_s_expected = 4.889443516730e-09
@@ -378,28 +379,28 @@ def test_compute_bds_group_delay_rnx3(input_for_test):
 
     # B1I -> C2I
     tgd_c2i_s = eph.compute_total_group_delay_rnx3(eph_rnx3_df,
-                                                   pd.Timestamp("2022-01-01T00:30:00.000000000"), "C01",
+                                                   helpers.timestamp_2_timedelta(pd.Timestamp("2022-01-01T00:30:00.000000000"), "BDT"), "C01",
                                                    "C2I")
     # B2I -> C7I
     tgd_c7i_s = eph.compute_total_group_delay_rnx3(eph_rnx3_df,
-                                                   pd.Timestamp("2022-01-01T00:30:00.000000000"), "C01",
+                                                   helpers.timestamp_2_timedelta(pd.Timestamp("2022-01-01T00:30:00.000000000"), "BDT"), "C01",
                                                    "C7I")
     # B3I -> C6I
     tgd_c6i_s = eph.compute_total_group_delay_rnx3(eph_rnx3_df,
-                                                   pd.Timestamp("2022-01-01T00:30:00.000000000"), "C01",
+                                                   helpers.timestamp_2_timedelta(pd.Timestamp("2022-01-01T00:30:00.000000000"), "BDT"), "C01",
                                                    "C6I")
 
     # B1Cd -> C1D
     tgd_c1d_s = eph.compute_total_group_delay_rnx3(eph_rnx3_df,
-                                                   pd.Timestamp("2022-01-01T00:30:00.000000000"), "C01",
+                                                   helpers.timestamp_2_timedelta(pd.Timestamp("2022-01-01T00:30:00.000000000"), "BDT"), "C01",
                                                    "C1D")
     # B1Cp -> C1P
     tgd_c1p_s = eph.compute_total_group_delay_rnx3(eph_rnx3_df,
-                                                   pd.Timestamp("2022-01-01T00:30:00.000000000"), "C01",
+                                                   helpers.timestamp_2_timedelta(pd.Timestamp("2022-01-01T00:30:00.000000000"), "BDT"), "C01",
                                                    "C1P")
     # B2bi -> C7D
     tgd_c5x_s = eph.compute_total_group_delay_rnx3(eph_rnx3_df,
-                                                   pd.Timestamp("2022-01-01T00:30:00.000000000"), "C01",
+                                                   helpers.timestamp_2_timedelta(pd.Timestamp("2022-01-01T00:30:00.000000000"), "BDT"), "C01",
                                                    "C7D")
 
     tgd_c2i_s_expected = -5.800000000000E-09
