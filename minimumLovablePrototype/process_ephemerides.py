@@ -100,7 +100,9 @@ def compute_satellite_state(ephemerides: pd.DataFrame, satellite_id: str, t_syst
     elif constellation(satellite_id) == "R":
         position_system_frame_m, velocity_system_frame_mps = compute_glonass_pv(sat_ephemeris, t_system_time_ns)
     else:
-        assert False, f"Constellation of {satellite_id} not supported"
+        position_system_frame_m = np.full(3, np.nan)
+        velocity_system_frame_mps = np.full(3, np.nan)
+        # assert False, f"Constellation of {satellite_id} not supported"
 
     clock_offset_m, clock_offset_rate_mps = \
         compute_satellite_clock_offset_and_clock_offset_rate(ephemerides, satellite_id, t_system_time_ns)
