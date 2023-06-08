@@ -132,58 +132,34 @@ def build_records(rinex_3_obs_file, rinex_3_ephemerides_file):
         unit="s",
     )
 
-    def compute_and_apply_satellite_clock_offsets(row, ephemerides):
+    def compute_sat_state(row, ephemerides):
         (
-            offset_m,
-            offset_rate_mps,
-        ) = eph.compute_satellite_clock_offset_and_clock_offset_rate(
-            ephemerides,
-            row["satellite"],
+            position_system_frame_m,
+            velocity_system_frame_mps,
+            clock_offset_m,
+            clock_offset_rate_mps
+        ) = eph.compute_satellite_state(
+            ephemerides, row['satellite'],
             helpers.timestamp_2_timedelta(
-                pd.Timestamp(row["time_of_emission_in_satellite_time"]),
+                row['time_of_emission_in_satellite_time'],
                 eph.satellite_id_2_system_time_scale(row["satellite"]),
-            ),
+            )
         )
-        time_of_emission_in_constellation_time = helpers.timestamp_2_timedelta(
-            pd.Timestamp(row["time_of_emission_in_satellite_time"]),
-            eph.satellite_id_2_system_time_scale(row["satellite"]),
-        )
-        -pd.Timedelta(
-            constants.cNanoSecondsPerSecond
-            * offset_m
-            / constants.cGpsIcdSpeedOfLight_mps
-        )
-
-        (
-            offset_m,
-            offset_rate_mps,
-        ) = eph.compute_satellite_clock_offset_and_clock_offset_rate(
-            ephemerides, row["satellite"], time_of_emission_in_constellation_time
-        )
+        broadcast_position_in_constellation_frame = 0
         return pd.Series(
-            [offset_m, offset_rate_mps, time_of_emission_in_constellation_time]
+            [position_system_frame_m, velocity_system_frame_mps, clock_offset_m, clock_offset_rate_mps]
         )
 
-    log.info("Computing satellite clock offsets")
+    log.info("Computing satellite states")
     ephemerides = eph.convert_rnx3_nav_file_to_dataframe(rinex_3_ephemerides_file)
     per_sat[
         [
-            "satellite_clock_offset_at_time_of_emission_m",
-            "satellite_clock_offset_rate_at_time_of_emission_mps",
-            "time_of_emission_in_system_time",
+            "satellite_position_m",
+            "satellite_velocity_mps",
+            "satellite_clock_bias_m",
+            "satellite_clock_bias_drift_mps",
         ]
     ] = per_sat.apply(
-        compute_and_apply_satellite_clock_offsets, axis=1, args=(ephemerides,)
-    )
-
-    def compute_sat_state(row, ephemerides):
-        nav_df = eph.select_nav_ephemeris(
-            ephemerides, row["satellite"], row["time_of_emission_in_system_time"]
-        )
-        broadcast_position_in_constellation_frame = 0
-        return broadcast_position_in_constellation_frame
-
-    per_sat["satellite_position_m"] = per_sat.apply(
         compute_sat_state, axis=1, args=(ephemerides,)
     )
 

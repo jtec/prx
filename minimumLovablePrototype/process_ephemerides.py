@@ -127,7 +127,9 @@ def compute_satellite_state(
             sat_ephemeris, t_system_time_ns
         )
     else:
-        assert False, f"Constellation of {satellite_id} not supported"
+        position_system_frame_m = np.full(3, np.nan)
+        velocity_system_frame_mps = np.full(3, np.nan)
+        # assert False, f"Constellation of {satellite_id} not supported"
 
     (
         clock_offset_m,
