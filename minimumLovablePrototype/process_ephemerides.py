@@ -1,5 +1,4 @@
 import math
-from functools import lru_cache
 
 from gnss_lib_py.utils.sim_gnss import find_sat
 import pandas as pd
@@ -205,7 +204,6 @@ def convert_nav_dataset_to_dataframe(nav_ds):
     return nav_df
 
 
-@lru_cache()
 def select_nav_ephemeris(
     nav_dataframe: pd.DataFrame,
     satellite_id: str,
