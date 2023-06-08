@@ -3,6 +3,7 @@ import pandas as pd
 from collections import defaultdict
 
 cGpstUtcEpoch = pd.Timestamp(np.datetime64("1980-01-06T00:00:00.000000000"))
+cTaiEpoch = pd.Timestamp(np.datetime64("1958-01-01T00:00:00.000000000"))
 cArbitraryGlonassUtcEpoch = pd.Timestamp(np.datetime64("1980-01-06T00:00:00.000000000"))
 
 cNanoSecondsPerSecond = 1e9
@@ -15,16 +16,9 @@ cNanoSecondsPerWeek = cSecondsPerWeek * cNanoSecondsPerSecond
 cHzPerMhz = 1e6
 cGpsIcdSpeedOfLight_mps = 2.99792458 * 1e8
 cPrxReferenceFrame = {"name": "IGS14", "epoch": "2005.001"}
-# Heuristic: demand micrometer precision in computations involving distances
-cPrxPrecision_m = 1e-6
-cMaxOrbitalSpeed_mps = 1e4
 
 cPrxJsonTextSequenceFileExtension = "jsonseq"
 cPrxCsvFileExtension = "csv"
-
-# the 8th and 9th bit of the `data source` parameter in the Galileo navigation message allows to identify the type of message (F/NAV vs I/NAV)
-cGalileoFnavDataSourceIndicator = 512
-
 
 # From RINEX Version 3.05, 1 December, 2020.
 def carrier_frequencies_hz():

@@ -152,8 +152,8 @@ def convert_nav_dataset_to_dataframe(nav_ds):
     nav_df.reset_index(inplace=True)
     nav_df["source"] = nav_ds.filename
     # georinex adds suffixes to satellite IDs if it sees multiple ephemerides (e.g. F/NAV, I/NAV) for the same
-    # satellite and the same timstamp.
-    # The downstream code expects three-letter satellite IDs, to remove suffixes.
+    # satellite and the same timestamp.
+    # The downstream code expects three-letter satellite IDs, so remove suffixes.
     nav_df["sv"] = nav_df.apply(lambda row: row["sv"][:3], axis=1)
 
     nav_df["time_scale"] = nav_df.apply(
@@ -219,20 +219,22 @@ def select_nav_ephemeris(
     ephemerides_of_requested_sat = nav_dataframe.loc[
         (nav_dataframe["sv"] == satellite_id)
     ]
-    # if the considered satellite is Galileo, there is a need to check which type of ephemeris has to be retrieved (
+    # If the considered satellite is Galileo, there is a need to check which type of ephemeris has to be retrieved (
     # F/NAV or I/NAV)
+    # The 8th and 9th bit of the `data source` parameter in the Galileo navigation message allows to identify the type of message (F/NAV vs I/NAV)
+    cGalileoFnavDataSourceIndicator = 512
     if obs_type is not None and constellation(satellite_id) == "E":
         frequency_letter = obs_type[1]
         match frequency_letter:
             case "1" | "7":  # DataSrc >= 512
                 ephemerides_of_requested_sat = ephemerides_of_requested_sat.loc[
                     ephemerides_of_requested_sat.DataSrc
-                    >= constants.cGalileoFnavDataSourceIndicator
+                    >= cGalileoFnavDataSourceIndicator
                 ]
             case "5":  # DataSrc < 512
                 ephemerides_of_requested_sat = ephemerides_of_requested_sat.loc[
                     ephemerides_of_requested_sat.DataSrc
-                    < constants.cGalileoFnavDataSourceIndicator
+                    < cGalileoFnavDataSourceIndicator
                 ]
             case _:  # other galileo signals not supported in rnx3
                 log.info(

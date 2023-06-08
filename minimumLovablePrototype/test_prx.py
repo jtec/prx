@@ -1,3 +1,4 @@
+import json
 import os
 from pathlib import Path
 import shutil
@@ -41,7 +42,7 @@ def input_for_test():
     assert test_file.parent.joinpath(ephemerides_file).exists()
 
     yield test_file
-    shutil.rmtree(test_file.parent)
+    #shutil.rmtree(test_file.parent)
 
 
 def test_prx_command_line_call_with_jsonseq_output(input_for_test):
@@ -65,6 +66,14 @@ def test_prx_function_call_with_jsonseq_output(input_for_test):
         str(test_file).replace("crx.gz", constants.cPrxJsonTextSequenceFileExtension)
     )
     assert expected_prx_file.exists()
+    prx_content = {"records": []}
+    with open(expected_prx_file, "r") as f:
+        for line in f:
+            if not "header" in prx_content.keys():
+                prx_content["header"] = json.loads(line[1:])
+                continue
+            prx_content["records"].append(json.loads(line[1:]))
+    assert len(prx_content) == 1
 
 
 def test_prx_function_call_with_csv_output(input_for_test):
