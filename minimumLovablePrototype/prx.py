@@ -34,14 +34,34 @@ def write_prx_file(
 def write_json_text_sequence_file(
     prx_header: dict, prx_records: pd.DataFrame, file_name_without_extension: Path
 ):
-    indent = 2
     output_file = Path(
         f"{str(file_name_without_extension)}.{constants.cPrxJsonTextSequenceFileExtension}"
     )
     with open(output_file, "w", encoding="utf-8") as file:
         file.write(
-            "\u241E" + json.dumps(prx_header, ensure_ascii=False, indent=indent) + "\n"
+            "\u241E" + json.dumps(prx_header, ensure_ascii=False) + "\n"
         )
+        drop_columns = ["time_of_reception_in_receiver_time", "satellite", "time_of_emission_in_satellite_time"]
+        for epoch in prx_records["time_of_reception_in_receiver_time"].unique():
+            epoch = pd.Timestamp(epoch)
+            epoch_obs = prx_records[prx_records["time_of_reception_in_receiver_time"] == epoch]
+            record = {"time_of_reception_in_receiver_time": epoch.strftime("%Y:%m:%dT%H:%M:%S.%f"), "satellites": {}}
+            for idx, row in epoch_obs.iterrows():
+                sat = row["satellite"]
+                row = epoch_obs.iloc[[idx]].dropna(axis='columns')
+                record["satellites"][sat] = {"observations": {}}
+                for col in row.columns:
+                    if len(col) == 3:
+                        record["satellites"][sat]["observations"][col] = row[col].values[0]
+                        continue
+                    if col in drop_columns:
+                        continue
+                    if type(row[col].values[0]) is np.ndarray:
+                        row[col].values[0] = row[col].values[0].tolist()
+                    record["satellites"][sat][col] = row[col].values[0]
+            file.write(
+                "\u241E" + json.dumps(record, ensure_ascii=False) + "\n"
+            )
     log.info(f"Generated JSON Text Sequence prx file: {output_file}")
 
 
@@ -63,7 +83,6 @@ def build_header(input_files):
         for file in input_files
     ]
     prx_header["speed_of_light_mps"] = constants.cGpsIcdSpeedOfLight_mps
-    prx_header["reference_frame"] = constants.cPrxReferenceFrame
     prx_header["carrier_frequencies_hz"] = constants.carrier_frequencies_hz()
     prx_header["prx_git_commit_id"] = git.Repo(
         search_parent_directories=True
@@ -146,7 +165,6 @@ def build_records(rinex_3_obs_file, rinex_3_ephemerides_file):
                 eph.satellite_id_2_system_time_scale(row["satellite"]),
             ),
         )
-        broadcast_position_in_constellation_frame = 0
         return pd.Series(
             [
                 position_system_frame_m,
@@ -171,7 +189,7 @@ def build_records(rinex_3_obs_file, rinex_3_ephemerides_file):
 
 
 def process(observation_file_path: Path, output_format="jsonseq"):
-    # Make this work even if someone passes a path string:
+    # We expect a Path, but might get a string here:
     observation_file_path = Path(observation_file_path)
     log.info(
         f"Starting processing {observation_file_path.name} (full path {observation_file_path})"
