@@ -137,17 +137,23 @@ def build_records(rinex_3_obs_file, rinex_3_ephemerides_file):
             position_system_frame_m,
             velocity_system_frame_mps,
             clock_offset_m,
-            clock_offset_rate_mps
+            clock_offset_rate_mps,
         ) = eph.compute_satellite_state(
-            ephemerides, row['satellite'],
+            ephemerides,
+            row["satellite"],
             helpers.timestamp_2_timedelta(
-                row['time_of_emission_in_satellite_time'],
+                row["time_of_emission_in_satellite_time"],
                 eph.satellite_id_2_system_time_scale(row["satellite"]),
-            )
+            ),
         )
         broadcast_position_in_constellation_frame = 0
         return pd.Series(
-            [position_system_frame_m, velocity_system_frame_mps, clock_offset_m, clock_offset_rate_mps]
+            [
+                position_system_frame_m,
+                velocity_system_frame_mps,
+                clock_offset_m,
+                clock_offset_rate_mps,
+            ]
         )
 
     log.info("Computing satellite states")
@@ -159,9 +165,7 @@ def build_records(rinex_3_obs_file, rinex_3_ephemerides_file):
             "satellite_clock_bias_m",
             "satellite_clock_bias_drift_mps",
         ]
-    ] = per_sat.apply(
-        compute_sat_state, axis=1, args=(ephemerides,)
-    )
+    ] = per_sat.apply(compute_sat_state, axis=1, args=(ephemerides,))
 
     return per_sat
 
