@@ -1,4 +1,6 @@
 import math
+from functools import lru_cache
+
 from gnss_lib_py.utils.sim_gnss import find_sat
 import pandas as pd
 import numpy as np
@@ -201,6 +203,7 @@ def convert_nav_dataset_to_dataframe(nav_ds):
     return nav_df
 
 
+@lru_cache()
 def select_nav_ephemeris(
     nav_dataframe: pd.DataFrame,
     satellite_id: str,
@@ -261,8 +264,6 @@ def compute_satellite_clock_offset_and_clock_offset_rate(
     time_wrt_ephemeris_epoch_s = helpers.timedelta_2_seconds(
         time_constellation_time_ns - ephemeris_df["time"].iloc[0]
     )
-    # Clock offset is sub-second, and float64 has roughly 1e-15 precision at 1s, so we get roughly 10 micrometers floating-point
-    # error here.
     if satellite[0] == "R":
         offset_at_epoch_s = ephemeris_df["SVclockBias"].iloc[0]
         offset_rate_at_epoch_sps = ephemeris_df["SVrelFreqBias"].iloc[0]
