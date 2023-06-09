@@ -12,3 +12,5 @@ __pycache__
 /bin/act
 */afterburner/*
 *.DS_Store
+*.png
+

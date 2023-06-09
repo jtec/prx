@@ -2,16 +2,22 @@ import numpy as np
 import pandas as pd
 from collections import defaultdict
 
+cGpstUtcEpoch = pd.Timestamp(np.datetime64("1980-01-06T00:00:00.000000000"))
+cArbitraryGlonassUtcEpoch = pd.Timestamp(np.datetime64("1980-01-06T00:00:00.000000000"))
 
-cGpstEpoch = pd.Timestamp(np.datetime64("1980-01-06T00:00:00.000000000"))
 cNanoSecondsPerSecond = 1e9
 cMicrosecondsPerSecond = 1e6
 cSecondsPerDay = 86400
-cSecondsPerHour = 60 * 60
+cSecondsPerMinute = 60
+cSecondsPerHour = 60 * cSecondsPerMinute
 cSecondsPerWeek = 7 * cSecondsPerDay
+cNanoSecondsPerWeek = cSecondsPerWeek * cNanoSecondsPerSecond
 cHzPerMhz = 1e6
 cGpsIcdSpeedOfLight_mps = 2.99792458 * 1e8
 cPrxReferenceFrame = {"name": "IGS14", "epoch": "2005.001"}
+# Heuristic: demand micrometer precision in computations involving distances
+cPrxPrecision_m = 1e-6
+cMaxOrbitalSpeed_mps = 1e4
 
 cPrxJsonTextSequenceFileExtension = "jsonseq"
 cPrxCsvFileExtension = "csv"
@@ -31,12 +37,8 @@ def carrier_frequencies_hz():
     cf["R"]["L1"] = defaultdict(dict)
     cf["R"]["L2"] = defaultdict(dict)
     for frequency_slot in range(-7, 12 + 1):
-        cf["R"]["L1"][frequency_slot] = (
-            1602 + frequency_slot * 9 / 16
-        ) * cHzPerMhz
-        cf["R"]["L2"][frequency_slot] = (
-            1246 + frequency_slot * 7 / 16
-        ) * cHzPerMhz
+        cf["R"]["L1"][frequency_slot] = (1602 + frequency_slot * 9 / 16) * cHzPerMhz
+        cf["R"]["L2"][frequency_slot] = (1246 + frequency_slot * 7 / 16) * cHzPerMhz
     # Glonass CDMA signals
     cf["R"]["L4"] = 1600.995 * cHzPerMhz
     cf["R"]["L3"] = 1202.025 * cHzPerMhz

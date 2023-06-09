@@ -3,6 +3,8 @@ import json
 from pathlib import Path
 import georinex
 import pandas as pd
+import numpy as np
+from collections import defaultdict
 import git
 
 import parse_rinex
@@ -69,8 +71,9 @@ def build_header(input_files):
     return prx_header
 
 
-def check_assumptions(rinex_3_obs_file):
+def check_assumptions(rinex_3_obs_file, rinex_3_nav_file):
     obs_header = georinex.rinexheader(rinex_3_obs_file)
+    nav_header = georinex.rinexheader(rinex_3_nav_file)
     if "RCV CLOCK OFFS APPL" in obs_header.keys():
         assert (
             obs_header["RCV CLOCK OFFS APPL"].strip() == "0"
@@ -81,7 +84,7 @@ def check_assumptions(rinex_3_obs_file):
 
 
 def build_records(rinex_3_obs_file, rinex_3_ephemerides_file):
-    check_assumptions(rinex_3_obs_file)
+    check_assumptions(rinex_3_obs_file, rinex_3_ephemerides_file)
     obs = parse_rinex.load(rinex_3_obs_file, use_caching=True)
 
     # Flatten the xarray DataSet into a pandas DataFrame:
@@ -113,15 +116,6 @@ def build_records(rinex_3_obs_file, rinex_3_ephemerides_file):
     )
 
     # Compute time-of-emission in satellite time (we don't have satellite clock offset from constellation time yet)
-    def compute_time_of_emission_in_satellite_time(row):
-        row = row.dropna()
-        pseudorange = row.iloc[row.index.str.startswith("C")].mean()
-        return (
-            constants.cNanoSecondsPerSecond
-            * pseudorange
-            / constants.cGpsIcdSpeedOfLight_mps
-        )
-
     log.info("Computing times of emission in satellite time")
     per_sat = flat_obs.pivot(
         index=["time_of_reception_in_receiver_time", "satellite"],
@@ -138,52 +132,53 @@ def build_records(rinex_3_obs_file, rinex_3_ephemerides_file):
         unit="s",
     )
 
-    def compute_and_apply_satellite_clock_offsets(row, ephemerides):
+    def compute_sat_state(row, ephemerides):
         (
-            offset_m,
-            offset_rate_mps,
-        ) = eph.compute_satellite_clock_offset_and_clock_offset_rate(
+            position_system_frame_m,
+            velocity_system_frame_mps,
+            clock_offset_m,
+            clock_offset_rate_mps,
+        ) = eph.compute_satellite_state(
             ephemerides,
             row["satellite"],
-            pd.Timestamp(row["time_of_emission_in_satellite_time"]),
+            helpers.timestamp_2_timedelta(
+                row["time_of_emission_in_satellite_time"],
+                eph.satellite_id_2_system_time_scale(row["satellite"]),
+            ),
         )
-        time_of_emission_in_system_time = pd.Timestamp(
-            row["time_of_emission_in_satellite_time"]
-            - pd.Timedelta(
-                constants.cNanoSecondsPerSecond
-                * offset_m
-                / constants.cGpsIcdSpeedOfLight_mps
-            )
+        broadcast_position_in_constellation_frame = 0
+        return pd.Series(
+            [
+                position_system_frame_m,
+                velocity_system_frame_mps,
+                clock_offset_m,
+                clock_offset_rate_mps,
+            ]
         )
-        (
-            offset_m,
-            offset_rate_mps,
-        ) = eph.compute_satellite_clock_offset_and_clock_offset_rate(
-            ephemerides, row["satellite"], time_of_emission_in_system_time
-        )
-        return pd.Series([offset_m, offset_rate_mps, time_of_emission_in_system_time])
 
-    log.info("Computing satellite clock offsets")
+    log.info("Computing satellite states")
     ephemerides = eph.convert_rnx3_nav_file_to_dataframe(rinex_3_ephemerides_file)
     per_sat[
         [
-            "satellite_clock_offset_at_time_of_emission_m",
-            "satellite_clock_offset_rate_at_time_of_emission_mps",
-            "time_of_emission_in_system_time",
+            "satellite_position_m",
+            "satellite_velocity_mps",
+            "satellite_clock_bias_m",
+            "satellite_clock_bias_drift_mps",
         ]
-    ] = per_sat.apply(
-        compute_and_apply_satellite_clock_offsets, axis=1, args=(ephemerides,)
-    )
+    ] = per_sat.apply(compute_sat_state, axis=1, args=(ephemerides,))
+
     return per_sat
 
 
 def process(observation_file_path: Path, output_format="jsonseq"):
+    # Make this work even if someone passes a path string:
+    observation_file_path = Path(observation_file_path)
     log.info(
         f"Starting processing {observation_file_path.name} (full path {observation_file_path})"
     )
     rinex_3_obs_file = converters.anything_to_rinex_3(observation_file_path)
     prx_file = str(rinex_3_obs_file).replace(".rnx", "")
-    aux_files = aux.discover_or_download_auxiliary_files(observation_file_path)
+    aux_files = aux.discover_or_download_auxiliary_files(rinex_3_obs_file)
     write_prx_file(
         build_header([rinex_3_obs_file, aux_files["broadcast_ephemerides"]]),
         build_records(rinex_3_obs_file, aux_files["broadcast_ephemerides"]),
