@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 import glob
 import subprocess
+import math
 
 logging.basicConfig(
     format="%(asctime)s,%(msecs)03d %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s",
@@ -34,12 +35,49 @@ def md5_of_file_content(file: Path):
     return hash_md5.hexdigest()
 
 
-def timestamp_2_gpst_ns(ts: pd.Timestamp):
-    delta = ts - constants.cGpstEpoch
-    return delta.delta
+def timestamp_2_timedelta(timestamp: pd.Timestamp, time_scale):
+    assert type(timestamp) == pd.Timestamp, "timestamp must be of type pd.Timestamp"
+    # RINEX 3 adds the offset between GPST and GST/QZSST/IRNSST epochs, so we can use the GPST epoch here.
+    # The SBAST epoch is the same as the GPST epoch.
+    if (
+        time_scale == "GPST"
+        or time_scale == "SBAST"
+        or time_scale == "QZSST"
+        or time_scale == "IRNSST"
+        or time_scale == "GST"
+    ):
+        return timestamp - constants.cGpstUtcEpoch
+    if time_scale == "BDT":
+        # TODO double-check the offset between BDT and GPST
+        return (
+            (timestamp - constants.cGpstUtcEpoch)
+            - pd.Timedelta(1356 * constants.cSecondsPerWeek, "seconds")
+            - pd.Timedelta(14, "seconds")
+        )
+    # The GLONASS epoch is (probably) the UTC epoch, to keep the Timedelta within the same order of magnitude
+    # as for the other constellations, we use an arbitrary epoch here.
+    if time_scale == "GLONASST":
+        return timestamp - constants.cArbitraryGlonassUtcEpoch
+    assert False, f"Time scale {time_scale} not supported."
 
 
-def rinex_header_time_string_2_timestamp_ns(time_string: str) -> np.datetime64:
+def timedelta_2_weeks_and_seconds(time_delta: pd.Timedelta):
+    assert type(time_delta) == pd.Timedelta, "time_delta must be of type pd.Timedelta"
+    weeks = math.floor(time_delta.delta / constants.cNanoSecondsPerWeek)
+    week_nanoseconds = time_delta.delta - weeks * constants.cNanoSecondsPerWeek
+    return weeks, np.float64(week_nanoseconds) / constants.cNanoSecondsPerSecond
+
+
+def timedelta_2_seconds(time_delta: pd.Timedelta):
+    assert type(time_delta) == pd.Timedelta, "time_delta must be of type pd.Timedelta"
+    integer_seconds = np.float64(round(time_delta.total_seconds()))
+    fractional_seconds = np.float64(
+        time_delta.delta - integer_seconds * constants.cNanoSecondsPerSecond
+    )
+    return integer_seconds + fractional_seconds
+
+
+def rinex_header_time_string_2_timestamp_ns(time_string: str) -> pd.Timestamp:
     elements = time_string.split()
     time_scale = elements[-1]
     assert time_scale == "GPS", "Time scales other than GPST not supported yet"
@@ -67,6 +105,7 @@ def repair_with_gfzrnx(file):
             log.info(f"Ran gfzrnx file repair on {file}")
             return file
     assert False, "gdzrnx file repair run failed!"
+
 
 def deg_2_rad(angle_deg):
     return angle_deg * np.pi / 180
