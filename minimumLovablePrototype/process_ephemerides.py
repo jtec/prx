@@ -30,7 +30,7 @@ constellation_2_system_time_scale = {
 
 def satellite_id_2_system_time_scale(satellite_id):
     assert (
-        len(satellite_id) == 3
+            len(satellite_id) == 3
     ), f"Satellite ID unexpectedly not three characters long: {satellite_id}"
     return constellation_2_system_time_scale[constellation(satellite_id)]
 
@@ -46,7 +46,7 @@ def glonass_xdot(x, a):
     vdot = np.zeros(3)
     r = np.linalg.norm(p)
     c1 = -mu / math.pow(p[0], 3) - (3 / 2) * math.pow(J_2, 2) * (
-        mu * math.pow(a_e, 2) / math.pow(r, 5)
+            mu * math.pow(a_e, 2) / math.pow(r, 5)
     ) * (1 - 5 * math.pow(p[2] / r, 2))
     vdot[0] = c1 * p[0] + math.pow(omega, 2) * p[0] + 2 * omega * v[1] + a[0]
     vdot[1] = c1 * p[1] + math.pow(omega, 2) * p[1] - 2 * omega * v[0] + a[1]
@@ -104,19 +104,19 @@ def compute_kepler_pv(sat_ephemeris: pd.DataFrame, t_system_time: pd.Timedelta):
 
 def constellation(satellite_id: str):
     assert (
-        len(satellite_id) == 3
+            len(satellite_id) == 3
     ), f"Satellite ID unexpectedly not three characters long: {satellite_id}"
     return satellite_id[0]
 
 
 def compute_satellite_state(
-    ephemerides: pd.DataFrame, satellite_id: str, t_system_time_ns: pd.Timedelta
+        ephemerides: pd.DataFrame, satellite_id: str, t_system_time_ns: pd.Timedelta
 ):
     sat_ephemeris = select_nav_ephemeris(ephemerides, satellite_id, t_system_time_ns)
     if (
-        constellation(satellite_id) == "G"
-        or constellation(satellite_id) == "E"
-        or constellation(satellite_id) == "C"
+            constellation(satellite_id) == "G"
+            or constellation(satellite_id) == "E"
+            or constellation(satellite_id) == "C"
     ):
         position_system_frame_m, velocity_system_frame_mps = compute_kepler_pv(
             sat_ephemeris, t_system_time_ns
@@ -136,6 +136,7 @@ def compute_satellite_state(
     ) = compute_satellite_clock_offset_and_clock_offset_rate(
         ephemerides, satellite_id, t_system_time_ns
     )
+
     return (
         position_system_frame_m,
         velocity_system_frame_mps,
@@ -175,8 +176,8 @@ def convert_nav_dataset_to_dataframe(nav_ds):
         }
         if row["time_scale"] != "GLONASST":
             full_seconds = (
-                row[week_field[row["time_scale"]]] * constants.cSecondsPerWeek
-                + row["Toe"]
+                    row[week_field[row["time_scale"]]] * constants.cSecondsPerWeek
+                    + row["Toe"]
             )
             return pd.Timedelta(full_seconds, "seconds")
         if row["time_scale"] == "GLONASST":
@@ -205,16 +206,16 @@ def convert_nav_dataset_to_dataframe(nav_ds):
 
 
 def select_nav_ephemeris(
-    nav_dataframe: pd.DataFrame,
-    satellite_id: str,
-    t_system: pd.Timedelta,
-    obs_type=None,
+        nav_dataframe: pd.DataFrame,
+        satellite_id: str,
+        t_system: pd.Timedelta,
+        obs_type=None,
 ):
     """
     select an ephemeris from a RINEX 3 ephemeris dataframe for a particular sv and time, and return the ephemeris.
     """
     assert (
-        type(t_system) == pd.Timedelta
+            type(t_system) == pd.Timedelta
     ), f"t_system is not a pandas.Timedelta, but {type(t_system)}"
     ephemerides_of_requested_sat = nav_dataframe.loc[
         (nav_dataframe["sv"] == satellite_id)
@@ -228,12 +229,12 @@ def select_nav_ephemeris(
                 ephemerides_of_requested_sat = ephemerides_of_requested_sat.loc[
                     ephemerides_of_requested_sat.DataSrc
                     >= constants.cGalileoFnavDataSourceIndicator
-                ]
+                    ]
             case "5":  # DataSrc < 512
                 ephemerides_of_requested_sat = ephemerides_of_requested_sat.loc[
                     ephemerides_of_requested_sat.DataSrc
                     < constants.cGalileoFnavDataSourceIndicator
-                ]
+                    ]
             case _:  # other galileo signals not supported in rnx3
                 log.info(
                     f"Could not retrieve ephemeris for satellite id: {satellite_id} and obs: {obs_type}"
@@ -244,18 +245,18 @@ def select_nav_ephemeris(
     ephemerides_of_requested_sat_before_requested_time = (
         ephemerides_of_requested_sat.loc[
             ephemerides_of_requested_sat["time"] <= t_system
-        ]
+            ]
     )
     assert (
-        ephemerides_of_requested_sat_before_requested_time.shape[0] > 0
+            ephemerides_of_requested_sat_before_requested_time.shape[0] > 0
     ), f"Did not find ephemeris with timestamp before {t_system}"
     return ephemerides_of_requested_sat_before_requested_time.iloc[[-1]]
 
 
 def compute_satellite_clock_offset_and_clock_offset_rate(
-    parsed_rinex_3_nav_file: pd.DataFrame,
-    satellite: str,
-    time_constellation_time_ns: pd.Timedelta,
+        parsed_rinex_3_nav_file: pd.DataFrame,
+        satellite: str,
+        time_constellation_time_ns: pd.Timedelta,
 ):
     ephemeris_df = select_nav_ephemeris(
         parsed_rinex_3_nav_file, satellite, time_constellation_time_ns
@@ -279,13 +280,13 @@ def compute_satellite_clock_offset_and_clock_offset_rate(
         offset_acceleration_sps2 = ephemeris_df["SVclockDriftRate"].iloc[0]
 
     offset_s = (
-        offset_at_epoch_s
-        + offset_rate_at_epoch_sps * time_wrt_ephemeris_epoch_s
-        + offset_acceleration_sps2 * math.pow(time_wrt_ephemeris_epoch_s, 2)
+            offset_at_epoch_s
+            + offset_rate_at_epoch_sps * time_wrt_ephemeris_epoch_s
+            + offset_acceleration_sps2 * math.pow(time_wrt_ephemeris_epoch_s, 2)
     )
     offset_rate_sps = (
-        offset_rate_at_epoch_sps
-        + 2 * offset_acceleration_sps2 * time_wrt_ephemeris_epoch_s
+            offset_rate_at_epoch_sps
+            + 2 * offset_acceleration_sps2 * time_wrt_ephemeris_epoch_s
     )
 
     return (
@@ -295,10 +296,10 @@ def compute_satellite_clock_offset_and_clock_offset_rate(
 
 
 def compute_total_group_delay_rnx3(
-    parsed_rinex_3_nav_file: pd.DataFrame,
-    time_constellation_time_ns: pd.Timedelta,
-    satellite: str,
-    obs_type: str,
+        parsed_rinex_3_nav_file: pd.DataFrame,
+        time_constellation_time_ns: pd.Timedelta,
+        satellite: str,
+        obs_type: str,
 ):
     """compute the total group delay from a parsed rnx3 file, for a specific satellite, time and observation type
 
@@ -338,9 +339,9 @@ def compute_total_group_delay_rnx3(
                     gamma = 1
                 case "2":
                     gamma = (
-                        constants.carrier_frequencies_hz()["G"]["L1"]
-                        / constants.carrier_frequencies_hz()["G"]["L2"]
-                    ) ** 2
+                                    constants.carrier_frequencies_hz()["G"]["L1"]
+                                    / constants.carrier_frequencies_hz()["G"]["L2"]
+                            ) ** 2
                 case _:
                     gamma = np.nan
         case "E":
@@ -351,15 +352,15 @@ def compute_total_group_delay_rnx3(
                 case "5":
                     group_delay = ephemeris_df.BGDe5a.values[0]
                     gamma = (
-                        constants.carrier_frequencies_hz()["E"]["L1"]
-                        / constants.carrier_frequencies_hz()["E"]["L5"]
-                    ) ** 2
+                                    constants.carrier_frequencies_hz()["E"]["L1"]
+                                    / constants.carrier_frequencies_hz()["E"]["L5"]
+                            ) ** 2
                 case "7":
                     group_delay = ephemeris_df.BGDe5b.values[0]
                     gamma = (
-                        constants.carrier_frequencies_hz()["E"]["L1"]
-                        / constants.carrier_frequencies_hz()["E"]["L7"]
-                    ) ** 2
+                                    constants.carrier_frequencies_hz()["E"]["L1"]
+                                    / constants.carrier_frequencies_hz()["E"]["L7"]
+                            ) ** 2
                 case _:
                     group_delay = np.nan
                     gamma = np.nan
@@ -386,3 +387,15 @@ def compute_total_group_delay_rnx3(
         )
 
     return group_delay * gamma
+
+
+def compute_sagnac_effect(sat_pos_m, rx_pos_m):
+    """compute the sagnac effect (effect of the Earth rotation during signal propagation°
+
+        Input :
+        - sat_pos_m: satellite ECEF position. np.ndarray of shape (3,)
+        - rx_pos_m: satellite ECEF position. np.ndarray of shape (3,)
+    """
+    sagnac_effect_m = constants.cEarthRotationRate_radps / constants.cGpsIcdSpeedOfLight_mps \
+                      * (sat_pos_m(0) * rx_pos_m(1) - sat_pos_m(1) * rx_pos_m(0))
+    return sagnac_effect_m
