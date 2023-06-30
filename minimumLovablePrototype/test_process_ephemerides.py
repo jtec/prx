@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 from pathlib import Path
 import process_ephemerides as eph
+import georinex
 import helpers
 import converters
 import constants
@@ -46,9 +47,21 @@ def input_for_test():
     )
     assert all_constellations_rnx3_nav_test_file.exists()
 
+    all_constellations_rnx3_obs_test_file = test_directory.joinpath(
+        "TLSE00FRA_R_20220010000_01D_30S_MO.zip"
+    )
+    shutil.copy(
+        helpers.prx_root().joinpath(
+            f"datasets/TLSE_2022001/{all_constellations_rnx3_obs_test_file.name}"
+        ),
+        all_constellations_rnx3_obs_test_file,
+    )
+    assert all_constellations_rnx3_obs_test_file.exists()
+
     yield {
         "gps_nav_file": gps_rnx3_nav_test_file,
         "all_constellations_nav_file": all_constellations_rnx3_nav_test_file,
+        "all_constellations_obs_file": all_constellations_rnx3_obs_test_file,
     }
     shutil.rmtree(test_directory)
 
@@ -599,3 +612,37 @@ def test_compute_bds_group_delay_rnx3(input_for_test):
     assert np.isnan(tgd_c1d_s)
     assert np.isnan(tgd_c1p_s)
     assert np.isnan(tgd_c5x_s)
+
+
+def test_sagnac_effect(input_for_test):
+    # parse rinex3 nav file
+    rinex_3_navigation_file = converters.anything_to_rinex_3(
+        input_for_test["all_constellations_nav_file"]
+    )
+    eph_rnx3_df = eph.convert_rnx3_nav_file_to_dataframe(rinex_3_navigation_file)
+
+    # retrieve receiver position from rinex3 obs file header
+    rinex_3_observation_file = converters.anything_to_rinex_3(
+        input_for_test["all_constellations_obs_file"]
+    )
+    obs_header = georinex.rinexheader(rinex_3_observation_file)
+    receiver_ecef_position_m = np.fromstring(obs_header["APPROX POSITION XYZ"], sep=" ")
+
+    # compute satellite position for a satellite and epochs
+    sv = "G01"
+    gpst_week = 2190
+    gpst_tow = 523800
+
+    # Compute broadcast satellite position
+    # Select right ephemeris
+    t_gpst_for_which_to_compute_position = pd.Timedelta(
+        gpst_week * constants.cSecondsPerWeek + gpst_tow, "seconds"
+    )
+    sat_ecef_position_m, _, _, _ = eph.compute_satellite_state(
+        eph_rnx3_df, sv, t_gpst_for_which_to_compute_position
+    )
+
+    # compute sagnac effect
+    eph.compute_sagnac_effect(sat_ecef_position_m, receiver_ecef_position_m)
+
+    assert(False)
