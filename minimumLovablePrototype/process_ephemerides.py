@@ -392,10 +392,16 @@ def compute_total_group_delay_rnx3(
 def compute_sagnac_effect(sat_pos_m, rx_pos_m):
     """compute the sagnac effect (effect of the Earth rotation during signal propagation°
 
-        Input :
+        Input:
         - sat_pos_m: satellite ECEF position. np.ndarray of shape (3,)
         - rx_pos_m: satellite ECEF position. np.ndarray of shape (3,)
+
+        Note:
+        The computation uses small angle approximation of cos and sin.
+
+        Reference:
+        RTKLIB v2.4.2 manual, eq E.3.8b, p 140
     """
     sagnac_effect_m = constants.cEarthRotationRate_radps / constants.cGpsIcdSpeedOfLight_mps \
-                      * (sat_pos_m(0) * rx_pos_m(1) - sat_pos_m(1) * rx_pos_m(0))
+                      * (sat_pos_m[0] * rx_pos_m[1] - sat_pos_m[1] * rx_pos_m[0])
     return sagnac_effect_m

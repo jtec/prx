@@ -613,8 +613,36 @@ def test_compute_bds_group_delay_rnx3(input_for_test):
     assert np.isnan(tgd_c1p_s)
     assert np.isnan(tgd_c5x_s)
 
+def test_sagnac_effect():
+    # load validation data
+    path_to_validation_file = helpers.prx_root().joinpath(
+            f"tools/validation_data/sagnac_effect.txt"
+        )
+    # read satellite position in header line 2
+    # with open(path_to_validation_file) as validation_file:
+    #     header_second_line = validation_file.readlines()[1:2]
+    sat_pos = np.array((28400000, 0, 0))
 
-def test_sagnac_effect(input_for_test):
+    # read data
+    data = np.loadtxt(path_to_validation_file,
+                      delimiter=",",
+                      skiprows=3,
+                      )
+
+    sagnac_effect_reference = np.zeros((data.shape[0],))
+    sagnac_effect_computed = np.zeros((data.shape[0],))
+    for ind in range(data.shape[0]):
+        rx_pos = data[ind, 0:3]
+        sagnac_effect_reference[ind] = data[ind, 3]
+        sagnac_effect_computed[ind] = eph.compute_sagnac_effect(sat_pos, rx_pos)
+
+    # errors come from the approximation of cos and sin for small angles
+    # millimeter accuracy should be sufficient
+    tolerance = 1e-3
+    assert(np.max(np.abs(sagnac_effect_computed - sagnac_effect_reference)) < tolerance)
+
+
+def test_sagnac_effect_on_rinex_data(input_for_test):
     # parse rinex3 nav file
     rinex_3_navigation_file = converters.anything_to_rinex_3(
         input_for_test["all_constellations_nav_file"]
