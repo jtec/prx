@@ -83,9 +83,15 @@ def check_assumptions(rinex_3_obs_file, rinex_3_nav_file):
     ), "Handling of observation files using time scales other than GPST not implemented yet."
 
 
-def build_records(rinex_3_obs_file, rinex_3_ephemerides_file):
+def build_records(rinex_3_obs_file, rinex_3_ephemerides_file,
+                  receiver_ecef_position_m=np.full(shape=(3,), fill_value=np.nan)):
     check_assumptions(rinex_3_obs_file, rinex_3_ephemerides_file)
     obs = parse_rinex.load(rinex_3_obs_file, use_caching=True)
+    obs_header = georinex.rinexheader(rinex_3_obs_file)
+
+    # if receiver_ecef_position_m has not been initialized, get it from the RNX OBS header
+    if np.isnan(receiver_ecef_position_m).any():
+        receiver_ecef_position_m = np.fromstring(obs_header["APPROX POSITION XYZ"], sep=" ")
 
     # Flatten the xarray DataSet into a pandas DataFrame:
     log.info("Converting Dataset into flat Dataframe of observations")
@@ -132,7 +138,7 @@ def build_records(rinex_3_obs_file, rinex_3_ephemerides_file):
         unit="s",
     )
 
-    def compute_sat_state(row, ephemerides):
+    def compute_sat_state(row, ephemerides, rx_ecef_position_m):
         (
             position_system_frame_m,
             velocity_system_frame_mps,
@@ -146,6 +152,7 @@ def build_records(rinex_3_obs_file, rinex_3_ephemerides_file):
                 eph.satellite_id_2_system_time_scale(row["satellite"]),
             ),
         )
+        sagnac_effect_m = eph.compute_sagnac_effect(position_system_frame_m, rx_ecef_position_m)
         broadcast_position_in_constellation_frame = 0
         return pd.Series(
             [
@@ -153,6 +160,7 @@ def build_records(rinex_3_obs_file, rinex_3_ephemerides_file):
                 velocity_system_frame_mps,
                 clock_offset_m,
                 clock_offset_rate_mps,
+                sagnac_effect_m,
             ]
         )
 
@@ -164,8 +172,9 @@ def build_records(rinex_3_obs_file, rinex_3_ephemerides_file):
             "satellite_velocity_mps",
             "satellite_clock_bias_m",
             "satellite_clock_bias_drift_mps",
+            "sagnac_effect_m",
         ]
-    ] = per_sat.apply(compute_sat_state, axis=1, args=(ephemerides,))
+    ] = per_sat.apply(compute_sat_state, axis=1, args=(ephemerides, receiver_ecef_position_m,))
 
     return per_sat
 

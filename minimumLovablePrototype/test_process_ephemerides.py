@@ -3,7 +3,6 @@ import pandas as pd
 import numpy as np
 from pathlib import Path
 import process_ephemerides as eph
-import georinex
 import helpers
 import converters
 import constants
@@ -165,7 +164,7 @@ def test_beidou_position_and_velocity_sanity_check(input_for_test):
     )
 
     # Compare to semi-major-axis:
-    assert abs(np.linalg.norm(p_ecef) - (6.493410568237e03) ** 2) < 1e6
+    assert abs(np.linalg.norm(p_ecef) - 6.493410568237e03 ** 2) < 1e6
     # C01 is on a geosynchronous orbit, so its velocity in ECEF should be smaller than those on MEO orbits
     assert abs(np.linalg.norm(v_ecef) - 2 * 1e2) < 1e1
 
@@ -613,14 +612,13 @@ def test_compute_bds_group_delay_rnx3(input_for_test):
     assert np.isnan(tgd_c1p_s)
     assert np.isnan(tgd_c5x_s)
 
+
 def test_sagnac_effect():
     # load validation data
     path_to_validation_file = helpers.prx_root().joinpath(
             f"tools/validation_data/sagnac_effect.txt"
         )
     # read satellite position in header line 2
-    # with open(path_to_validation_file) as validation_file:
-    #     header_second_line = validation_file.readlines()[1:2]
     sat_pos = np.array((28400000, 0, 0))
 
     # read data
@@ -640,37 +638,3 @@ def test_sagnac_effect():
     # millimeter accuracy should be sufficient
     tolerance = 1e-3
     assert(np.max(np.abs(sagnac_effect_computed - sagnac_effect_reference)) < tolerance)
-
-
-def test_sagnac_effect_on_rinex_data(input_for_test):
-    # parse rinex3 nav file
-    rinex_3_navigation_file = converters.anything_to_rinex_3(
-        input_for_test["all_constellations_nav_file"]
-    )
-    eph_rnx3_df = eph.convert_rnx3_nav_file_to_dataframe(rinex_3_navigation_file)
-
-    # retrieve receiver position from rinex3 obs file header
-    rinex_3_observation_file = converters.anything_to_rinex_3(
-        input_for_test["all_constellations_obs_file"]
-    )
-    obs_header = georinex.rinexheader(rinex_3_observation_file)
-    receiver_ecef_position_m = np.fromstring(obs_header["APPROX POSITION XYZ"], sep=" ")
-
-    # compute satellite position for a satellite and epochs
-    sv = "G01"
-    gpst_week = 2190
-    gpst_tow = 523800
-
-    # Compute broadcast satellite position
-    # Select right ephemeris
-    t_gpst_for_which_to_compute_position = pd.Timedelta(
-        gpst_week * constants.cSecondsPerWeek + gpst_tow, "seconds"
-    )
-    sat_ecef_position_m, _, _, _ = eph.compute_satellite_state(
-        eph_rnx3_df, sv, t_gpst_for_which_to_compute_position
-    )
-
-    # compute sagnac effect
-    eph.compute_sagnac_effect(sat_ecef_position_m, receiver_ecef_position_m)
-
-    assert(False)
