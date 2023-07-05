@@ -87,10 +87,10 @@ def build_records(rinex_3_obs_file, rinex_3_ephemerides_file,
                   receiver_ecef_position_m=np.full(shape=(3,), fill_value=np.nan)):
     check_assumptions(rinex_3_obs_file, rinex_3_ephemerides_file)
     obs = parse_rinex.load(rinex_3_obs_file, use_caching=True)
-    obs_header = georinex.rinexheader(rinex_3_obs_file)
 
     # if receiver_ecef_position_m has not been initialized, get it from the RNX OBS header
     if np.isnan(receiver_ecef_position_m).any():
+        obs_header = georinex.rinexheader(rinex_3_obs_file)
         receiver_ecef_position_m = np.fromstring(obs_header["APPROX POSITION XYZ"], sep=" ")
 
     # Flatten the xarray DataSet into a pandas DataFrame:
