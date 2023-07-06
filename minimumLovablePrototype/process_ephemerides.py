@@ -12,7 +12,7 @@ log = helpers.get_logger(__name__)
 
 def convert_rnx3_nav_file_to_dataframe(path):
     # parse RNX3 NAV file using georinex module
-    nav_ds = parse_rinex.load(path, use_caching=True)
+    nav_ds = parse_rinex.load(path)
     nav_df = convert_nav_dataset_to_dataframe(nav_ds)
     return nav_df
 
@@ -65,13 +65,13 @@ def compute_glonass_pv(sat_ephemeris: pd.DataFrame, t_system_time: pd.Timedelta)
 
     assert t_system_time >= t, (
         f"Time for which orbit is to be computed {t_system_time} is before "
-        f"ephemeris reference time {t}, should we be we propagating GLONASS orbits backwards in time?"
+        f"ephemeris reference time {t}, should we be propagating GLONASS orbits backwards in time?"
     )
-    while abs((t - t_system_time).delta) > 1:
+    while abs(helpers.timedelta_2_nanoseconds(t - t_system_time)) > 1:
         max_time_step_s = 60
         h = min(
             max_time_step_s,
-            float((t_system_time - t).delta) / constants.cNanoSecondsPerSecond,
+            float(helpers.timedelta_2_nanoseconds(t_system_time - t)) / constants.cNanoSecondsPerSecond,
         )
         k1 = glonass_xdot(x, a)
         k2 = glonass_xdot(x + k1 * h / 2, a)
