@@ -48,7 +48,7 @@ def write_json_text_sequence_file(
             record = {"time_of_reception_in_receiver_time": epoch.strftime("%Y:%m:%dT%H:%M:%S.%f"), "satellites": {}}
             for idx, row in epoch_obs.iterrows():
                 sat = row["satellite"]
-                row = epoch_obs.iloc[[idx]].dropna(axis='columns')
+                row = row.dropna().to_frame().transpose()
                 record["satellites"][sat] = {"observations": {}}
                 for col in row.columns:
                     if len(col) == 3:
@@ -104,7 +104,7 @@ def check_assumptions(rinex_3_obs_file, rinex_3_nav_file):
 
 def build_records(rinex_3_obs_file, rinex_3_ephemerides_file):
     check_assumptions(rinex_3_obs_file, rinex_3_ephemerides_file)
-    obs = parse_rinex.load(rinex_3_obs_file, use_caching=True)
+    obs = parse_rinex.load(rinex_3_obs_file)
 
     # Flatten the xarray DataSet into a pandas DataFrame:
     log.info("Converting Dataset into flat Dataframe of observations")

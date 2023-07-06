@@ -63,8 +63,9 @@ def timestamp_2_timedelta(timestamp: pd.Timestamp, time_scale):
 
 def timedelta_2_weeks_and_seconds(time_delta: pd.Timedelta):
     assert type(time_delta) == pd.Timedelta, "time_delta must be of type pd.Timedelta"
-    weeks = math.floor(time_delta.delta / constants.cNanoSecondsPerWeek)
-    week_nanoseconds = time_delta.delta - weeks * constants.cNanoSecondsPerWeek
+    in_nanoseconds = time_delta / pd.Timedelta(1, "ns")
+    weeks = math.floor(in_nanoseconds / constants.cNanoSecondsPerWeek)
+    week_nanoseconds = in_nanoseconds - weeks * constants.cNanoSecondsPerWeek
     return weeks, np.float64(week_nanoseconds) / constants.cNanoSecondsPerSecond
 
 
@@ -72,9 +73,14 @@ def timedelta_2_seconds(time_delta: pd.Timedelta):
     assert type(time_delta) == pd.Timedelta, "time_delta must be of type pd.Timedelta"
     integer_seconds = np.float64(round(time_delta.total_seconds()))
     fractional_seconds = np.float64(
-        time_delta.delta - integer_seconds * constants.cNanoSecondsPerSecond
+        timedelta_2_nanoseconds(time_delta) - integer_seconds * constants.cNanoSecondsPerSecond
     )
     return integer_seconds + fractional_seconds
+
+
+def timedelta_2_nanoseconds(time_delta: pd.Timedelta):
+    assert type(time_delta) == pd.Timedelta, "time_delta must be of type pd.Timedelta"
+    return np.float64(time_delta / pd.Timedelta(1, "ns"))
 
 
 def rinex_header_time_string_2_timestamp_ns(time_string: str) -> pd.Timestamp:
