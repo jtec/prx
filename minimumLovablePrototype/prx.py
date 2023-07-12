@@ -38,30 +38,39 @@ def write_json_text_sequence_file(
         f"{str(file_name_without_extension)}.{constants.cPrxJsonTextSequenceFileExtension}"
     )
     with open(output_file, "w", encoding="utf-8") as file:
-        file.write(
-            "\u241E" + json.dumps(prx_header, ensure_ascii=False) + "\n"
-        )
-        drop_columns = ["time_of_reception_in_receiver_time", "satellite", "time_of_emission_in_satellite_time"]
+        file.write("\u241E" + json.dumps(prx_header, ensure_ascii=False) + "\n")
+        drop_columns = [
+            "time_of_reception_in_receiver_time",
+            "satellite",
+            "time_of_emission_in_satellite_time",
+        ]
         for epoch in prx_records["time_of_reception_in_receiver_time"].unique():
             epoch = pd.Timestamp(epoch)
-            epoch_obs = prx_records[prx_records["time_of_reception_in_receiver_time"] == epoch]
-            record = {"time_of_reception_in_receiver_time": epoch.strftime("%Y:%m:%dT%H:%M:%S.%f"), "satellites": {}}
+            epoch_obs = prx_records[
+                prx_records["time_of_reception_in_receiver_time"] == epoch
+            ]
+            record = {
+                "time_of_reception_in_receiver_time": epoch.strftime(
+                    "%Y:%m:%dT%H:%M:%S.%f"
+                ),
+                "satellites": {},
+            }
             for idx, row in epoch_obs.iterrows():
                 sat = row["satellite"]
                 row = row.dropna().to_frame().transpose()
                 record["satellites"][sat] = {"observations": {}}
                 for col in row.columns:
                     if len(col) == 3:
-                        record["satellites"][sat]["observations"][col] = row[col].values[0]
+                        record["satellites"][sat]["observations"][col] = row[
+                            col
+                        ].values[0]
                         continue
                     if col in drop_columns:
                         continue
                     if type(row[col].values[0]) is np.ndarray:
                         row[col].values[0] = row[col].values[0].tolist()
                     record["satellites"][sat][col] = row[col].values[0]
-            file.write(
-                "\u241E" + json.dumps(record, ensure_ascii=False) + "\n"
-            )
+            file.write("\u241E" + json.dumps(record, ensure_ascii=False) + "\n")
     log.info(f"Generated JSON Text Sequence prx file: {output_file}")
 
 

@@ -71,7 +71,8 @@ def compute_glonass_pv(sat_ephemeris: pd.DataFrame, t_system_time: pd.Timedelta)
         max_time_step_s = 60
         h = min(
             max_time_step_s,
-            float(helpers.timedelta_2_nanoseconds(t_system_time - t)) / constants.cNanoSecondsPerSecond,
+            float(helpers.timedelta_2_nanoseconds(t_system_time - t))
+            / constants.cNanoSecondsPerSecond,
         )
         k1 = glonass_xdot(x, a)
         k2 = glonass_xdot(x + k1 * h / 2, a)

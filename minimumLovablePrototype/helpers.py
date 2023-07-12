@@ -73,7 +73,8 @@ def timedelta_2_seconds(time_delta: pd.Timedelta):
     assert type(time_delta) == pd.Timedelta, "time_delta must be of type pd.Timedelta"
     integer_seconds = np.float64(round(time_delta.total_seconds()))
     fractional_seconds = np.float64(
-        timedelta_2_nanoseconds(time_delta) - integer_seconds * constants.cNanoSecondsPerSecond
+        timedelta_2_nanoseconds(time_delta)
+        - integer_seconds * constants.cNanoSecondsPerSecond
     )
     return integer_seconds + fractional_seconds
 
