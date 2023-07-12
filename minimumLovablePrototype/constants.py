@@ -16,6 +16,9 @@ cNanoSecondsPerWeek = cSecondsPerWeek * cNanoSecondsPerSecond
 cHzPerMhz = 1e6
 cGpsIcdSpeedOfLight_mps = 2.99792458 * 1e8
 cPrxReferenceFrame = {"name": "IGS14", "epoch": "2005.001"}
+# Heuristic: demand micrometer precision in computations involving distances
+cPrxPrecision_m = 1e-6
+cMaxOrbitalSpeed_mps = 1e4
 
 cPrxJsonTextSequenceFileExtension = "jsonseq"
 cPrxCsvFileExtension = "csv"
