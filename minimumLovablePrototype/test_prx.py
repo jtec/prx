@@ -42,7 +42,7 @@ def input_for_test():
     assert test_file.parent.joinpath(ephemerides_file).exists()
 
     yield test_file
-    #shutil.rmtree(test_file.parent)
+    # shutil.rmtree(test_file.parent)
 
 
 def test_prx_command_line_call_with_jsonseq_output(input_for_test):

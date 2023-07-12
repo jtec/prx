@@ -23,6 +23,7 @@ cMaxOrbitalSpeed_mps = 1e4
 cPrxJsonTextSequenceFileExtension = "jsonseq"
 cPrxCsvFileExtension = "csv"
 
+
 # From RINEX Version 3.05, 1 December, 2020.
 def carrier_frequencies_hz():
     cf = defaultdict(dict)
