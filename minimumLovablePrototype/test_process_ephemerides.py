@@ -616,7 +616,7 @@ def test_compute_bds_group_delay_rnx3(input_for_test):
 def test_sagnac_effect():
     # load validation data
     path_to_validation_file = helpers.prx_root().joinpath(
-            f"tools/validation_data/sagnac_effect.txt"
+            f"tools/validation_data/sagnac_effect.csv"
         )
     # read satellite position in header line 2
     sat_pos = np.array((28400000, 0, 0))
