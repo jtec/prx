@@ -87,7 +87,7 @@ def test_compare_rnx3_gps_sat_pos_with_magnitude(input_for_test):
     t_gpst_for_which_to_compute_position = pd.Timedelta(
         gpst_week * constants.cSecondsPerWeek + gpst_tow, "seconds"
     )
-    p_ecef, v_ecef, _, _ = eph.compute_satellite_state(
+    p_ecef, v_ecef, _, _, _ = eph.compute_satellite_state(
         ephemerides, sv, t_gpst_for_which_to_compute_position
     )
 
@@ -123,7 +123,7 @@ def test_galileo_position_and_velocity_sanity_check(input_for_test):
         gst_week * constants.cSecondsPerWeek + gst_tow, "seconds"
     )
 
-    p_ecef, v_ecef, clock_offset, clock_offset_rate = eph.compute_satellite_state(
+    p_ecef, v_ecef, clock_offset, clock_offset_rate, _ = eph.compute_satellite_state(
         ephemerides, sv, t_orbit_gst_ns
     )
 
@@ -159,7 +159,7 @@ def test_beidou_position_and_velocity_sanity_check(input_for_test):
         gst_week * constants.cSecondsPerWeek + gst_tow, "seconds"
     )
 
-    p_ecef, v_ecef, clock_offset, clock_offset_rate = eph.compute_satellite_state(
+    p_ecef, v_ecef, clock_offset, clock_offset_rate, _ = eph.compute_satellite_state(
         ephemerides, sv, t_orbit_gst_ns
     )
 
@@ -193,7 +193,7 @@ def test_glonass_position_and_velocity_sanity_check(input_for_test):
     ) + pd.Timedelta(1, "seconds")
 
     # there we go:
-    p_ecef, v_ecef, _, _ = eph.compute_satellite_state(ephemerides, sv, t_orbit)
+    p_ecef, v_ecef, _, _, _ = eph.compute_satellite_state(ephemerides, sv, t_orbit)
 
     assert abs(np.linalg.norm(p_ecef) - 25 * 1e6) < 1e6
     assert abs(np.linalg.norm(v_ecef) - 3.5 * 1e3) < 1e2

@@ -121,13 +121,19 @@ def compute_satellite_state(
         position_system_frame_m, velocity_system_frame_mps = compute_kepler_pv(
             sat_ephemeris, t_system_time_ns
         )
+        relativistic_clock_effect_m = compute_relativistic_clock_effect(
+            position_system_frame_m, velocity_system_frame_mps
+        )
     elif constellation(satellite_id) == "R":
         position_system_frame_m, velocity_system_frame_mps = compute_glonass_pv(
             sat_ephemeris, t_system_time_ns
         )
+        # relativistic clock effect are already taken into account in Glonass navigation message
+        relativistic_clock_effect_m = 0
     else:
         position_system_frame_m = np.full(3, np.nan)
         velocity_system_frame_mps = np.full(3, np.nan)
+        relativistic_clock_effect_m = np.nan
         # assert False, f"Constellation of {satellite_id} not supported"
 
     (
@@ -142,6 +148,7 @@ def compute_satellite_state(
         velocity_system_frame_mps,
         clock_offset_m,
         clock_offset_rate_mps,
+        relativistic_clock_effect_m,
     )
 
 
@@ -405,3 +412,19 @@ def compute_sagnac_effect(sat_pos_m, rx_pos_m):
     sagnac_effect_m = constants.cEarthRotationRate_radps / constants.cGpsIcdSpeedOfLight_mps \
                       * (sat_pos_m[0] * rx_pos_m[1] - sat_pos_m[1] * rx_pos_m[0])
     return sagnac_effect_m
+
+
+def compute_relativistic_clock_effect(
+        sat_pos_m: np.array(3,),
+        sat_vel_mps: np.array(3,)
+):
+    """
+    Reference:
+    GNSS Data Processing, Vol. I: Fundamentals and Algorithms. Equation (5.19)
+    """
+    relativistic_clock_effect_m = (
+            -2 * np.dot(sat_pos_m, sat_vel_mps) / constants.cGpsIcdSpeedOfLight_mps
+    )
+
+    return relativistic_clock_effect_m
+

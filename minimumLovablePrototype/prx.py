@@ -144,6 +144,7 @@ def build_records(rinex_3_obs_file, rinex_3_ephemerides_file,
             velocity_system_frame_mps,
             clock_offset_m,
             clock_offset_rate_mps,
+            relativistic_clock_effect_m,
         ) = eph.compute_satellite_state(
             ephemerides,
             row["satellite"],
@@ -161,6 +162,7 @@ def build_records(rinex_3_obs_file, rinex_3_ephemerides_file,
                 clock_offset_m,
                 clock_offset_rate_mps,
                 sagnac_effect_m,
+                relativistic_clock_effect_m,
             ]
         )
 
@@ -173,6 +175,7 @@ def build_records(rinex_3_obs_file, rinex_3_ephemerides_file,
             "satellite_clock_bias_m",
             "satellite_clock_bias_drift_mps",
             "sagnac_effect_m",
+            "relativistic_clock_effect_m",
         ]
     ] = per_sat.apply(compute_sat_state, axis=1, args=(ephemerides, receiver_ecef_position_m,))
 
