@@ -1,5 +1,6 @@
 import argparse
 import json
+import csv
 from pathlib import Path
 import georinex
 import pandas as pd
@@ -51,8 +52,14 @@ def write_csv_file(
     output_file = Path(
         f"{str(file_name_without_extension)}.{constants.cPrxCsvFileExtension}"
     )
+    # write header
     with open(output_file, "w", encoding="utf-8") as file:
-        file.write(f"Empty so far." + "\n")
+        for key in prx_header.keys():
+            file.write("# %s,%s\n" % (key, prx_header[key]))
+    # write records
+    prx_records.to_csv(path_or_buf=output_file,
+                       index=False,
+                       mode="a",)
     log.info(f"Generated CSV prx file: {file}")
 
 
