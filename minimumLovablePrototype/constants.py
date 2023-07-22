@@ -14,6 +14,7 @@ cSecondsPerWeek = 7 * cSecondsPerDay
 cNanoSecondsPerWeek = cSecondsPerWeek * cNanoSecondsPerSecond
 cHzPerMhz = 1e6
 cGpsIcdSpeedOfLight_mps = 2.99792458 * 1e8
+cEarthRotationRate_radps = 7.2921151467e-5
 cPrxReferenceFrame = {"name": "IGS14", "epoch": "2005.001"}
 # Heuristic: demand micrometer precision in computations involving distances
 cPrxPrecision_m = 1e-6
