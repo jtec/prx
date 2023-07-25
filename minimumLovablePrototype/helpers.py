@@ -7,6 +7,8 @@ import pandas as pd
 import glob
 import subprocess
 import math
+import cProfile
+
 
 logging.basicConfig(
     format="%(asctime)s,%(msecs)03d %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s",
@@ -116,3 +118,13 @@ def repair_with_gfzrnx(file):
 
 def deg_2_rad(angle_deg):
     return angle_deg * np.pi / 180
+
+
+def profile_this(func):
+    def wrapper(*args, **kwargs):
+        datafn = func.__name__ + ".profile"
+        prof = cProfile.Profile()
+        retval = prof.runcall(func, *args, **kwargs)
+        prof.dump_stats(datafn)
+        return retval
+    return wrapper

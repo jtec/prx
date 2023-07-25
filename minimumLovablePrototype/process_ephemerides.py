@@ -1,4 +1,6 @@
+import functools
 import math
+from pathlib import Path
 
 from gnss_lib_py.utils.sim_gnss import find_sat
 import pandas as pd
@@ -6,8 +8,12 @@ import numpy as np
 import parse_rinex
 import constants
 import helpers
+import joblib
+memory = joblib.Memory(Path(__file__).parent.joinpath("afterburner"), verbose=0)
+
 
 log = helpers.get_logger(__name__)
+
 
 
 def convert_rnx3_nav_file_to_dataframe(path):
@@ -55,7 +61,7 @@ def glonass_xdot(x, a):
 
 
 def compute_glonass_pv(sat_ephemeris: pd.DataFrame, t_system_time: pd.Timedelta):
-    """Compute GLONASS satellite position and velocity from ephemerides"""
+    """Compute GLONASS satellite position and velocity from ephemeris"""
     toe = sat_ephemeris["ephemeris_reference_time_system_time"].values[0]
     p = sat_ephemeris[["X", "Y", "Z"]].values.flatten()
     v = sat_ephemeris[["dX", "dY", "dZ"]].values.flatten()
@@ -145,6 +151,7 @@ def compute_satellite_state(
     )
 
 
+@memory.cache
 def convert_nav_dataset_to_dataframe(nav_ds):
     """convert ephemerides from xarray.Dataset to pandas.DataFrame, as required by gnss_lib_py"""
     nav_df = nav_ds.to_dataframe()
@@ -164,8 +171,7 @@ def convert_nav_dataset_to_dataframe(nav_ds):
         lambda row: helpers.timestamp_2_timedelta(row["time"], row["time_scale"]),
         axis=1,
     )
-
-    def extract_toe(row):
+    for c_group in nav_df.groupby("constellation"):
         week_field = {
             "GPST": "GPSWeek",
             "GST": "GALWeek",
@@ -174,13 +180,13 @@ def convert_nav_dataset_to_dataframe(nav_ds):
             "QZSST": "GPSWeek",
             "IRNSST": "GPSWeek",
         }
-        if row["time_scale"] != "GLONASST":
+        if c_group["time_scale"] != "GLONASST":
             full_seconds = (
                 row[week_field[row["time_scale"]]] * constants.cSecondsPerWeek
                 + row["Toe"]
             )
             return pd.Timedelta(full_seconds, "seconds")
-        if row["time_scale"] == "GLONASST":
+        else:
             return pd.Timedelta(row["time"])
 
     nav_df["ephemeris_reference_time_system_time"] = nav_df.apply(extract_toe, axis=1)
