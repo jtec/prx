@@ -1,5 +1,6 @@
 import argparse
 import json
+from methodtools import lru_cache
 from pathlib import Path
 import georinex
 import pandas as pd
@@ -13,6 +14,8 @@ import helpers
 import constants
 import aux_file_discovery as aux
 import process_ephemerides as eph
+import joblib
+memory = joblib.Memory(Path(__file__).parent.joinpath("afterburner"), verbose=0)
 
 log = helpers.get_logger(__name__)
 
@@ -197,6 +200,7 @@ def build_records(rinex_3_obs_file, rinex_3_ephemerides_file):
     return per_sat
 
 
+@helpers.profile_this
 def process(observation_file_path: Path, output_format="jsonseq"):
     # We expect a Path, but might get a string here:
     observation_file_path = Path(observation_file_path)

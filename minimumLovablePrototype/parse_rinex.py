@@ -21,7 +21,6 @@ def load(rinex_file: Path):
         parsed = georinex.load(rinex_file)
         return parsed
 
-    log.info(f"Parsing {rinex_file} ...")
     t0 = pd.Timestamp.now()
     file_content_hash = helpers.md5_of_file_content(rinex_file)
     hash_time = pd.Timestamp.now() - t0
