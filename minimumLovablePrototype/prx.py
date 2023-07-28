@@ -14,6 +14,7 @@ import helpers
 import constants
 import aux_file_discovery as aux
 import process_ephemerides as eph
+import atmospheric_corrections as atmo
 
 log = helpers.get_logger(__name__)
 
@@ -187,6 +188,51 @@ def build_records(rinex_3_obs_file, rinex_3_ephemerides_file,
     ] = per_sat.apply(compute_sat_state, axis=1, args=(ephemerides, receiver_ecef_position_m,))
 
     return per_sat
+
+def convert_to_per_obs(row, ephemerides, code_phase_columns, nav_header):
+    time_of_reception_in_receiver_time = row["time_reception_in_receiver_time"]
+    constellation = row["satellite"][0]
+    prn = row["satellite"][1:]
+    for data_var in code_phase_columns:
+        if not np.isnan(row[data_var]):
+            observation_code = data_var[1:]
+            code_observation_m = row["C" + observation_code]
+            doppler_observation_hz = row["D" + observation_code]
+            carrier_observation_m = row["L" + observation_code] * \
+                                    constants.cGpsIcdSpeedOfLight_mps / \
+                                    constants.carrier_frequencies_hz()[constellation]["L" + observation_code[0]]
+            cn0_dbhz = row["S" + observation_code]
+            satellite_position_m = row["satellite_position_m"]
+            satellite_velocity_mps = row["satellite_velocity_mps"]
+            satellite_clock_bias_m = row["satellite_clock_bias_m"]
+            satellite_clock_drift_mps = row["satellite_clock_drift_mps"]
+            sagnac_effect_m = row["sagnac_effect_m"]
+            relativistic_clock_effect_m = row["relativistic_clock_effect_m"]
+            group_delay_m = eph.compute_total_group_delay_rnx3(
+                ephemerides,
+                row["time_of_emission_in_satellite_time"],
+                row["satellite"],
+                data_var,
+            )
+            #TODO: compute elevation and azimuth of satellite
+            #TODO: convert user position to geodetic coordinates
+            iono_delay_m = atmo.compute_klobuchar_l1_correction(
+                time_of_reception_in_receiver_time,
+                nav_header["IONOSPHERIC CORR"]["GPSA"],
+                nav_header["IONOSPHERIC CORR"]["GPSB"],
+                elevation_rad,
+                azimuth_rad,
+                lat_user_rad,
+                lon_user_rad,)
+            tropo_delay_m = np.nan
+            approximate_antenna_position_m = np.full(3, np.nan)
+    return pd.Series(
+            [
+            ]
+        )
+
+nav_header = georinex.rinexheader(rinex_3_ephemerides_file)
+per_epoch_per_sat_per_obs = per_sat.apply(convert_to_per_obs, axis=1)
 
 
 def process(observation_file_path: Path, output_format="jsonseq"):
