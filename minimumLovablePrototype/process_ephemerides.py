@@ -386,6 +386,7 @@ def compute_total_group_delay_rnx3(
                     group_delay = np.nan
                     gamma = np.nan
         case _:
+            group_delay = np.nan
             gamma = np.nan
 
     if np.isnan(gamma):
