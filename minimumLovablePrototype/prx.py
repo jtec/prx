@@ -187,7 +187,7 @@ def build_records(rinex_3_obs_file, rinex_3_ephemerides_file,
         ]
     ] = per_sat.apply(compute_sat_state, axis=1, args=(ephemerides, receiver_ecef_position_m,))
 
-    def convert_to_per_obs(row, ephemerides, code_phase_columns):  # , nav_header):
+    def convert_to_per_obs(row, ephemerides, code_phase_columns, receiver_ecef_position_m):  # , nav_header):
         time_of_reception_in_receiver_time = row["time_of_reception_in_receiver_time"]
         constellation = row["satellite"][0]
         prn = row["satellite"][1:]
@@ -287,7 +287,7 @@ def build_records(rinex_3_obs_file, rinex_3_ephemerides_file,
         per_epoch_per_sat_per_obs = pd.concat(
             [
                 per_epoch_per_sat_per_obs,
-                convert_to_per_obs(per_sat.iloc[index],ephemerides, code_phase_columns),
+                convert_to_per_obs(per_sat.iloc[index], ephemerides, code_phase_columns, receiver_ecef_position_m,),
             ],
             ignore_index=True
         )

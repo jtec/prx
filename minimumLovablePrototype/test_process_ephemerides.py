@@ -638,3 +638,31 @@ def test_sagnac_effect():
     # millimeter accuracy should be sufficient
     tolerance = 1e-3
     assert(np.max(np.abs(sagnac_effect_computed - sagnac_effect_reference)) < tolerance)
+
+
+def test_ecef_to_geodetic():
+    """Generated with chatGPT"""
+    ecef_coords = [6378137.0, 0.0, 0.0]
+    expected_geodetic = [0.0, 0.0, 0.0]
+    computed_geodetic = eph.ecef_2_geodetic(ecef_coords)
+    assert expected_geodetic == computed_geodetic
+
+    # EDGE CASE NOT CONSIDERED - north Pole
+    # ecef_coords = [0.0, 0.0, 6356752.3142]  # X, Y, Z coordinates in meters
+    # expected_geodetic = [np.pi / 2, 0.0, 0.0]
+    # computed_geodetic = eph.ecef_2_geodetic(ecef_coords)
+    # assert expected_geodetic == computed_geodetic
+
+    ecef_coords = [0.0, 6378137.0, 0.0]
+    expected_geodetic = [np.deg2rad(0.0), np.deg2rad(90), 0.0]
+    computed_geodetic = eph.ecef_2_geodetic(ecef_coords)
+    assert expected_geodetic == computed_geodetic
+
+    ecef_coords = [4624518, 116590, 4376497]  # Toulouse
+    expected_geodetic = [np.deg2rad(43.6047), np.deg2rad(1.4442), 152]
+    computed_geodetic = eph.ecef_2_geodetic(ecef_coords)
+    tolerance_rad = 1e-6
+    tolerance_alt = 1e-1
+    assert (np.array(expected_geodetic[:1]) - np.array(computed_geodetic[:1]) < tolerance_rad).all()
+    assert expected_geodetic[2] - computed_geodetic[2] < tolerance_alt
+
