@@ -18,6 +18,7 @@ cEarthRotationRate_radps = 7.2921151467e-5
 cWgs84EarthFlatteningFactor = 1/298.257223563
 cWgs84EarthSemiMajorAxis_m = 6378137.0
 cWgs84EarthEccentricity = np.sqrt(2 * cWgs84EarthFlatteningFactor - cWgs84EarthFlatteningFactor**2 )
+
 cPrxReferenceFrame = {"name": "IGS14", "epoch": "2005.001"}
 # Heuristic: demand micrometer precision in computations involving distances
 cPrxPrecision_m = 1e-6

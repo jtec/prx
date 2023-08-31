@@ -416,8 +416,8 @@ def compute_sagnac_effect(sat_pos_m, rx_pos_m):
 
 
 def compute_relativistic_clock_effect(
-        sat_pos_m: np.array(3, ),
-        sat_vel_mps: np.array(3, )
+        sat_pos_m: np.array(3,),
+        sat_vel_mps: np.array(3,)
 ):
     """
     Reference:
@@ -428,7 +428,7 @@ def compute_relativistic_clock_effect(
     )
 
     return relativistic_clock_effect_m
-
+  
 
 def compute_satellite_elevation_and_azimuth(sat_pos_ecef, receiver_pos_ecef):
     """
@@ -463,3 +463,4 @@ def ecef_2_geodetic(pos_ecef):
         delta_h_m = np.abs(altitude_m - altitude_previous)
         latitude_rad = np.arctan2(pos_ecef[2], p * (1 - n * constants.cWgs84EarthEccentricity ** 2 / (n + altitude_m)))
     return [latitude_rad, longitude_rad, altitude_m]
+
