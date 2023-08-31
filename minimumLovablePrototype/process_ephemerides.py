@@ -436,7 +436,7 @@ def compute_satellite_elevation_and_azimuth(sat_pos_ecef, receiver_pos_ecef):
     GNSS Data Processing, Vol. I: Fundamentals and Algorithms. Equations (B.9),(B.13),(B.14)
     """
     rho = (sat_pos_ecef - receiver_pos_ecef) / np.linalg.norm(sat_pos_ecef - receiver_pos_ecef)
-    lat, lon = ecef_2_geodetic(receiver_pos_ecef)
+    [lat, lon, __] = ecef_2_geodetic(receiver_pos_ecef)
     unit_e = [-np.sin(lon), np.cos(lon), 0]
     unit_n = [-np.cos(lon) * np.sin(lat), -np.sin(lon) * np.sin(lat), np.cos(lat)]
     unit_u = [np.cos(lon) * np.cos(lat), np.sin(lon) * np.cos(lat), np.sin(lat)]
