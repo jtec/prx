@@ -13,6 +13,7 @@ cSecondsPerMinute = 60
 cSecondsPerHour = 60 * cSecondsPerMinute
 cSecondsPerWeek = 7 * cSecondsPerDay
 cNanoSecondsPerWeek = cSecondsPerWeek * cNanoSecondsPerSecond
+cMetersPerKilometer = 1e3
 cHzPerMhz = 1e6
 cGpsIcdSpeedOfLight_mps = 2.99792458 * 1e8
 cPrxReferenceFrame = {"name": "IGS14", "epoch": "2005.001"}

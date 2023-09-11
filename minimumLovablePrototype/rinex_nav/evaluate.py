@@ -10,8 +10,8 @@ from pathlib import Path
 import joblib
 from gnss_lib_py.utils.sim_gnss import find_sat
 
-import helpers
-import constants
+from . import helpers
+from . import constants
 
 memory = joblib.Memory(Path(__file__).parent.joinpath("diskcache"), verbose=0)
 log = helpers.get_logger(__name__)
@@ -74,7 +74,7 @@ constellation_2_ephemeris_validity_interval = {
     "S": [pd.Timedelta(-2, "hours"), pd.Timedelta(2, "hours")],
     "E": [pd.Timedelta(-2, "hours"), pd.Timedelta(2, "hours")],
     "C": [pd.Timedelta(-1, "hours"), pd.Timedelta(1, "hours")],
-    "R": [pd.Timedelta(0, "hours"), pd.Timedelta(0.25, "hours")],
+    "R": [pd.Timedelta(0, "hours"), pd.Timedelta(2*0.5, "hours")],
     "J": [pd.Timedelta(-1, "hours"), pd.Timedelta(1, "hours")],
     "I": [pd.Timedelta(-1, "hours"), pd.Timedelta(1, "hours")],
 }
@@ -88,6 +88,12 @@ system_time_scale_2_rinex_utc_epoch = {
     "QZSST": constants.cGpstUtcEpoch,
     "IRNSST": constants.cGpstUtcEpoch,
 }
+
+
+def time_scale_integer_second_offset(time_scale_a, time_scale_b):
+    offset = system_time_scale_2_rinex_utc_epoch[time_scale_a] - system_time_scale_2_rinex_utc_epoch[time_scale_b]
+    offset = offset.round("s")
+    return offset
 
 
 def satellite_id_2_system_time_scale(satellite_id):
@@ -146,23 +152,138 @@ def compute_glonass_pv(sat_ephemeris: pd.DataFrame, t_system_time: pd.Timedelta)
     return x[0:3], x[3:6]
 
 
-def compute_kepler_pv(sat_ephemeris: pd.DataFrame, t_system_time: pd.Timedelta):
-    system_time_week, system_time_week_second = helpers.timedelta_2_weeks_and_seconds(
-        t_system_time
-    )
-    # use gnss_lib_py as a stopgap until we have our own ephemeris computation. Pretend that this is a GPS ephemeris:
-    satellite = sat_ephemeris["sv"].iloc[0]
-    if constellation(satellite) == "E":
-        sat_ephemeris["GPSWeek"] = sat_ephemeris["GALWeek"]
-    if constellation(satellite) == "C":
-        sat_ephemeris["GPSWeek"] = sat_ephemeris["BDTWeek"]
+# Adapted from gnss_lib_py's _compute_eccentric_anomoly()
+def eccentric_anomaly(M, e, tol=1e-5, max_iter=10):
+    E = M
+    for _ in np.arange(0, max_iter):
+        f    = M - E + e * np.sin(E)
+        dfdE = e*np.cos(E) - 1.
+        dE   = -f / dfdE
+        E    = E + dE
 
-    sv_posvel = find_sat(
-        sat_ephemeris, np.array([float(system_time_week_second)]), system_time_week
-    )
-    position_system_frame_m = sv_posvel[["x", "y", "z"]].values.flatten()
-    velocity_system_frame_mps = sv_posvel[["vx", "vy", "vz"]].values.flatten()
-    return position_system_frame_m, velocity_system_frame_mps
+    if any(dE.iloc[:] > tol):
+        print("Eccentric Anomaly may not have converged: dE = ", dE)
+
+    return E
+
+
+# Adapted from gnss_lib_py's find_sat()
+def compute_kepler_orbit_position_and_velocity(ephem):
+    # Extract parameters
+    c_is = ephem['C_is']
+    c_ic = ephem['C_ic']
+    c_rs = ephem['C_rs']
+    c_rc = ephem['C_rc']
+    c_uc = ephem['C_uc']
+    c_us = ephem['C_us']
+    M_0 = ephem['M_0']
+    dN = ephem['deltaN']
+
+    ecc = ephem['e']  # eccentricity
+    omega = ephem['omega']  # argument of perigee
+    omega_0 = ephem['Omega_0']
+    sqrt_sma = ephem['sqrtA']  # sqrt of semi-major axis
+    sma = sqrt_sma ** 2  # semi-major axis
+
+    sqrt_mu_A = np.sqrt(constants.cGravitationalConstantEarthOrbit) * sqrt_sma ** -3  # mean angular motion
+
+    sv_posvel = pd.DataFrame()
+    sv_posvel.loc[:, 'sv'] = ephem.index
+    sv_posvel.set_index('sv', inplace=True)
+
+    dt = ephem['query_time_wrt_ephemeris_reference_time_s']
+
+    # Calculate the mean anomaly with corrections
+    M_corr = dN * dt
+    M = M_0 + (sqrt_mu_A * dt) + M_corr
+
+    # Compute Eccentric Anomaly
+    E = eccentric_anomaly(M, ecc, tol=1e-5)
+
+    cos_E = np.cos(E)
+    sin_E = np.sin(E)
+    e_cos_E = (1 - ecc * cos_E)
+
+    # Calculate the true anomaly from the eccentric anomaly
+    sin_nu = np.sqrt(1 - ecc ** 2) * (sin_E / e_cos_E)
+    cos_nu = (cos_E - ecc) / e_cos_E
+    nu = np.arctan2(sin_nu, cos_nu)
+
+    # Calculate the argument of latitude iteratively
+    phi_0 = nu + omega
+    phi = phi_0
+    for i in range(5):
+        cos_to_phi = np.cos(2. * phi)
+        sin_to_phi = np.sin(2. * phi)
+        phi_corr = c_uc * cos_to_phi + c_us * sin_to_phi
+        phi = phi_0 + phi_corr
+
+    # Calculate the longitude of ascending node with correction
+    omega_corr = ephem['OmegaDot'] * dt
+
+    # Also correct for the rotation since the beginning of the system time scale week for
+    # which the Omega0 is defined.
+    # TODO Is this valid for all constellations?
+    week_second = ephem['query_time_isagpst'].apply(lambda t: helpers.timedelta_2_weeks_and_seconds(t)[1])
+    omega = omega_0 - (constants.cSiderealRotationRateEarthRadPerSecond * (week_second)) + omega_corr
+
+    # Calculate orbital radius with correction
+    r_corr = c_rc * cos_to_phi + c_rs * sin_to_phi
+    r = sma * e_cos_E + r_corr
+
+    ############################################
+    ######  Lines added for velocity (1)  ######
+    ############################################
+    dE = (sqrt_mu_A + dN) / e_cos_E
+    dphi = np.sqrt(1 - ecc ** 2) * dE / e_cos_E
+    # Changed from the paper
+    dr = (sma * ecc * dE * sin_E) + 2 * (c_rs * cos_to_phi - c_rc * sin_to_phi) * dphi
+
+    # Calculate the inclination with correction
+    i_corr = c_ic * cos_to_phi + c_is * sin_to_phi + ephem['IDOT'] * dt
+    i = ephem['i_0'] + i_corr
+
+    ############################################
+    ######  Lines added for velocity (2)  ######
+    ############################################
+    di = 2 * (c_is * cos_to_phi - c_ic * sin_to_phi) * dphi + ephem['IDOT']
+
+    # Find the position in the orbital plane
+    xp = r * np.cos(phi)
+    yp = r * np.sin(phi)
+
+    ############################################
+    ######  Lines added for velocity (3)  ######
+    ############################################
+    du = (1 + 2 * (c_us * cos_to_phi - c_uc * sin_to_phi)) * dphi
+    dxp = dr * np.cos(phi) - r * np.sin(phi) * du
+    dyp = dr * np.sin(phi) + r * np.cos(phi) * du
+    # Find satellite position in ECEF coordinates
+    cos_omega = np.cos(omega)
+    sin_omega = np.sin(omega)
+    cos_i = np.cos(i)
+    sin_i = np.sin(i)
+
+    sv_posvel.loc[:, 'x'] = xp * cos_omega - yp * cos_i * sin_omega
+    sv_posvel.loc[:, 'y'] = xp * sin_omega + yp * cos_i * cos_omega
+    sv_posvel.loc[:, 'z'] = yp * sin_i
+
+    ############################################
+    ######  Lines added for velocity (4)  ######
+    ############################################
+    omega_dot = ephem['OmegaDot'] - constants.cSiderealRotationRateEarthRadPerSecond
+    sv_posvel.loc[:, 'vx'] = (dxp * cos_omega
+                              - dyp * cos_i * sin_omega
+                              + yp * sin_omega * sin_i * di
+                              - (xp * sin_omega + yp * cos_i * cos_omega) * omega_dot)
+
+    sv_posvel.loc[:, 'vy'] = (dxp * sin_omega
+                              + dyp * cos_i * cos_omega
+                              - yp * sin_i * cos_omega * di
+                              + (xp * cos_omega - (yp * cos_i * sin_omega)) * omega_dot)
+
+    sv_posvel.loc[:, 'vz'] = dyp * sin_i + yp * cos_i * di
+    return sv_posvel
 
 
 def constellation(satellite_id: str):
@@ -172,44 +293,9 @@ def constellation(satellite_id: str):
     return satellite_id[0]
 
 
-def compute_satellite_state(
-    ephemerides: pd.DataFrame, satellite_id: str, t_system_time_ns: pd.Timedelta
-):
-    sat_ephemeris = select_nav_ephemeris(ephemerides, satellite_id, t_system_time_ns)
-    if (
-        constellation(satellite_id) == "G"
-        or constellation(satellite_id) == "E"
-        or constellation(satellite_id) == "C"
-    ):
-        position_system_frame_m, velocity_system_frame_mps = compute_kepler_pv(
-            sat_ephemeris, t_system_time_ns
-        )
-    elif constellation(satellite_id) == "R":
-        position_system_frame_m, velocity_system_frame_mps = compute_glonass_pv(
-            sat_ephemeris, t_system_time_ns
-        )
-    else:
-        position_system_frame_m = np.full(3, np.nan)
-        velocity_system_frame_mps = np.full(3, np.nan)
-        # assert False, f"Constellation of {satellite_id} not supported"
-
-    (
-        clock_offset_m,
-        clock_offset_rate_mps,
-    ) = compute_satellite_clock_offset_and_clock_offset_rate(
-        ephemerides, satellite_id, t_system_time_ns
-    )
-    return (
-        position_system_frame_m,
-        velocity_system_frame_mps,
-        clock_offset_m,
-        clock_offset_rate_mps,
-    )
-
-
 @memory.cache
 def convert_nav_dataset_to_dataframe(nav_ds):
-    """convert ephemerides from xarray.Dataset to pandas.DataFrame, as required by gnss_lib_py"""
+    """convert ephemerides from xarray.Dataset to pandas.DataFrame"""
     df = nav_ds.to_dataframe()
     # Drop ephemerides for which all parameters are NaN, as we cannot compute anything from those
     df.dropna(how="all", inplace=True)
@@ -233,14 +319,22 @@ def convert_nav_dataset_to_dataframe(nav_ds):
         }
         group_time_scale = group["time_scale"].iloc[0]
         group_constellation = group["constellation"].iloc[0]
-        if group_time_scale != "GLONASST":
+        if group_time_scale not in ["GLONASST", "SBAST"]:
             full_seconds = group[week_field[group_time_scale]] * constants.cSecondsPerWeek + group["Toe"]
             group["ephemeris_reference_time_system_time"] = pd.to_timedelta(full_seconds, unit="seconds")
         else:
+            # For SBAS and GLONASS there are no separate ephemeris reference time fields
             group["ephemeris_reference_time_system_time"] = group["time"] - constants.cArbitraryGlonassUtcEpoch
+            # The first derivative of the clock offset is in a different field for SBAS and GLONASS
+            group["SVclockDrift"] = group["SVrelFreqBias"]
+            # And the second derivative is zero, i.e. the constellation uses a fist-order clock model
+            group["SVclockDriftRate"] = 0
+        group["ephemeris_reference_time_isagpst"] = group["ephemeris_reference_time_system_time"] + time_scale_integer_second_offset(group_time_scale, "GPST")
         group["clock_offset_reference_time_system_time"] = group["time"] - system_time_scale_2_rinex_utc_epoch[group_time_scale]
-        group["validity_start"] = group["ephemeris_reference_time_system_time"] + constellation_2_ephemeris_validity_interval[group_constellation][0]
-        group["validity_end"] = group["ephemeris_reference_time_system_time"] + constellation_2_ephemeris_validity_interval[group_constellation][1]
+        group["clock_reference_time_isagpst"] = group["clock_offset_reference_time_system_time"] + time_scale_integer_second_offset(group_time_scale, "GPST")
+
+        group["validity_start"] = group["ephemeris_reference_time_isagpst"] + constellation_2_ephemeris_validity_interval[group_constellation][0]
+        group["validity_end"] = group["ephemeris_reference_time_isagpst"] + constellation_2_ephemeris_validity_interval[group_constellation][1]
         return group
     df = df.groupby("constellation").apply(compute_ephemeris_and_clock_offset_reference_times)
     df.rename(
@@ -355,14 +449,29 @@ def compute_satellite_clock_offset_and_clock_offset_rate(
     )
 
 
+def to_isagpst(time: pd.Timedelta, timescale: str):
+    return time + time_scale_integer_second_offset(timescale, "GPST")
 
 
-def process(rinex_nav_file_path):
+def compute(rinex_nav_file_path, query_times_isagpst):
     rinex_nav_file_path = Path(rinex_nav_file_path)
     ds = parse_rinex_nav_file(rinex_nav_file_path)
     df = convert_nav_dataset_to_dataframe(ds)
-    # Compute satellite position and clock offsets at regularly spaced times over the time of validity of each ephemeris
-    for ephemeris in
+    df = df[df['sv'].isin(query_times_isagpst.keys())]
+    df['query_time_isagpst'] = df['sv'].apply(lambda sat: query_times_isagpst[sat])
+    # Kick out all ephemerides that are not valid at the time of interest
+    df = df[df['query_time_isagpst'] > df["validity_start"]]
+    df = df[df['query_time_isagpst'] < df["validity_end"]]
+    df['query_time_wrt_ephemeris_reference_time_s'] = (df['query_time_isagpst'] - df['ephemeris_reference_time_isagpst']).apply(helpers.timedelta_2_seconds)
+    df['query_time_wrt_clock_reference_time_s'] = (df['query_time_isagpst'] - df['clock_reference_time_isagpst']).apply(helpers.timedelta_2_seconds)
+    # TODO Can the reference time be in the future in a live navigation message?
+    # TODO We only consider ephemeris reference time here to select which ephemeris a live user would use, what about
+    #      clock offset reference time?
+    df = df[df['query_time_wrt_ephemeris_reference_time_s'] > 0.0]
+    df = df.sort_values('query_time_wrt_ephemeris_reference_time_s').groupby(['sv']).first()
+    df['clock_offset_m'] = constants.cGpsIcdSpeedOfLight_mps * (df['query_time_wrt_clock_reference_time_s'] * df['SVclockDrift'] + df['SVclockBias'])
+    return compute_kepler_orbit_position_and_velocity(df)
+
 
 if __name__ == "main":
     pass
