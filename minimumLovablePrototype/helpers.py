@@ -109,3 +109,12 @@ def repair_with_gfzrnx(file):
 
 def deg_2_rad(angle_deg):
     return angle_deg * np.pi / 180
+
+def build_glonass_slot_dictionary(header_line):
+    header_line_split = header_line.split()
+    n_sat = int(header_line_split[0])
+    glonass_slot_dict = {}
+    for sat in range(1,n_sat+1):
+        # append entry to dict
+        glonass_slot_dict |= {int(header_line_split[1+2*(sat-1)][1:]): int(header_line_split[1+2*(sat-1)+1])}
+    return glonass_slot_dict
