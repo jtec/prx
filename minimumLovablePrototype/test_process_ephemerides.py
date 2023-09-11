@@ -674,13 +674,6 @@ def test_ecef_to_geodetic():
     assert (np.abs(np.array(expected_geodetic[:2]) - np.array(computed_geodetic[:2])) < tolerance_rad).all()
     assert np.abs(expected_geodetic[2] - computed_geodetic[2]) < tolerance_alt
 
-    # EDGE CASE NOT CONSIDERED - north Pole
-    # ecef_coords = [0.0, 0.0, 6356752.3142]  # X, Y, Z coordinates in meters
-    # expected_geodetic = [np.pi / 2, 0.0, 0.0]
-    # computed_geodetic = eph.ecef_2_geodetic(ecef_coords)
-    # assert (np.abs(np.array(expected_geodetic[:2]) - np.array(computed_geodetic[:2])) < tolerance_rad).all()
-    # assert np.abs(expected_geodetic[2] - computed_geodetic[2]) < tolerance_alt
-
 
 def test_satellite_elevation_and_azimuth():
     tolerance = np.deg2rad(1e-3)
