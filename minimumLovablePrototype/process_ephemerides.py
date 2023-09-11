@@ -386,6 +386,7 @@ def compute_total_group_delay_rnx3(
                     group_delay = np.nan
                     gamma = np.nan
         case _:
+            group_delay = np.nan
             gamma = np.nan
 
     if np.isnan(gamma):
@@ -427,4 +428,39 @@ def compute_relativistic_clock_effect(
     )
 
     return relativistic_clock_effect_m
+  
+
+def compute_satellite_elevation_and_azimuth(sat_pos_ecef, receiver_pos_ecef):
+    """
+    Reference:
+    GNSS Data Processing, Vol. I: Fundamentals and Algorithms. Equations (B.9),(B.13),(B.14)
+    """
+    rho = (sat_pos_ecef - receiver_pos_ecef) / np.linalg.norm(sat_pos_ecef - receiver_pos_ecef)
+    [lat, lon, __] = ecef_2_geodetic(receiver_pos_ecef)
+    unit_e = [-np.sin(lon), np.cos(lon), 0]
+    unit_n = [-np.cos(lon) * np.sin(lat), -np.sin(lon) * np.sin(lat), np.cos(lat)]
+    unit_u = [np.cos(lon) * np.cos(lat), np.sin(lon) * np.cos(lat), np.sin(lat)]
+    elevation_rad = np.arcsin(np.dot(rho, unit_u))
+    azimuth_rad = np.arctan2(np.dot(rho, unit_e), np.dot(rho, unit_n))
+    return elevation_rad, azimuth_rad
+
+
+def ecef_2_geodetic(pos_ecef):
+    """Reference:
+    GNSS Data Processing, Vol. I: Fundamentals and Algorithms. Equations (B.4),(B.5),(B.6)
+    """
+    p = np.sqrt(pos_ecef[0] ** 2 + pos_ecef[1] ** 2)
+    longitude_rad = np.arctan2(pos_ecef[1], pos_ecef[0])
+    precision_m = 1e-3
+    delta_h_m = 1  # initialization to a value larger than precision
+    altitude_m = 0
+    latitude_rad = np.arctan2(pos_ecef[2], p * (1 - constants.cWgs84EarthEccentricity ** 2))
+    while delta_h_m > precision_m:
+        n = constants.cWgs84EarthSemiMajorAxis_m / np.sqrt(
+            1 - constants.cWgs84EarthEccentricity ** 2 * np.sin(latitude_rad) ** 2)
+        altitude_previous = altitude_m
+        altitude_m = p / np.cos(latitude_rad) - n
+        delta_h_m = np.abs(altitude_m - altitude_previous)
+        latitude_rad = np.arctan2(pos_ecef[2], p * (1 - n * constants.cWgs84EarthEccentricity ** 2 / (n + altitude_m)))
+    return [latitude_rad, longitude_rad, altitude_m]
 
