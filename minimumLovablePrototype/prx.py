@@ -141,7 +141,8 @@ def build_records(rinex_3_obs_file, rinex_3_ephemerides_file,
         columns=["observation_type"],
         values="observation_value",
     ).reset_index()
-    code_phase_columns = [c for c in per_sat.columns if c[0] == "C"]
+    # when using useindicator=True in georinex.load(), there are additional ssi columns such as C1Cssi. To exclude them, we check the length of the column name
+    code_phase_columns = [c for c in per_sat.columns if c[0] == "C" and len(c) == 3]
     per_sat["time_of_emission_in_satellite_time"] = per_sat[
                                                         "time_of_reception_in_receiver_time"
                                                     ] - pd.to_timedelta(
@@ -207,6 +208,7 @@ def build_records(rinex_3_obs_file, rinex_3_ephemerides_file,
         code_observation_m = list()
         doppler_observation_hz = list()
         carrier_observation_m = list()
+        lli = list()
         cn0_dbhz = list()
         satellite_position_m = list()
         satellite_velocity_mps = list()
@@ -237,6 +239,11 @@ def build_records(rinex_3_obs_file, rinex_3_ephemerides_file,
                    constants.cGpsIcdSpeedOfLight_mps / \
                    carrier_frequency_hz
                 )
+                # sometimes, lli is not present in georinex output. Add a NaN in this case.
+                try:
+                    lli.append(row["L" + observation_code[-1] + "lli"])
+                except:
+                    lli.append(np.nan)
                 cn0_dbhz.append(row["S" + observation_code[-1]])
                 satellite_position_m.append(row["satellite_position_m"])
                 satellite_velocity_mps.append(row["satellite_velocity_mps"])
@@ -277,6 +284,7 @@ def build_records(rinex_3_obs_file, rinex_3_ephemerides_file,
                 "code_observation_m": code_observation_m,
                 "doppler_observation_hz": doppler_observation_hz,
                 "carrier_observation_m": carrier_observation_m,
+                "lli": lli,
                 "cn0_dbhz": cn0_dbhz,
                 "satellite_position_m": satellite_position_m,
                 "satellite_velocity_mps": satellite_velocity_mps,
