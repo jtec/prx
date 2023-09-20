@@ -9,11 +9,11 @@ import parse_rinex
 import constants
 import helpers
 import joblib
+
 memory = joblib.Memory(Path(__file__).parent.joinpath("afterburner"), verbose=0)
 
 
 log = helpers.get_logger(__name__)
-
 
 
 def convert_rnx3_nav_file_to_dataframe(path):
