@@ -17,8 +17,8 @@ log = helpers.get_logger(__name__)
 
 
 def parse_sp3_file(file_path: Path):
-    # @lru_cache
-    # @memory.cache
+    @lru_cache
+    @memory.cache
     def cached_load(file_path: Path, file_hash: str):
         log.info(f"Parsing {file_path} ...")
         parsed = georinex.load(file_path)
@@ -97,8 +97,6 @@ def plot_lagrange_interpolation(
 def interpolate(df, query_time_gpst_s):
     n_samples_each_side = 4
     assert df["sv"].unique().size == 1, "This function expects one satellite at a time"
-    if df["sv"].unique()[0] == "G01":
-        jan = 0
     closest_sample_index = np.argmin(np.abs(df["gpst_s"] - query_time_gpst_s))
     start_index = closest_sample_index - n_samples_each_side
     end_index = closest_sample_index + n_samples_each_side
