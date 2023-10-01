@@ -17,8 +17,8 @@ log = helpers.get_logger(__name__)
 
 
 def parse_sp3_file(file_path: Path):
-    #@lru_cache
-    #@memory.cache
+    # @lru_cache
+    # @memory.cache
     def cached_load(file_path: Path, file_hash: str):
         log.info(f"Parsing {file_path} ...")
         parsed = georinex.load(file_path)
@@ -38,7 +38,9 @@ def parse_sp3_file(file_path: Path):
             if "position" not in col and "velocity" not in col:
                 df.rename(columns={col: col.replace("_x", "")}, inplace=True)
         # Convert timestamps to seconds since GPST epoch
-        df["gpst_s"] = (df["time"] - constants.cGpstUtcEpoch).apply(helpers.timedelta_2_seconds)
+        df["gpst_s"] = (df["time"] - constants.cGpstUtcEpoch).apply(
+            helpers.timedelta_2_seconds
+        )
         df.drop("time", axis=1, inplace=True)
         df["clock"] = df["clock"] / constants.cMicrosecondsPerSecond
         df["dclock"] = df["dclock"] / constants.cMicrosecondsPerSecond
@@ -74,8 +76,10 @@ def parse_sp3_file(file_path: Path):
     return cached_load(file_path, file_content_hash)
 
 
-def plot_lagrange_interpolation(polynomial, times, samples, interpolation_time, interpolated_value, label):
-    polynomial_times = np.linspace(min(times), max(times), 10*times.size)
+def plot_lagrange_interpolation(
+    polynomial, times, samples, interpolation_time, interpolated_value, label
+):
+    polynomial_times = np.linspace(min(times), max(times), 10 * times.size)
     polynomial_samples = Polynomial(polynomial.coef[::-1])(polynomial_times)
     plt.plot(times, samples, "o", label="samples")
     plt.plot(polynomial_times, polynomial_samples, ".", label="samples")
@@ -93,6 +97,8 @@ def plot_lagrange_interpolation(polynomial, times, samples, interpolation_time, 
 def interpolate(df, query_time_gpst_s):
     n_samples_each_side = 4
     assert df["sv"].unique().size == 1, "This function expects one satellite at a time"
+    if df["sv"].unique()[0] == "G01":
+        jan = 0
     closest_sample_index = np.argmin(np.abs(df["gpst_s"] - query_time_gpst_s))
     start_index = closest_sample_index - n_samples_each_side
     end_index = closest_sample_index + n_samples_each_side
@@ -102,11 +108,11 @@ def interpolate(df, query_time_gpst_s):
     assert end_index < len(
         df.index
     ), f"We need at least {n_samples_each_side} after the sample closest to the query time to interpolate"
-    columns_to_interpolate = ['x_m', 'y_m', 'z_m', 'clock_s']
-    interpolated = df[closest_sample_index:closest_sample_index+1]
-    interpolated['gpst_s'] = query_time_gpst_s
+    columns_to_interpolate = ["x_m", "y_m", "z_m", "clock_s"]
+    interpolated = df[closest_sample_index : closest_sample_index + 1]
+    interpolated["gpst_s"] = query_time_gpst_s
     for col in columns_to_interpolate:
-        interpolated[col] = float('nan')
+        interpolated[col] = float("nan")
     for col in columns_to_interpolate:
         times = df["gpst_s"].iloc[start_index : end_index + 1].to_numpy()
         samples = df[col].iloc[start_index : end_index + 1].to_numpy()
@@ -115,21 +121,20 @@ def interpolate(df, query_time_gpst_s):
         interpolated[col] = (
             Polynomial(poly.coef[::-1])(query_time_gpst_s - times[0]) + samples[0]
         )
-        '''
+        """
         plot_lagrange_interpolation(poly,
                                     times - times[0],
                                     samples - samples[0],
                                     query_time_gpst -times[0],
                                     interpolated[col] - samples[0], f"{col} {df['sv'].unique()}")
-        '''
+        """
         first_derivative = Polynomial(poly.coef[::-1]).deriv(1)(
             query_time_gpst_s - times[0]
         )
         if col in ["x_m", "y_m", "z_m"]:
             interpolated[f"d{col}ps"] = first_derivative
         elif col == "clock_s":
-            if interpolated["sv"].unique()[0] == "G01":
-                interpolated["dclock_sps"] = first_derivative
+            interpolated["dclock_sps"] = first_derivative
 
     return interpolated
 
@@ -142,7 +147,8 @@ def compute(sp3_file_path, query_time_gpst):
             [
                 interpolated,
                 interpolate(
-                    sv_df.reset_index().drop(columns=["index"]), helpers.timedelta_2_seconds(query_time_gpst)
+                    sv_df.reset_index().drop(columns=["index"]),
+                    helpers.timedelta_2_seconds(query_time_gpst),
                 ),
             ]
         )
