@@ -1,10 +1,10 @@
-import math
 import pandas as pd
 import numpy as np
 from pathlib import Path
 from .. import evaluate
-from ..helpers import compressed_2_uncompressed
-from ..constants import cGpstUtcEpoch
+from ... import helpers
+from ... import converters
+from ... import constants
 import shutil
 import pytest
 import os
@@ -39,13 +39,11 @@ def input_for_test():
 
 
 def test_position(input_for_test):
-    rinex_nav_file = compressed_2_uncompressed(
+    rinex_nav_file = converters.compressed_to_uncompressed(
         input_for_test["all_constellations_nav_file"]
     )
     query_times = {}
-    rx_time = (
-        pd.Timestamp(np.datetime64("2022-01-01T01:00:00.000000000")) - cGpstUtcEpoch
-    )
+    rx_time = pd.Timestamp("2022-01-01T01:00:00.000000000") - constants.cGpstUtcEpoch
     query_times["G01"] = rx_time + pd.Timedelta(seconds=1) / 1e3
     query_times["E02"] = rx_time + pd.Timedelta(seconds=2) / 1e3
     query_times["C03"] = rx_time + pd.Timedelta(seconds=3) / 1e3

@@ -4,9 +4,7 @@ import itertools
 import subprocess
 import gzip
 import zipfile
-import prx
-import helpers
-
+from . import helpers
 log = helpers.get_logger(__name__)
 
 

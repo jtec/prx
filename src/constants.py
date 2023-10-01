@@ -15,11 +15,16 @@ cSecondsPerWeek = 7 * cSecondsPerDay
 cNanoSecondsPerWeek = cSecondsPerWeek * cNanoSecondsPerSecond
 cMetersPerKilometer = 1e3
 cHzPerMhz = 1e6
+# the GPS ICD speed of light
 cGpsIcdSpeedOfLight_mps = 2.99792458 * 1e8
-cPrxReferenceFrame = {"name": "IGS14", "epoch": "2005.001"}
+# `G*M_E`, the "gravitational constant" for orbital motion about the Earth [m^3/s^2]
+cMuEarth_m3ps2 = 398600.5e9
+# The sidereal rotation rate of the Earth (WGS-84)
+cOmegaDotEarth_rps = 7.2921151467e-5
+
 # Heuristic: demand micrometer precision in computations involving distances
 cPrxPrecision_m = 1e-6
-cMaxOrbitalSpeed_mps = 1e4
+cMaxOrbitalSpeedOfAnyGnssSatellite_mps = 1e4
 
 cPrxJsonTextSequenceFileExtension = "jsonseq"
 cPrxCsvFileExtension = "csv"

@@ -4,14 +4,13 @@ import subprocess
 import pandas as pd
 import numpy as np
 import glob
-import os
+from functools import lru_cache
 import georinex
 from pathlib import Path
 import joblib
-from gnss_lib_py.utils.sim_gnss import find_sat
 
-from . import helpers
-from . import constants
+from .. import helpers
+from .. import constants
 
 memory = joblib.Memory(Path(__file__).parent.joinpath("diskcache"), verbose=0)
 log = helpers.get_logger(__name__)
@@ -159,7 +158,7 @@ def compute_glonass_pv(sat_ephemeris: pd.DataFrame, t_system_time: pd.Timedelta)
     return x[0:3], x[3:6]
 
 
-# Adapted from gnss_lib_py's _compute_eccentric_anomoly()
+# Adapted from gnss_lib_py's _compute_eccentric_anomoly() (sic!)
 def eccentric_anomaly(M, e, tol=1e-5, max_iter=10):
     E = M
     for _ in np.arange(0, max_iter):
@@ -193,7 +192,7 @@ def compute_kepler_orbit_position_and_velocity(ephem):
     sma = sqrt_sma**2  # semi-major axis
 
     sqrt_mu_A = (
-        np.sqrt(constants.cGravitationalConstantEarthOrbit) * sqrt_sma**-3
+        np.sqrt(constants.cMuEarth_m3ps2) * sqrt_sma**-3
     )  # mean angular motion
 
     sv_posvel = pd.DataFrame()
@@ -238,7 +237,7 @@ def compute_kepler_orbit_position_and_velocity(ephem):
     )
     omega = (
         omega_0
-        - (constants.cSiderealRotationRateEarthRadPerSecond * (week_second))
+        - (constants.cOmegaDotEarth_rps * (week_second))
         + omega_corr
     )
 
@@ -286,7 +285,7 @@ def compute_kepler_orbit_position_and_velocity(ephem):
     ############################################
     ######  Lines added for velocity (4)  ######
     ############################################
-    omega_dot = ephem["OmegaDot"] - constants.cSiderealRotationRateEarthRadPerSecond
+    omega_dot = ephem["OmegaDot"] - constants.cOmegaDotEarth_rps
     sv_posvel.loc[:, "vx"] = (
         dxp * cos_omega
         - dyp * cos_i * sin_omega
@@ -302,7 +301,7 @@ def compute_kepler_orbit_position_and_velocity(ephem):
     )
 
     sv_posvel.loc[:, "vz"] = dyp * sin_i + yp * cos_i * di
-    return sv_posvel
+    return pd.concat([ephem, sv_posvel], axis='columns')
 
 
 def constellation(satellite_id: str):
@@ -518,6 +517,7 @@ def compute(rinex_nav_file_path, query_times_isagpst):
         .groupby(["sv"])
         .first()
     )
+    df.reset_index(inplace=True)
     df["clock_offset_m"] = constants.cGpsIcdSpeedOfLight_mps * (
         df["query_time_wrt_clock_reference_time_s"] * df["SVclockDrift"]
         + df["SVclockBias"]
