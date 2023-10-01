@@ -235,11 +235,7 @@ def compute_kepler_orbit_position_and_velocity(ephem):
     week_second = ephem["query_time_isagpst"].apply(
         lambda t: helpers.timedelta_2_weeks_and_seconds(t)[1]
     )
-    omega = (
-        omega_0
-        - (constants.cOmegaDotEarth_rps * (week_second))
-        + omega_corr
-    )
+    omega = omega_0 - (constants.cOmegaDotEarth_rps * (week_second)) + omega_corr
 
     # Calculate orbital radius with correction
     r_corr = c_rc * cos_to_phi + c_rs * sin_to_phi
@@ -301,7 +297,7 @@ def compute_kepler_orbit_position_and_velocity(ephem):
     )
 
     sv_posvel.loc[:, "vz"] = dyp * sin_i + yp * cos_i * di
-    return pd.concat([ephem, sv_posvel], axis='columns')
+    return pd.concat([ephem, sv_posvel], axis="columns")
 
 
 def constellation(satellite_id: str):
