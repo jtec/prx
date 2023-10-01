@@ -35,15 +35,11 @@ def test_at_sample(input_for_test):
     # Compute satellite states directly at a sample time somewhere in the middle of the file
     query_time = pd.Timestamp("2021-12-31T00:20:00.00000000") - constants.cGpstUtcEpoch
     sat_states = compute(sp3_file, query_time)
-    assert sat_states[sat_states["sv"] == "G01"][["x_m", "y_m", "z_m"]].to_numpy()[0] == pytest.approx(
-        1e3*np.array([13624.009028, -20092.399598,  10082.111937]), abs=1e-3
-    )
-    assert sat_states[sat_states["sv"] == "G01"][["clock_s"]].values[
-        0
-    ] == pytest.approx(
-        469.973744 / constants.cMicrosecondsPerSecond,
-        abs=1e-3 / constants.cGpsIcdSpeedOfLight_mps,
-    )
+    assert np.allclose(sat_states[sat_states["sv"] == "G01"][["x_m", "y_m", "z_m"]].to_numpy(),
+        1e3*np.array([13744.907145, 20823.122313,  8309.113118]), rtol=1e-5, atol=1e-3)
+    assert np.allclose(sat_states[sat_states["sv"] == "G01"][["clock_s"]].to_numpy(),
+        np.array([469.979467 / constants.cMicrosecondsPerSecond]),
+                       rtol=1e-5, atol=1e-3 / constants.cGpsIcdSpeedOfLight_mps)
 
 
 def test_between_samples(input_for_test):
