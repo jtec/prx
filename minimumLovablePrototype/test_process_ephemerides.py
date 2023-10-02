@@ -36,7 +36,7 @@ def input_for_test():
     assert gps_rnx3_nav_test_file.exists()
 
     all_constellations_rnx3_nav_test_file = test_directory.joinpath(
-        "BRDC00IGS_R_20220010000_01D_MN.zip"
+        "BRDC00IGS_R_20220010000_01D_MN.rnx.zip"
     )
     shutil.copy(
         helpers.prx_root().joinpath(

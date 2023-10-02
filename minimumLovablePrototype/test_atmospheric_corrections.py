@@ -20,7 +20,7 @@ def rnx3_input_for_test():
         shutil.rmtree(test_directory)
     os.makedirs(test_directory)
 
-    rnx3_nav_test_file = test_directory.joinpath("BRDC00IGS_R_20220010000_01D_MN.zip")
+    rnx3_nav_test_file = test_directory.joinpath("BRDC00IGS_R_20220010000_01D_MN.rnx.zip")
     shutil.copy(
         helpers.prx_root().joinpath(f"datasets/TLSE_2022001/{rnx3_nav_test_file.name}"),
         rnx3_nav_test_file,

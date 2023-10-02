@@ -69,7 +69,7 @@ def input_for_test_long_version():
     test_mixed_obs_file = copy_data_file_to_test_directory(filepath_to_mixed_obs_file,
                                                          test_directory,)
 
-    filepath_to_mixed_nav_file = "datasets/TLSE_2022001/BRDC00IGS_R_20220010000_01D_MN.zip"
+    filepath_to_mixed_nav_file = "datasets/TLSE_2022001/BRDC00IGS_R_20220010000_01D_MN.rnx.zip"
     test_mixed_nav_file = copy_data_file_to_test_directory(filepath_to_mixed_nav_file,
                                                          test_directory,)
 
