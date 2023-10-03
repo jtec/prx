@@ -79,9 +79,8 @@ def build_header(input_files):
     return prx_header
 
 
-def check_assumptions(rinex_3_obs_file, rinex_3_nav_file):
+def check_assumptions(rinex_3_obs_file,):
     obs_header = georinex.rinexheader(rinex_3_obs_file)
-    nav_header = georinex.rinexheader(rinex_3_nav_file)
     if "RCV CLOCK OFFS APPL" in obs_header.keys():
         assert (
                 obs_header["RCV CLOCK OFFS APPL"].strip() == "0"
@@ -91,9 +90,9 @@ def check_assumptions(rinex_3_obs_file, rinex_3_nav_file):
     ), "Handling of observation files using time scales other than GPST not implemented yet."
 
 
-def build_records(rinex_3_obs_file, rinex_3_ephemerides_file,
+def build_records(rinex_3_obs_file, rinex_3_ephemerides_files,
                   receiver_ecef_position_m=np.full(shape=(3,), fill_value=np.nan)):
-    check_assumptions(rinex_3_obs_file, rinex_3_ephemerides_file)
+    check_assumptions(rinex_3_obs_file,)
     obs = parse_rinex.load(rinex_3_obs_file, use_caching=True)
 
     # if receiver_ecef_position_m has not been initialized, get it from the RNX OBS header
@@ -185,7 +184,8 @@ def build_records(rinex_3_obs_file, rinex_3_ephemerides_file,
         )
 
     log.info("Computing satellite states")
-    ephemerides = eph.convert_rnx3_nav_file_to_dataframe(rinex_3_ephemerides_file)
+    ephemerides = pd.concat([eph.convert_rnx3_nav_file_to_dataframe(file) for file in rinex_3_ephemerides_files]).sort_values(by=["time"])
+
     per_sat[
         [
             "satellite_position_m",
@@ -300,7 +300,7 @@ def build_records(rinex_3_obs_file, rinex_3_ephemerides_file,
         )
         return per_obs
 
-    nav_header = georinex.rinexheader(rinex_3_ephemerides_file)
+    nav_header = georinex.rinexheader(rinex_3_ephemerides_files[-1]) # TODO check how to manage multiple headers for iono correction
     per_epoch_per_sat_per_obs = pd.DataFrame()
     for index in range(per_sat.shape[0]):
         per_epoch_per_sat_per_obs = pd.concat(
@@ -324,8 +324,10 @@ def process(observation_file_path: Path, output_format="jsonseq"):
     rinex_3_obs_file = converters.anything_to_rinex_3(observation_file_path)
     prx_file = str(rinex_3_obs_file).replace(".rnx", "")
     aux_files = aux.discover_or_download_auxiliary_files(rinex_3_obs_file)
+    input_file_list = [rinex_3_obs_file]
+    input_file_list.extend(aux_files["broadcast_ephemerides"])
     write_prx_file(
-        build_header([rinex_3_obs_file, aux_files["broadcast_ephemerides"]]),
+        build_header(input_file_list),
         build_records(rinex_3_obs_file, aux_files["broadcast_ephemerides"]),
         prx_file,
         output_format,

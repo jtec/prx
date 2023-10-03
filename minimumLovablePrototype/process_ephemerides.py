@@ -248,7 +248,6 @@ def select_nav_ephemeris(
                 )
 
     # Find first ephemeris before time of interest
-    ephemerides_of_requested_sat = ephemerides_of_requested_sat.sort_values(by=["time"])
     ephemerides_of_requested_sat_before_requested_time = (
         ephemerides_of_requested_sat.loc[
             ephemerides_of_requested_sat["time"] <= t_system

@@ -64,7 +64,6 @@ def input_for_test_long_version():
     filepath_to_gps_nav_file = "datasets/TLSE_2022001/BRDC00IGS_R_20220010000_01D_GN.zip"
     test_gps_nav_file = copy_data_file_to_test_directory(filepath_to_gps_nav_file,
                                                          test_directory,)
-
     filepath_to_mixed_obs_file = "datasets/TLSE_2022001/TLSE00FRA_R_20220010000_01D_30S_MO.zip"
     test_mixed_obs_file = copy_data_file_to_test_directory(filepath_to_mixed_obs_file,
                                                          test_directory,)
@@ -72,6 +71,9 @@ def input_for_test_long_version():
     filepath_to_mixed_nav_file = "datasets/TLSE_2022001/BRDC00IGS_R_20220010000_01D_MN.rnx.zip"
     test_mixed_nav_file = copy_data_file_to_test_directory(filepath_to_mixed_nav_file,
                                                          test_directory,)
+    # nav data from previous day
+    copy_data_file_to_test_directory("datasets/TLSE_2022001/BRDC00IGS_R_20213650000_01D_MN.rnx.gz",
+                                     test_directory, )
 
     yield {"gps_obs_file": test_gps_obs_file,
            "gps_nav_file": test_gps_nav_file,
