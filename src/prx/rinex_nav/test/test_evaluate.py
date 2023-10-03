@@ -2,9 +2,9 @@ import pandas as pd
 import numpy as np
 from pathlib import Path
 from .. import evaluate
-from ... import helpers
-from ... import converters
+from  import constants
 from ... import constants
+from ... import sp3
 import shutil
 import pytest
 import os
@@ -20,27 +20,25 @@ def input_for_test():
         # file decompression not working properly
         shutil.rmtree(test_directory)
     os.makedirs(test_directory)
-
-    all_constellations_rnx3_nav_test_file = test_directory.joinpath(
-        "BRDC00IGS_R_20220010000_01D_MN.zip"
-    )
-    shutil.copy(
-        Path(__file__).parent.joinpath(
-            "datasets", "BRDC00IGS_R_20220010000_01D_MN.zip"
-        ),
-        all_constellations_rnx3_nav_test_file,
-    )
-    assert all_constellations_rnx3_nav_test_file.exists()
-    yield {
-        "all_constellations_nav_file": all_constellations_rnx3_nav_test_file,
+    test_files = {
+        "rinex_nav_file": test_directory / "BRDC00IGS_R_20220010000_01D_MN.zip",
+        "sp3_file": test_directory / "WUM0MGXULT_20220010000_01D_05M_ORB.SP3",
     }
-
+    for key, test_file_path in test_files.items():
+        shutil.copy(
+            Path(__file__).parent.joinpath(
+                "datasets", test_file_path.name
+            ),
+            test_file_path,
+        )
+        assert test_file_path.exists()
+    yield test_files
     shutil.rmtree(test_directory)
 
 
 def test_position(input_for_test):
     rinex_nav_file = converters.compressed_to_uncompressed(
-        input_for_test["all_constellations_nav_file"]
+        input_for_test["rinex_nav_file"]
     )
     query_times = {}
     rx_time = pd.Timestamp("2022-01-01T01:00:00.000000000") - constants.cGpstUtcEpoch
@@ -48,5 +46,7 @@ def test_position(input_for_test):
     query_times["E02"] = rx_time + pd.Timedelta(seconds=2) / 1e3
     query_times["C03"] = rx_time + pd.Timedelta(seconds=3) / 1e3
     query_times["R04"] = rx_time + pd.Timedelta(seconds=4) / 1e3
-    sat_states = evaluate.compute(rinex_nav_file, query_times)
-    pass
+    rinex_sat_states = evaluate.compute(rinex_nav_file, query_times)
+    for satellite, query_time in query_times.items():
+        sp3_sat_state = sp3.evaluate.compute(input_for_test["sp3_file"], query_time)
+        assert np.allclose()
