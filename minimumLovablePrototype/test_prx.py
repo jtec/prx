@@ -49,7 +49,7 @@ def input_for_test():
     shutil.rmtree(test_file.parent)
 
 @pytest.fixture
-def input_for_test_long_version():
+def input_for_test_2():
     test_directory = Path(f"./tmp_test_directory_{__name__}").resolve()
     if test_directory.exists():
         # Make sure the expected file has not been generated before and is still on disk due to e.g. a previous
@@ -57,27 +57,18 @@ def input_for_test_long_version():
         shutil.rmtree(test_directory)
     os.makedirs(test_directory)
 
-    filepath_to_gps_obs_file = "datasets/TLSE_2022001/TLSE00FRA_R_20220010000_01D_30S_GO.zip"
-    test_gps_obs_file = copy_data_file_to_test_directory(filepath_to_gps_obs_file,
-                                                         test_directory,)
-
-    filepath_to_gps_nav_file = "datasets/TLSE_2022001/BRDC00IGS_R_20220010000_01D_GN.zip"
-    test_gps_nav_file = copy_data_file_to_test_directory(filepath_to_gps_nav_file,
-                                                         test_directory,)
-    filepath_to_mixed_obs_file = "datasets/TLSE_2022001/TLSE00FRA_R_20220010000_01D_30S_MO.zip"
+    filepath_to_mixed_obs_file = "datasets/TLSE_2022001/TLSE00FRA_R_20220010000_01H_30S_MO.rnx.gz"
     test_mixed_obs_file = copy_data_file_to_test_directory(filepath_to_mixed_obs_file,
-                                                         test_directory,)
+                                                           test_directory,)
 
     filepath_to_mixed_nav_file = "datasets/TLSE_2022001/BRDC00IGS_R_20220010000_01D_MN.rnx.zip"
     test_mixed_nav_file = copy_data_file_to_test_directory(filepath_to_mixed_nav_file,
-                                                         test_directory,)
+                                                           test_directory,)
     # nav data from previous day
     copy_data_file_to_test_directory("datasets/TLSE_2022001/BRDC00IGS_R_20213650000_01D_MN.rnx.gz",
                                      test_directory, )
 
-    yield {"gps_obs_file": test_gps_obs_file,
-           "gps_nav_file": test_gps_nav_file,
-           "mixed_obs_file": test_mixed_obs_file,
+    yield {"mixed_obs_file": test_mixed_obs_file,
            "mixed_nav_file": test_mixed_nav_file,}
     shutil.rmtree(test_directory)
 
@@ -113,8 +104,8 @@ def test_prx_function_call_with_csv_output(input_for_test):
     )
     assert expected_prx_file.exists()
 
-def test_prx_function_call_with_csv_output_for_long_gps_rnx_file(input_for_test_long_version):
-    test_file = input_for_test_long_version["gps_obs_file"]
+def test_prx_function_call_with_csv_output_2(input_for_test_2):
+    test_file = input_for_test_2["mixed_obs_file"]
     prx.process(observation_file_path=test_file, output_format="csv")
     expected_prx_file = Path(
         str(test_file).replace("crx.gz", constants.cPrxCsvFileExtension)
