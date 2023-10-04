@@ -303,7 +303,8 @@ def build_records(rinex_3_obs_file, rinex_3_ephemerides_files,
         return per_obs
 
     # create a dictionary containing the headers of the different NAV files.
-    # The keys are the "YYYYDDD" (year and day of year)
+    # The keys are the "YYYYDDD" (year and day of year) and are located at
+    # [12:19] of the file name using RINEX naming convention
     nav_header_dict = {rinex_3_ephemerides_files[i].name[12:19]:georinex.rinexheader(rinex_3_ephemerides_files[i]) for i in
                        range(len(rinex_3_ephemerides_files))}
     per_epoch_per_sat_per_obs = pd.DataFrame()

@@ -106,11 +106,6 @@ def discover_or_download_auxiliary_files(observation_file_path=Path()):
         rinex_3_obs_file.parent,
         list(header["fields"].keys()),
     )
-    # if len(ephs) > 1:
-        # assert (
-        #     False
-        # ), "Observations crossing day boundaries not handled yet, need to merge ephemeris files here"
-    # return {"broadcast_ephemerides": ephs[0]}
     return {"broadcast_ephemerides": ephs}
 
 if __name__ == "__main__":
