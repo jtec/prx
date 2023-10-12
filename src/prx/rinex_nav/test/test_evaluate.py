@@ -1,10 +1,10 @@
 import pandas as pd
 import numpy as np
 from pathlib import Path
-from .. import evaluate
-from  import constants
-from ... import constants
-from ... import sp3
+from prx.sp3 import evaluate as sp3_evaluate
+from prx.rinex_nav import evaluate as rinex_nav_evaluate
+from prx import converters
+from prx import constants
 import shutil
 import pytest
 import os
@@ -41,12 +41,21 @@ def test_position(input_for_test):
         input_for_test["rinex_nav_file"]
     )
     query_times = {}
-    rx_time = pd.Timestamp("2022-01-01T01:00:00.000000000") - constants.cGpstUtcEpoch
-    query_times["G01"] = rx_time + pd.Timedelta(seconds=1) / 1e3
-    query_times["E02"] = rx_time + pd.Timedelta(seconds=2) / 1e3
-    query_times["C03"] = rx_time + pd.Timedelta(seconds=3) / 1e3
-    query_times["R04"] = rx_time + pd.Timedelta(seconds=4) / 1e3
-    rinex_sat_states = evaluate.compute(rinex_nav_file, query_times)
+    sat_state_query_time_gpst = pd.Timestamp("2022-01-01T00:2:00.000000000") - constants.cGpstUtcEpoch
+    query_times["G01"] = sat_state_query_time_gpst
+    query_times["E02"] = sat_state_query_time_gpst
+    query_times["C03"] = sat_state_query_time_gpst
+    query_times["R04"] = sat_state_query_time_gpst
+    sp3_sat_states = sp3_evaluate.compute(input_for_test["sp3_file"], sat_state_query_time_gpst)
+    rinex_sat_states = rinex_nav_evaluate.compute(rinex_nav_file, query_times)
     for satellite, query_time in query_times.items():
-        sp3_sat_state = sp3.evaluate.compute(input_for_test["sp3_file"], query_time)
-        assert np.allclose()
+        sp3_sat_position = sp3_sat_states[sp3_sat_states['sv'] == satellite][['x_m', 'y_m', 'z_m']].to_numpy()
+        rinex_sat_position = rinex_sat_states[rinex_sat_states['sv'] == satellite][['x', 'y', 'z']].to_numpy()
+        sp3_sat_velocity = sp3_sat_states[sp3_sat_states['sv'] == satellite][['dx_mps', 'dy_mps', 'dz_mps']].to_numpy()
+        rinex_sat_velocity = rinex_sat_states[rinex_sat_states['sv'] == satellite][['vx', 'vy', 'vz']].to_numpy()
+
+        # We expect broadcast ephemeris error w.r.t. precise orbits to be less than 10 meters
+        assert np.linalg.norm(sp3_sat_position - rinex_sat_position) < 1e1
+        # We expect broadcast ephemeris velocity error w.r.t. precise orbits to be less than 1mm/s
+        assert np.linalg.norm(sp3_sat_position - rinex_sat_position) < 1e-3
+
