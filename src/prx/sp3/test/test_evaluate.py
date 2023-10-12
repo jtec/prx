@@ -1,11 +1,11 @@
 import pandas as pd
 import numpy as np
 from pathlib import Path
-from ..evaluate import compute
+from prx.sp3.evaluate import compute
 import shutil
 import pytest
 import os
-from ... import constants
+from prx import constants
 
 
 @pytest.fixture

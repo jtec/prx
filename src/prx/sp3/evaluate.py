@@ -1,5 +1,4 @@
 from functools import lru_cache
-
 import pandas as pd
 import numpy as np
 from scipy.interpolate import lagrange
@@ -9,8 +8,8 @@ from pathlib import Path
 import joblib
 import matplotlib.pyplot as plt
 
-from .. import helpers
-from .. import constants
+from prx import helpers
+from prx import constants
 
 memory = joblib.Memory(Path(__file__).parent.joinpath("diskcache"), verbose=0)
 log = helpers.get_logger(__name__)
@@ -41,7 +40,8 @@ def parse_sp3_file(file_path: Path):
         df["gpst_s"] = (df["time"] - constants.cGpstUtcEpoch).apply(
             helpers.timedelta_2_seconds
         )
-        df.drop("time", axis=1, inplace=True)
+        df["gpst"] = df["time"] - constants.cGpstUtcEpoch
+        #df.drop("time", axis=1, inplace=True)
         df["clock"] = df["clock"] / constants.cMicrosecondsPerSecond
         df["dclock"] = df["dclock"] / constants.cMicrosecondsPerSecond
         for axis in ["x", "y", "z"]:

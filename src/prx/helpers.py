@@ -77,7 +77,7 @@ def timedelta_2_seconds(time_delta: pd.Timedelta):
     fractional_seconds = np.float64(
         timedelta_2_nanoseconds(time_delta)
         - integer_seconds * constants.cNanoSecondsPerSecond
-    )
+    ) / constants.cNanoSecondsPerSecond
     return integer_seconds + fractional_seconds
 
 
