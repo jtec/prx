@@ -40,10 +40,9 @@ def parse_sp3_file(file_path: Path):
         df["gpst_s"] = (df["time"] - constants.cGpstUtcEpoch).apply(
             helpers.timedelta_2_seconds
         )
-        df["gpst"] = df["time"] - constants.cGpstUtcEpoch
-        #df.drop("time", axis=1, inplace=True)
-        df["clock"] = df["clock"] / constants.cMicrosecondsPerSecond
-        df["dclock"] = df["dclock"] / constants.cMicrosecondsPerSecond
+        df.drop(columns=["time"], inplace=True)
+        df["clock_m"] = (constants.cGpsIcdSpeedOfLight_mps * df["clock"]) / constants.cMicrosecondsPerSecond
+        df["dclock_mps"] = (constants.cGpsIcdSpeedOfLight_mps * df["dclock"]) / constants.cMicrosecondsPerSecond
         for axis in ["x", "y", "z"]:
             df["position_" + axis] = (
                 df["position_" + axis] * constants.cMetersPerKilometer
@@ -61,18 +60,12 @@ def parse_sp3_file(file_path: Path):
             },
             inplace=True,
         )
-        df.rename(columns={"clock": "clock_s", "dclock": "dclock_sps"}, inplace=True)
+        df.drop(columns={"clock", "dclock"}, inplace=True)
         # Put timestamps first
         df.insert(0, "gpst_s", df.pop("gpst_s"))
         return df
 
-    t0 = pd.Timestamp.now()
     file_content_hash = helpers.md5_of_file_content(file_path)
-    hash_time = pd.Timestamp.now() - t0
-    if hash_time > pd.Timedelta(seconds=1):
-        log.info(
-            f"Hashing file content took {hash_time}, we might want to partially hash the file"
-        )
     return cached_load(file_path, file_content_hash)
 
 
@@ -106,7 +99,7 @@ def interpolate(df, query_time_gpst_s):
     assert end_index < len(
         df.index
     ), f"We need at least {n_samples_each_side} after the sample closest to the query time to interpolate"
-    columns_to_interpolate = ["x_m", "y_m", "z_m", "clock_s"]
+    columns_to_interpolate = ["x_m", "y_m", "z_m", "clock_m"]
     interpolated = df[closest_sample_index : closest_sample_index + 1]
     interpolated["gpst_s"] = query_time_gpst_s
     for col in columns_to_interpolate:
@@ -131,8 +124,8 @@ def interpolate(df, query_time_gpst_s):
         )
         if col in ["x_m", "y_m", "z_m"]:
             interpolated[f"d{col}ps"] = first_derivative
-        elif col == "clock_s":
-            interpolated["dclock_sps"] = first_derivative
+        elif col == "clock_m":
+            interpolated["dclock_mps"] = first_derivative
 
     return interpolated
 

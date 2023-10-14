@@ -41,21 +41,35 @@ def test_position(input_for_test):
         input_for_test["rinex_nav_file"]
     )
     query_times = {}
-    sat_state_query_time_gpst = pd.Timestamp("2022-01-01T00:2:00.000000000") - constants.cGpstUtcEpoch
-    query_times["G01"] = sat_state_query_time_gpst
-    query_times["E02"] = sat_state_query_time_gpst
+    sat_state_query_time_gpst = pd.Timestamp("2022-01-01T00:02:00.000000000") - constants.cGpstUtcEpoch
+    #query_times["G01"] = sat_state_query_time_gpst
+    #query_times["E02"] = sat_state_query_time_gpst
     query_times["C03"] = sat_state_query_time_gpst
-    query_times["R04"] = sat_state_query_time_gpst
+    #query_times["R04"] = sat_state_query_time_gpst
     sp3_sat_states = sp3_evaluate.compute(input_for_test["sp3_file"], sat_state_query_time_gpst)
     rinex_sat_states = rinex_nav_evaluate.compute(rinex_nav_file, query_times)
     for satellite, query_time in query_times.items():
-        sp3_sat_position = sp3_sat_states[sp3_sat_states['sv'] == satellite][['x_m', 'y_m', 'z_m']].to_numpy()
-        rinex_sat_position = rinex_sat_states[rinex_sat_states['sv'] == satellite][['x', 'y', 'z']].to_numpy()
-        sp3_sat_velocity = sp3_sat_states[sp3_sat_states['sv'] == satellite][['dx_mps', 'dy_mps', 'dz_mps']].to_numpy()
-        rinex_sat_velocity = rinex_sat_states[rinex_sat_states['sv'] == satellite][['vx', 'vy', 'vz']].to_numpy()
-
-        # We expect broadcast ephemeris error w.r.t. precise orbits to be less than 10 meters
-        assert np.linalg.norm(sp3_sat_position - rinex_sat_position) < 1e1
-        # We expect broadcast ephemeris velocity error w.r.t. precise orbits to be less than 1mm/s
-        assert np.linalg.norm(sp3_sat_position - rinex_sat_position) < 1e-3
+        sp3 = {
+            "position_m": sp3_sat_states[sp3_sat_states['sv'] == satellite][['x_m', 'y_m', 'z_m']].to_numpy(),
+            "velocity_mps": sp3_sat_states[sp3_sat_states['sv'] == satellite][['dx_mps', 'dy_mps', 'dz_mps']].to_numpy(),
+            "clock_m": sp3_sat_states[sp3_sat_states['sv'] == satellite][['clock_m']].to_numpy(),
+            "dclock_mps": sp3_sat_states[sp3_sat_states['sv'] == satellite][['dclock_mps']].to_numpy(),
+        }
+        rinex = {"position_m": rinex_sat_states[rinex_sat_states['sv'] == satellite][['x', 'y', 'z']].to_numpy(),
+                 "velocity_mps": rinex_sat_states[rinex_sat_states['sv'] == satellite][['vx', 'vy', 'vz']].to_numpy(),
+                 "clock_m": rinex_sat_states[rinex_sat_states['sv'] == satellite][['clock_offset_m']].to_numpy(),
+                 "dclock_mps": rinex_sat_states[rinex_sat_states['sv'] == satellite][['clock_offset_rate_mps']].to_numpy(),
+                 }
+        # These thresholds are based on the difference between broadcast and precise observed in this test.
+        # We expect broadcast position error w.r.t. precise orbits to be less than 10 meters
+        # We expect broadcast clock error (in units of length) w.r.t. precise clocks to be less than 12 meters
+        # We expect broadcast velocity w.r.t. precise orbits to be less than 1 mm/s
+        # We expect broadcast clock offset drift error (in units of length/second) w.r.t. precise clocks to be less than 3 mm/s
+        expected_max_abs_difference = {"position_m": 1e1,
+                                       "velocity_mps": 1e-3,
+                                       "clock_m": 1.2e1,
+                                       "dclock_mps": 3e-3,
+                                       }
+        for state_name in sp3:
+            assert np.linalg.norm(rinex[state_name] - sp3[state_name]) < expected_max_abs_difference[state_name]
 

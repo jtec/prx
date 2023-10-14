@@ -307,7 +307,7 @@ def constellation(satellite_id: str):
     return satellite_id[0]
 
 
-@memory.cache
+#@memory.cache
 def convert_nav_dataset_to_dataframe(nav_ds):
     """convert ephemerides from xarray.Dataset to pandas.DataFrame"""
     df = nav_ds.to_dataframe()
@@ -348,7 +348,7 @@ def convert_nav_dataset_to_dataframe(nav_ds):
             )
             # The first derivative of the clock offset is in a different field for SBAS and GLONASS
             group["SVclockDrift"] = group["SVrelFreqBias"]
-            # And the second derivative is zero, i.e. the constellation uses a fist-order clock model
+            # And the second derivative is zero, i.e. the constellation ground segment uses a fist-order clock model
             group["SVclockDriftRate"] = 0
         group["ephemeris_reference_time_isagpst"] = group[
             "ephemeris_reference_time_system_time"
@@ -515,10 +515,17 @@ def compute(rinex_nav_file_path, query_times_isagpst):
     )
     df.reset_index(inplace=True)
     df["clock_offset_m"] = constants.cGpsIcdSpeedOfLight_mps * (
-        df["query_time_wrt_clock_reference_time_s"] * df["SVclockDrift"]
-        + df["SVclockBias"]
+        df["SVclockBias"]
+        + df["SVclockDrift"] * df["query_time_wrt_clock_reference_time_s"]
+        + df["SVclockDriftRate"] * df["query_time_wrt_clock_reference_time_s"]**2
     )
-    return compute_kepler_orbit_position_and_velocity(df)
+    df["clock_offset_rate_mps"] = constants.cGpsIcdSpeedOfLight_mps * (
+            df["SVclockDrift"]
+            + 2 * df["SVclockDriftRate"] * df["query_time_wrt_clock_reference_time_s"]
+    )
+    df = compute_kepler_orbit_position_and_velocity(df)
+    df = df[["sv", "x", "y", "z", "vx", "vy", "vz", "clock_offset_m", "clock_offset_rate_mps", "query_time_isagpst"]]
+    return df
 
 
 if __name__ == "main":
