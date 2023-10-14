@@ -42,10 +42,10 @@ def test_position(input_for_test):
     sat_state_query_time_gpst = (
         pd.Timestamp("2022-01-01T00:02:00.000000000") - constants.cGpstUtcEpoch
     )
-    # query_times["G01"] = sat_state_query_time_gpst
-    # query_times["E02"] = sat_state_query_time_gpst
+    query_times["G01"] = sat_state_query_time_gpst
+    query_times["E02"] = sat_state_query_time_gpst
     query_times["C03"] = sat_state_query_time_gpst
-    # query_times["R04"] = sat_state_query_time_gpst
+    query_times["R04"] = sat_state_query_time_gpst
     sp3_sat_states = sp3_evaluate.compute(
         input_for_test["sp3_file"], sat_state_query_time_gpst
     )
