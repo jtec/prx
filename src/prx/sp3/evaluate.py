@@ -41,8 +41,12 @@ def parse_sp3_file(file_path: Path):
             helpers.timedelta_2_seconds
         )
         df.drop(columns=["time"], inplace=True)
-        df["clock_m"] = (constants.cGpsIcdSpeedOfLight_mps * df["clock"]) / constants.cMicrosecondsPerSecond
-        df["dclock_mps"] = (constants.cGpsIcdSpeedOfLight_mps * df["dclock"]) / constants.cMicrosecondsPerSecond
+        df["clock_m"] = (
+            constants.cGpsIcdSpeedOfLight_mps * df["clock"]
+        ) / constants.cMicrosecondsPerSecond
+        df["dclock_mps"] = (
+            constants.cGpsIcdSpeedOfLight_mps * df["dclock"]
+        ) / constants.cMicrosecondsPerSecond
         for axis in ["x", "y", "z"]:
             df["position_" + axis] = (
                 df["position_" + axis] * constants.cMetersPerKilometer
