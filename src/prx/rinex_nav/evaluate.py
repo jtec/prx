@@ -119,17 +119,14 @@ def glonass_xdot(x, a):
     pdot = v
     vdot = np.zeros(3)
     r = np.linalg.norm(p)
-    c1 = -mu / math.pow(p[0], 3) - (3 / 2) * math.pow(J_2, 2) * (
-        mu * math.pow(a_e, 2) / math.pow(r, 5)
-    ) * (1 - 5 * math.pow(p[2] / r, 2))
-    vdot[0] = c1 * p[0] + math.pow(omega, 2) * p[0] + 2 * omega * v[1] + a[0]
+    c1 = (-mu / p[0]**3) - (3 / 2) * J_2**2 * (mu * (a_e**2 / r**5)) * (1 - 5 * (p[2] / r)**2)
+    vdot[0] = c1 * p[0] + omega**2 * p[0] + 2 * omega * v[1] + a[0]
     vdot[1] = c1 * p[1] + math.pow(omega, 2) * p[1] - 2 * omega * v[0] + a[1]
     vdot[2] = c1 * p[2] + a[2]
     return np.concatenate((pdot, vdot))
 
 
-def compute_glonass_pv(sat_ephemeris: pd.DataFrame, t_system_time: pd.Timedelta):
-    """Compute GLONASS satellite position and velocity from ephemeris"""
+def compute_propagated_position_and_velocity(df):
     toe = sat_ephemeris["ephemeris_reference_time_system_time"].values[0]
     p = sat_ephemeris[["X", "Y", "Z"]].values.flatten()
     v = sat_ephemeris[["dX", "dY", "dZ"]].values.flatten()
@@ -137,10 +134,6 @@ def compute_glonass_pv(sat_ephemeris: pd.DataFrame, t_system_time: pd.Timedelta)
     a = sat_ephemeris[["dX2", "dY2", "dZ2"]].values.flatten()
     t = toe
 
-    assert t_system_time >= t, (
-        f"Time for which orbit is to be computed {t_system_time} is before "
-        f"ephemeris reference time {t}, should we be propagating GLONASS orbits backwards in time?"
-    )
     while abs(helpers.timedelta_2_nanoseconds(t - t_system_time)) > 1:
         max_time_step_s = 60
         h = min(
@@ -524,6 +517,7 @@ def compute(rinex_nav_file_path, query_times_isagpst):
         + 2 * df["SVclockDriftRate"] * df["query_time_wrt_clock_reference_time_s"]
     )
     df = compute_kepler_orbit_position_and_velocity(df)
+    df = compute_propagated_position_and_velocity(df)
     df = df[
         [
             "sv",
