@@ -40,7 +40,7 @@ def test_position(input_for_test):
     )
     query_times = {}
     sat_state_query_time_gpst = (
-        pd.Timestamp("2022-01-01T00:02:00.000000000") - constants.cGpstUtcEpoch
+        pd.Timestamp("2022-01-01T01:00:00.000000000") - constants.cGpstUtcEpoch
     )
     query_times["G01"] = sat_state_query_time_gpst
     query_times["E02"] = sat_state_query_time_gpst
