@@ -42,10 +42,14 @@ def test_position(input_for_test):
     sat_state_query_time_gpst = (
         pd.Timestamp("2022-01-01T01:00:00.000000000") - constants.cGpstUtcEpoch
     )
-    query_times["G01"] = sat_state_query_time_gpst
-    query_times["E02"] = sat_state_query_time_gpst
-    query_times["C03"] = sat_state_query_time_gpst
-    query_times["R04"] = sat_state_query_time_gpst
+    # Time-of-transmission is different for each satellite, simulate that here
+    # Multiple satellites with Kepler orbits
+    query_times["G01"] = sat_state_query_time_gpst + pd.Timedelta(seconds=1)/1e3
+    query_times["E02"] = sat_state_query_time_gpst + pd.Timedelta(seconds=2)/1e3
+    query_times["C03"] = sat_state_query_time_gpst + pd.Timedelta(seconds=3)/1e3
+    # Multiple satellites with orbits that require propagation of an initial state
+    query_times["R04"] = sat_state_query_time_gpst + pd.Timedelta(seconds=4)/1e3
+    query_times["R05"] = sat_state_query_time_gpst + pd.Timedelta(seconds=5)/1e3
     sp3_sat_states = sp3_evaluate.compute(
         input_for_test["sp3_file"], sat_state_query_time_gpst
     )
