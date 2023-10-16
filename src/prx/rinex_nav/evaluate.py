@@ -116,8 +116,8 @@ def glonass_xdot(x, a):
     a_e = 6378136.0
     J_2 = 1082625.7 * 1e-9
     omega = 0.7292115 * 1e-5
-    pdot = v
-    vdot = np.zeros(3)
+    xdot = x * float("nan")
+    xdot[["X", "Y", "Z"]] = x[["dX", "dY", "dZ"]]
     r = np.linalg.norm(p)
     c1 = (-mu / p[0]**3) - (3 / 2) * J_2**2 * (mu * (a_e**2 / r**5)) * (1 - 5 * (p[2] / r)**2)
     vdot[0] = c1 * p[0] + omega**2 * p[0] + 2 * omega * v[1] + a[0]
@@ -127,26 +127,31 @@ def glonass_xdot(x, a):
 
 
 def compute_propagated_position_and_velocity(df):
-    toe = sat_ephemeris["ephemeris_reference_time_system_time"].values[0]
-    p = sat_ephemeris[["X", "Y", "Z"]].values.flatten()
-    v = sat_ephemeris[["dX", "dY", "dZ"]].values.flatten()
-    x = np.concatenate((p, v))
-    a = sat_ephemeris[["dX2", "dY2", "dZ2"]].values.flatten()
-    t = toe
+    toes = df["ephemeris_reference_time_isagpst"]
+    pv = df[["X", "Y", "Z", "dX", "dY", "dZ"]]
+    a = df[["dX2", "dY2", "dZ2"]]
+    #p = df[["X", "Y", "Z"]].values.flatten()
+    #v = df[["dX", "dY", "dZ"]].values.flatten()
+    #x = np.concatenate((p, v))
+    #a = df[["dX2", "dY2", "dZ2"]].values.flatten()
+    ts = df["query_time_wrt_ephemeris_reference_time_s"] * 0
+    t_ends = df["query_time_wrt_ephemeris_reference_time_s"]
 
-    while abs(helpers.timedelta_2_nanoseconds(t - t_system_time)) > 1:
-        max_time_step_s = 60
-        h = min(
-            max_time_step_s,
-            float(helpers.timedelta_2_nanoseconds(t_system_time - t))
-            / constants.cNanoSecondsPerSecond,
-        )
-        k1 = glonass_xdot(x, a)
-        k2 = glonass_xdot(x + k1 * h / 2, a)
-        k3 = glonass_xdot(x + k2 * h / 2, a)
-        k4 = glonass_xdot(x + k3 * h, a)
-        x = x + h / 6 * (k1 + 2 * k2 + 2 * k3 + k4)
-        t += pd.Timedelta(h, "seconds")
+    while True:
+        # We integrate in fixed steps until the last step, which is the time between the next-to-last integrated state
+        # and the query time.
+        fixed_integration_time_step = 60
+        time_steps = t_ends - ts
+        time_steps[time_steps > fixed_integration_time_step] = fixed_integration_time_step
+        time_steps[time_steps < 0] = 0
+        if np.all(time_steps == 0):
+            break
+        k1 = glonass_xdot(pv, a)
+        k2 = glonass_xdot(pv + k1 * time_steps / 2, a)
+        k3 = glonass_xdot(pv + k2 * time_steps / 2, a)
+        k4 = glonass_xdot(pv + k3 * time_steps, a)
+        pv = pv + time_steps / 6 * (k1 + 2 * k2 + 2 * k3 + k4)
+        ts = ts + time_steps
 
     return x[0:3], x[3:6]
 
