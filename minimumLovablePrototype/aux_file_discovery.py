@@ -100,17 +100,17 @@ def discover_or_download_auxiliary_files(observation_file_path=Path()):
     rinex_3_obs_file = converters.anything_to_rinex_3(observation_file_path)
     header = georinex.rinexheader(rinex_3_obs_file)
     ephs = discover_or_download_ephemerides(
-        helpers.rinex_header_time_string_2_timestamp_ns(header["TIME OF FIRST OBS"]),
+        # remove 200 ms to the first obs epochin to the time of emission computation
+        # This accounts for
+        #   travel time to GEO satellite (~120 ms)
+        #   + max sat clock offset (37 ms)
+        #   + 43 ms / 27 % margin
+        helpers.rinex_header_time_string_2_timestamp_ns(header["TIME OF FIRST OBS"]) - pd.Timedelta(200, unit="milliseconds"),
         helpers.rinex_header_time_string_2_timestamp_ns(header["TIME OF LAST OBS"]),
         rinex_3_obs_file.parent,
         list(header["fields"].keys()),
     )
-    if len(ephs) > 1:
-        assert (
-            False
-        ), "Observations crossing day boundaries not handled yet, need to merge ephemeris files here"
-    return {"broadcast_ephemerides": ephs[0]}
-
+    return {"broadcast_ephemerides": ephs}
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(

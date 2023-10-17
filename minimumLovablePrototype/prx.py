@@ -79,9 +79,8 @@ def build_header(input_files):
     return prx_header
 
 
-def check_assumptions(rinex_3_obs_file, rinex_3_nav_file):
+def check_assumptions(rinex_3_obs_file,):
     obs_header = georinex.rinexheader(rinex_3_obs_file)
-    nav_header = georinex.rinexheader(rinex_3_nav_file)
     if "RCV CLOCK OFFS APPL" in obs_header.keys():
         assert (
                 obs_header["RCV CLOCK OFFS APPL"].strip() == "0"
@@ -91,9 +90,9 @@ def check_assumptions(rinex_3_obs_file, rinex_3_nav_file):
     ), "Handling of observation files using time scales other than GPST not implemented yet."
 
 
-def build_records(rinex_3_obs_file, rinex_3_ephemerides_file,
+def build_records(rinex_3_obs_file, rinex_3_ephemerides_files,
                   receiver_ecef_position_m=np.full(shape=(3,), fill_value=np.nan)):
-    check_assumptions(rinex_3_obs_file, rinex_3_ephemerides_file)
+    check_assumptions(rinex_3_obs_file,)
     obs = parse_rinex.load(rinex_3_obs_file, use_caching=True)
 
     # if receiver_ecef_position_m has not been initialized, get it from the RNX OBS header
@@ -185,7 +184,8 @@ def build_records(rinex_3_obs_file, rinex_3_ephemerides_file,
         )
 
     log.info("Computing satellite states")
-    ephemerides = eph.convert_rnx3_nav_file_to_dataframe(rinex_3_ephemerides_file)
+    ephemerides = pd.concat([eph.convert_rnx3_nav_file_to_dataframe(file) for file in rinex_3_ephemerides_files]).sort_values(by=["time"])
+
     per_sat[
         [
             "satellite_position_m",
@@ -198,7 +198,7 @@ def build_records(rinex_3_obs_file, rinex_3_ephemerides_file,
         ]
     ] = per_sat.apply(compute_sat_state, axis=1, args=(ephemerides, receiver_ecef_position_m,))
 
-    def convert_to_per_obs(row, ephemerides, code_phase_columns, receiver_ecef_position_m, nav_header, glonass_slot_dict):  # , nav_header):
+    def convert_to_per_obs(row, ephemerides, code_phase_columns, receiver_ecef_position_m, nav_header_dict, glonass_slot_dict):  # , nav_header):
         time_of_reception_in_receiver_time = row["time_of_reception_in_receiver_time"]
         constellation = row["satellite"][0]
         prn = row["satellite"][1:]
@@ -263,12 +263,14 @@ def build_records(rinex_3_obs_file, rinex_3_ephemerides_file,
                 elevation_sat_rad, azimuth_sat_rad = eph.compute_satellite_elevation_and_azimuth(row["satellite_position_m"],
                                                                                     receiver_ecef_position_m)
                 [lat_user_rad, lon_user_rad, __] = eph.ecef_2_geodetic(receiver_ecef_position_m)
-                __, tow_s = helpers.timedelta_2_weeks_and_seconds(helpers.timestamp_2_timedelta(row["time_of_emission_in_satellite_time"],
+                week_nb, tow_s = helpers.timedelta_2_weeks_and_seconds(helpers.timestamp_2_timedelta(row["time_of_emission_in_satellite_time"],
                                                       eph.constellation_2_system_time_scale[constellation]))
+                year, day_of_year = helpers.week_number_and_tow_to_year_and_doy(week_nb, tow_s, eph.constellation_2_system_time_scale[constellation])
+
                 iono_delay_m.append(atmo.compute_klobuchar_l1_correction(
                     tow_s,
-                    nav_header["IONOSPHERIC CORR"]["GPSA"],
-                    nav_header["IONOSPHERIC CORR"]["GPSB"],
+                    nav_header_dict[f"{year:03d}"+f"{day_of_year:03d}"]["IONOSPHERIC CORR"]["GPSA"],
+                    nav_header_dict[f"{year:03d}"+f"{day_of_year:03d}"]["IONOSPHERIC CORR"]["GPSB"],
                     elevation_sat_rad,
                     azimuth_sat_rad,
                     lat_user_rad,
@@ -300,14 +302,18 @@ def build_records(rinex_3_obs_file, rinex_3_ephemerides_file,
         )
         return per_obs
 
-    nav_header = georinex.rinexheader(rinex_3_ephemerides_file)
+    # create a dictionary containing the headers of the different NAV files.
+    # The keys are the "YYYYDDD" (year and day of year) and are located at
+    # [12:19] of the file name using RINEX naming convention
+    nav_header_dict = {rinex_3_ephemerides_files[i].name[12:19]:georinex.rinexheader(rinex_3_ephemerides_files[i]) for i in
+                       range(len(rinex_3_ephemerides_files))}
     per_epoch_per_sat_per_obs = pd.DataFrame()
     for index in range(per_sat.shape[0]):
         per_epoch_per_sat_per_obs = pd.concat(
             [
                 per_epoch_per_sat_per_obs,
                 convert_to_per_obs(per_sat.iloc[index], ephemerides, code_phase_columns, receiver_ecef_position_m,
-                                   nav_header, glonass_slot_dict,),
+                                   nav_header_dict, glonass_slot_dict,),
             ],
             ignore_index=True
         )
@@ -324,8 +330,10 @@ def process(observation_file_path: Path, output_format="jsonseq"):
     rinex_3_obs_file = converters.anything_to_rinex_3(observation_file_path)
     prx_file = str(rinex_3_obs_file).replace(".rnx", "")
     aux_files = aux.discover_or_download_auxiliary_files(rinex_3_obs_file)
+    input_file_list = [rinex_3_obs_file]
+    input_file_list.extend(aux_files["broadcast_ephemerides"])
     write_prx_file(
-        build_header([rinex_3_obs_file, aux_files["broadcast_ephemerides"]]),
+        build_header(input_file_list),
         build_records(rinex_3_obs_file, aux_files["broadcast_ephemerides"]),
         prx_file,
         output_format,

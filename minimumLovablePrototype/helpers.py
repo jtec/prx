@@ -94,6 +94,40 @@ def rinex_header_time_string_2_timestamp_ns(time_string: str) -> pd.Timestamp:
     return timestamp
 
 
+def week_number_and_tow_to_year_and_doy(week_nb, time_of_week, time_scale):
+    if (
+            time_scale == "GPST"
+            or time_scale == "SBAST"
+            or time_scale == "QZSST"
+            or time_scale == "IRNSST"
+            or time_scale == "GST"
+    ):
+        reference_epoch = constants.cGpstUtcEpoch
+    if time_scale == "BDT":
+        # TODO double-check the offset between BDT and GPST
+        reference_epoch = constants.cGpstUtcEpoch\
+                          + pd.Timedelta(1356 * constants.cSecondsPerWeek, "seconds")\
+                          + pd.Timedelta(14, "seconds")
+    # The GLONASS epoch is (probably) the UTC epoch, to keep the Timedelta within the same order of magnitude
+    # as for the other constellations, we use an arbitrary epoch here.
+    if time_scale == "GLONASST":
+        reference_epoch = constants.cArbitraryGlonassUtcEpoch
+
+    # Calculate the number of days to add
+    days = week_nb * 7 + time_of_week // 86400
+
+    # Calculate the number of seconds to add
+    seconds = time_of_week % 86400
+
+    # Create a timedelta and add it to the GPS epoch
+    time = reference_epoch + pd.to_timedelta(days, unit='D') + pd.to_timedelta(seconds, unit='s')
+
+    # Extract year and day of year from the resulting timestamp
+    year = time.year
+    day_of_year = time.dayofyear
+
+    return year, day_of_year
+
 def repair_with_gfzrnx(file):
     gfzrnx_binaries = glob.glob(
         str(prx_root().joinpath("tools/gfzrnx/**gfzrnx**")), recursive=True
