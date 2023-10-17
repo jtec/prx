@@ -37,7 +37,7 @@ def load_from_pickle_cache(rinex_file: Path, use_caching=False):
                 return load_from_pickle_cache(rinex_file, use_caching)
     log.info(f"Parsing {rinex_file} ...")
     helpers.repair_with_gfzrnx(rinex_file)
-    parsed = georinex.load(rinex_file)
+    parsed = georinex.load(rinex_file, useindicators=True)
     if use_caching:
         try:
             with open(cache_file, "wb") as file:
@@ -70,7 +70,7 @@ def load_from_netcdf_cache(rinex_file: Path, use_caching=False):
                 os.remove(cache_file)
                 return load_from_netcdf_cache(rinex_file, use_caching)
     helpers.repair_with_gfzrnx(rinex_file)
-    parsed = georinex.load(rinex_file)
+    parsed = georinex.load(rinex_file, useindicators=True)
     if use_caching:
         try:
             parsed.to_netcdf(cache_file)
