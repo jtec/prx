@@ -8,6 +8,7 @@ from functools import lru_cache
 import georinex
 from pathlib import Path
 import joblib
+import scipy
 
 from .. import helpers
 from .. import constants
@@ -276,6 +277,18 @@ def compute_kepler_orbit_position_and_velocity(ephem):
     sv_posvel.loc[:, "y"] = xp * sin_omega + yp * cos_i * cos_omega
     sv_posvel.loc[:, "z"] = yp * sin_i
 
+    # Do special rotation for Beidou GEO satellites, see Beidou_ICD_B3I_v1.0.pdf, Table 5-11
+    z_angles = constants.cOmegaDotEarth_rps * dt
+    rotation_matrices = []
+    for i, z_angle in enumerate(z_angles):
+        x_angle = helpers.deg_2_rad(-5.0)
+        Rx = np.array([[1, 0, 0],[0, np.cos(x_angle), np.sin(x_angle)],[0, -np.sin(x_angle), np.cos(x_angle)]])
+        Rz = np.array([[np.cos(z_angle), np.sin(z_angle), 0],[-np.sin(z_angle), np.cos(z_angle), 0],[0, 0, 1]])
+        rotation_matrices.append(np.matmul(Rz, Rx))
+    R = scipy.linalg.block_diag(*rotation_matrices)
+    new_pos = np.matmul(R, sv_posvel.stack().to_numpy())
+    new_pos = pd.DataFrame(new_pos).unstack()
+
     ############################################
     ######  Lines added for velocity (4)  ######
     ############################################
@@ -522,7 +535,7 @@ def compute(rinex_nav_file_path, query_times_isagpst):
         + 2 * df["SVclockDriftRate"] * df["query_time_wrt_clock_reference_time_s"]
     )
     df = compute_kepler_orbit_position_and_velocity(df)
-    df = compute_propagated_position_and_velocity(df)
+    # df = compute_propagated_position_and_velocity(df)
     df = df[
         [
             "sv",
