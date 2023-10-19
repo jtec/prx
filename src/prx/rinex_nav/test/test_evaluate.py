@@ -99,3 +99,4 @@ def test_position(input_for_test):
                 np.linalg.norm(rinex[state_name] - sp3[state_name])
                 < expected_max_abs_difference[state_name]
             )
+        pass
