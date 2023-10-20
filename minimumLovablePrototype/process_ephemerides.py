@@ -393,7 +393,7 @@ def compute_total_group_delay_rnx3(
             f"Could not retrieve total group delay for satellite id: {satellite} and obs: {obs_type}"
         )
 
-    return group_delay * gamma
+    return group_delay * gamma * constants.cGpsIcdSpeedOfLight_mps
 
 
 def compute_sagnac_effect(sat_pos_m, rx_pos_m):
