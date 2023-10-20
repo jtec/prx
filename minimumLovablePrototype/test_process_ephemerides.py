@@ -313,7 +313,7 @@ def test_compute_gps_group_delay_rnx3(input_for_test):
     eph_rnx3_df = eph.convert_rnx3_nav_file_to_dataframe(rinex_3_navigation_file)
 
     # retrieve total group delays for 4 different observation codes, at 3 different times
-    tgd_c1c_s = pd.Series(
+    tgd_c1c_m = pd.Series(
         data=[
             eph.compute_total_group_delay_rnx3(
                 eph_rnx3_df,
@@ -341,7 +341,7 @@ def test_compute_gps_group_delay_rnx3(input_for_test):
             ),
         ]
     )
-    tgd_c1p_s = pd.Series(
+    tgd_c1p_m = pd.Series(
         data=[
             eph.compute_total_group_delay_rnx3(
                 eph_rnx3_df,
@@ -369,7 +369,7 @@ def test_compute_gps_group_delay_rnx3(input_for_test):
             ),
         ]
     )
-    tgd_c2p_s = pd.Series(
+    tgd_c2p_m = pd.Series(
         data=[
             eph.compute_total_group_delay_rnx3(
                 eph_rnx3_df,
@@ -397,7 +397,7 @@ def test_compute_gps_group_delay_rnx3(input_for_test):
             ),
         ]
     )
-    tgd_c5x_s = eph.compute_total_group_delay_rnx3(
+    tgd_c5x_m = eph.compute_total_group_delay_rnx3(
         eph_rnx3_df,
         helpers.timestamp_2_timedelta(
             pd.Timestamp("2022-01-01T00:00:00.000000000"), "GPST"
@@ -407,25 +407,26 @@ def test_compute_gps_group_delay_rnx3(input_for_test):
     )
 
     # total group delay is on the 7th line, 3rd position
-    tgd_c1c_s_expected = pd.Series(
+    tgd_c1c_m_expected = pd.Series(
         data=[-1.769512891770e-08, -1.769512891770e-08, -1.769512891769e-08]
-    )
-    tgd_c1p_s_expected = pd.Series(
+    ) * constants.cGpsIcdSpeedOfLight_mps
+    tgd_c1p_m_expected = pd.Series(
         data=[-1.769512891770e-08, -1.769512891770e-08, -1.769512891769e-08]
-    )
-    tgd_c2p_s_expected = (
+    ) * constants.cGpsIcdSpeedOfLight_mps
+    tgd_c2p_m_expected = (
         pd.Series(data=[-1.769512891770e-08, -1.769512891770e-08, -1.769512891769e-08])
         * (
             constants.carrier_frequencies_hz()["G"]["L1"]
             / constants.carrier_frequencies_hz()["G"]["L2"]
         )
         ** 2
+        * constants.cGpsIcdSpeedOfLight_mps
     )
 
-    assert (tgd_c1c_s == tgd_c1c_s_expected).all()
-    assert (tgd_c1p_s == tgd_c1p_s_expected).all()
-    assert (tgd_c2p_s == tgd_c2p_s_expected).all()
-    assert np.isnan(tgd_c5x_s)
+    assert (tgd_c1c_m == tgd_c1c_m_expected).all()
+    assert (tgd_c1p_m == tgd_c1p_m_expected).all()
+    assert (tgd_c2p_m == tgd_c2p_m_expected).all()
+    assert np.isnan(tgd_c5x_m)
 
 
 def test_compute_gal_group_delay_rnx3(input_for_test):
@@ -453,7 +454,7 @@ def test_compute_gal_group_delay_rnx3(input_for_test):
     )
     eph_rnx3_df = eph.convert_rnx3_nav_file_to_dataframe(rinex_3_navigation_file)
 
-    tgd_e1_s = eph.compute_total_group_delay_rnx3(
+    tgd_e1_m = eph.compute_total_group_delay_rnx3(
         eph_rnx3_df,
         helpers.timestamp_2_timedelta(
             pd.Timestamp("2022-01-01T01:30:00.000000000"), "GST"
@@ -461,7 +462,7 @@ def test_compute_gal_group_delay_rnx3(input_for_test):
         "E25",
         "C1C",
     )
-    tgd_e5a_s = eph.compute_total_group_delay_rnx3(
+    tgd_e5a_m = eph.compute_total_group_delay_rnx3(
         eph_rnx3_df,
         helpers.timestamp_2_timedelta(
             pd.Timestamp("2022-01-01T01:30:00.000000000"), "GST"
@@ -469,7 +470,7 @@ def test_compute_gal_group_delay_rnx3(input_for_test):
         "E25",
         "C5X",
     )
-    tgd_e5b_s = eph.compute_total_group_delay_rnx3(
+    tgd_e5b_m = eph.compute_total_group_delay_rnx3(
         eph_rnx3_df,
         helpers.timestamp_2_timedelta(
             pd.Timestamp("2022-01-01T01:30:00.000000000"), "GST"
@@ -477,7 +478,7 @@ def test_compute_gal_group_delay_rnx3(input_for_test):
         "E25",
         "C7X",
     )
-    tgd_e6b_s = eph.compute_total_group_delay_rnx3(
+    tgd_e6b_m = eph.compute_total_group_delay_rnx3(
         eph_rnx3_df,
         helpers.timestamp_2_timedelta(
             pd.Timestamp("2022-01-01T01:30:00.000000000"), "GST"
@@ -486,32 +487,34 @@ def test_compute_gal_group_delay_rnx3(input_for_test):
         "C6B",
     )
 
-    tgd_e1_s_expected = 4.889443516730e-09
-    tgd_e5a_s_expected = (
+    tgd_e1_m_expected = 4.889443516730e-09 * constants.cGpsIcdSpeedOfLight_mps
+    tgd_e5a_m_expected = (
         4.423782229424e-09
         * (
             constants.carrier_frequencies_hz()["E"]["L1"]
             / constants.carrier_frequencies_hz()["E"]["L5"]
         )
         ** 2
+        * constants.cGpsIcdSpeedOfLight_mps
     )
-    tgd_e5b_s_expected = (
+    tgd_e5b_m_expected = (
         4.889443516730e-09
         * (
             constants.carrier_frequencies_hz()["E"]["L1"]
             / constants.carrier_frequencies_hz()["E"]["L7"]
         )
         ** 2
+        * constants.cGpsIcdSpeedOfLight_mps
     )
 
-    assert abs(tgd_e1_s - tgd_e1_s_expected) * constants.cGpsIcdSpeedOfLight_mps < 1e-3
+    assert abs(tgd_e1_m - tgd_e1_m_expected) < 1e-3
     assert (
-        abs(tgd_e5a_s - tgd_e5a_s_expected) * constants.cGpsIcdSpeedOfLight_mps < 1e-3
+        abs(tgd_e5a_m - tgd_e5a_m_expected) < 1e-3
     )
     assert (
-        abs(tgd_e5b_s - tgd_e5b_s_expected) * constants.cGpsIcdSpeedOfLight_mps < 1e-3
+        abs(tgd_e5b_m - tgd_e5b_m_expected) < 1e-3
     )
-    assert np.isnan(tgd_e6b_s)
+    assert np.isnan(tgd_e6b_m)
 
 
 def test_compute_bds_group_delay_rnx3(input_for_test):
@@ -540,7 +543,7 @@ def test_compute_bds_group_delay_rnx3(input_for_test):
     eph_rnx3_df = eph.convert_rnx3_nav_file_to_dataframe(rinex_3_navigation_file)
 
     # B1I -> C2I
-    tgd_c2i_s = eph.compute_total_group_delay_rnx3(
+    tgd_c2i_m = eph.compute_total_group_delay_rnx3(
         eph_rnx3_df,
         helpers.timestamp_2_timedelta(
             pd.Timestamp("2022-01-01T00:30:00.000000000"), "BDT"
@@ -549,7 +552,7 @@ def test_compute_bds_group_delay_rnx3(input_for_test):
         "C2I",
     )
     # B2I -> C7I
-    tgd_c7i_s = eph.compute_total_group_delay_rnx3(
+    tgd_c7i_m = eph.compute_total_group_delay_rnx3(
         eph_rnx3_df,
         helpers.timestamp_2_timedelta(
             pd.Timestamp("2022-01-01T00:30:00.000000000"), "BDT"
@@ -558,7 +561,7 @@ def test_compute_bds_group_delay_rnx3(input_for_test):
         "C7I",
     )
     # B3I -> C6I
-    tgd_c6i_s = eph.compute_total_group_delay_rnx3(
+    tgd_c6i_m = eph.compute_total_group_delay_rnx3(
         eph_rnx3_df,
         helpers.timestamp_2_timedelta(
             pd.Timestamp("2022-01-01T00:30:00.000000000"), "BDT"
@@ -568,7 +571,7 @@ def test_compute_bds_group_delay_rnx3(input_for_test):
     )
 
     # B1Cd -> C1D
-    tgd_c1d_s = eph.compute_total_group_delay_rnx3(
+    tgd_c1d_m = eph.compute_total_group_delay_rnx3(
         eph_rnx3_df,
         helpers.timestamp_2_timedelta(
             pd.Timestamp("2022-01-01T00:30:00.000000000"), "BDT"
@@ -577,7 +580,7 @@ def test_compute_bds_group_delay_rnx3(input_for_test):
         "C1D",
     )
     # B1Cp -> C1P
-    tgd_c1p_s = eph.compute_total_group_delay_rnx3(
+    tgd_c1p_m = eph.compute_total_group_delay_rnx3(
         eph_rnx3_df,
         helpers.timestamp_2_timedelta(
             pd.Timestamp("2022-01-01T00:30:00.000000000"), "BDT"
@@ -586,7 +589,7 @@ def test_compute_bds_group_delay_rnx3(input_for_test):
         "C1P",
     )
     # B2bi -> C7D
-    tgd_c5x_s = eph.compute_total_group_delay_rnx3(
+    tgd_c5x_m = eph.compute_total_group_delay_rnx3(
         eph_rnx3_df,
         helpers.timestamp_2_timedelta(
             pd.Timestamp("2022-01-01T00:30:00.000000000"), "BDT"
@@ -595,22 +598,22 @@ def test_compute_bds_group_delay_rnx3(input_for_test):
         "C7D",
     )
 
-    tgd_c2i_s_expected = -5.800000000000e-09
-    tgd_c7i_s_expected = -1.020000000000e-08
-    tgd_c6i_s_expected = 0
+    tgd_c2i_m_expected = -5.800000000000e-09 * constants.cGpsIcdSpeedOfLight_mps
+    tgd_c7i_m_expected = -1.020000000000e-08 * constants.cGpsIcdSpeedOfLight_mps
+    tgd_c6i_m_expected = 0 * constants.cGpsIcdSpeedOfLight_mps
 
     assert (
-        abs(tgd_c2i_s - tgd_c2i_s_expected) * constants.cGpsIcdSpeedOfLight_mps < 1e-3
+        abs(tgd_c2i_m - tgd_c2i_m_expected) < 1e-3
     )
     assert (
-        abs(tgd_c7i_s - tgd_c7i_s_expected) * constants.cGpsIcdSpeedOfLight_mps < 1e-3
+        abs(tgd_c7i_m - tgd_c7i_m_expected) < 1e-3
     )
     assert (
-        abs(tgd_c6i_s - tgd_c6i_s_expected) * constants.cGpsIcdSpeedOfLight_mps < 1e-3
+        abs(tgd_c6i_m - tgd_c6i_m_expected) < 1e-3
     )
-    assert np.isnan(tgd_c1d_s)
-    assert np.isnan(tgd_c1p_s)
-    assert np.isnan(tgd_c5x_s)
+    assert np.isnan(tgd_c1d_m)
+    assert np.isnan(tgd_c1p_m)
+    assert np.isnan(tgd_c5x_m)
 
 
 def test_sagnac_effect():

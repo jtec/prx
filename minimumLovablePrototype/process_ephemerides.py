@@ -307,7 +307,7 @@ def compute_total_group_delay_rnx3(
         satellite: str,
         obs_type: str,
 ):
-    """compute the total group delay from a parsed rnx3 file, for a specific satellite, time and observation type
+    """compute the total group delay in meters from a parsed rnx3 file, for a specific satellite, time and observation type
 
     Input examples:
     parsed_rinex_3_nav_file = ph.convert_rnx3_nav_file_to_dataframe(rinex_3_navigation_file)
