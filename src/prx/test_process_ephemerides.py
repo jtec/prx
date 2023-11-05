@@ -218,12 +218,12 @@ def test_compute_gps_satellite_clock_offset(input_for_test):
     )
     # We expect the following clock offset and clock offset rate computed by hand from the parameters above.
     delta_t_s = constants.cSecondsPerHour
-    expected_offset_m = constants.cGpsIcdSpeedOfLight_mps * (
+    expected_offset_m = constants.cGpsSpeedOfLight_mps * (
         4.691267386079e-04
         + (-1.000444171950e-11 * delta_t_s)
         + 0.000000000000e00 * math.pow(delta_t_s, 2)
     )
-    expected_offset_rate_mps = constants.cGpsIcdSpeedOfLight_mps * (
+    expected_offset_rate_mps = constants.cGpsSpeedOfLight_mps * (
         -1.000444171950e-11 + 2 * 0.000000000000e00 * delta_t_s
     )
     # Expect micrometers and micrometers/s accuracy here:
@@ -258,7 +258,7 @@ def test_compute_satellite_clock_offset_glonass(input_for_test):
     )
     # We expect the following clock offset and clock offset rate computed by hand from the parameters above.
     delta_t_s = constants.cSecondsPerHour
-    expected_offset_m = constants.cGpsIcdSpeedOfLight_mps * (
+    expected_offset_m = constants.cGpsSpeedOfLight_mps * (
         7.305294275284e-06 + (0.0 * delta_t_s) + math.pow(0.000000000000e00, 2)
     )
     expected_offset_rate_mps = 0
@@ -492,12 +492,12 @@ def test_compute_gal_group_delay_rnx3(input_for_test):
         ** 2
     )
 
-    assert abs(tgd_e1_s - tgd_e1_s_expected) * constants.cGpsIcdSpeedOfLight_mps < 1e-3
+    assert abs(tgd_e1_s - tgd_e1_s_expected) * constants.cGpsSpeedOfLight_mps < 1e-3
     assert (
-        abs(tgd_e5a_s - tgd_e5a_s_expected) * constants.cGpsIcdSpeedOfLight_mps < 1e-3
+            abs(tgd_e5a_s - tgd_e5a_s_expected) * constants.cGpsSpeedOfLight_mps < 1e-3
     )
     assert (
-        abs(tgd_e5b_s - tgd_e5b_s_expected) * constants.cGpsIcdSpeedOfLight_mps < 1e-3
+            abs(tgd_e5b_s - tgd_e5b_s_expected) * constants.cGpsSpeedOfLight_mps < 1e-3
     )
     assert np.isnan(tgd_e6b_s)
 
@@ -588,13 +588,13 @@ def test_compute_bds_group_delay_rnx3(input_for_test):
     tgd_c6i_s_expected = 0
 
     assert (
-        abs(tgd_c2i_s - tgd_c2i_s_expected) * constants.cGpsIcdSpeedOfLight_mps < 1e-3
+            abs(tgd_c2i_s - tgd_c2i_s_expected) * constants.cGpsSpeedOfLight_mps < 1e-3
     )
     assert (
-        abs(tgd_c7i_s - tgd_c7i_s_expected) * constants.cGpsIcdSpeedOfLight_mps < 1e-3
+            abs(tgd_c7i_s - tgd_c7i_s_expected) * constants.cGpsSpeedOfLight_mps < 1e-3
     )
     assert (
-        abs(tgd_c6i_s - tgd_c6i_s_expected) * constants.cGpsIcdSpeedOfLight_mps < 1e-3
+            abs(tgd_c6i_s - tgd_c6i_s_expected) * constants.cGpsSpeedOfLight_mps < 1e-3
     )
     assert np.isnan(tgd_c1d_s)
     assert np.isnan(tgd_c1p_s)
