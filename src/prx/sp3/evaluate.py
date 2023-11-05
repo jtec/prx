@@ -42,10 +42,10 @@ def parse_sp3_file(file_path: Path):
         )
         df.drop(columns=["time"], inplace=True)
         df["clock_m"] = (
-            constants.cGpsIcdSpeedOfLight_mps * df["clock"]
+                                constants.cGpsSpeedOfLight_mps * df["clock"]
         ) / constants.cMicrosecondsPerSecond
         df["dclock_mps"] = (
-            constants.cGpsIcdSpeedOfLight_mps * df["dclock"]
+                                   constants.cGpsSpeedOfLight_mps * df["dclock"]
         ) / constants.cMicrosecondsPerSecond
         for axis in ["x", "y", "z"]:
             df["position_" + axis] = (

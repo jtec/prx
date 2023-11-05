@@ -172,127 +172,129 @@ def eccentric_anomaly(M, e, tol=1e-5, max_iter=10):
     return E
 
 
+def is_bds_geo(inclination_rad, semi_major_axis_m):
+    # IGSO and MEO satellites have an inclination of 55 degrees, so we can
+    # use that as a threshold to distinguish GEO from IGSO satellites.
+    # TODO Ok to ignore eccentricity here?
+    # From BDS-SIS-ICD-2.0, 2013-12, section 3.1
+    inclination_igso_and_meo_rad = helpers.deg_2_rad(55)
+    geo_and_igso_approximate_radius_m = 35786 * constants.cMetersPerKilometer + constants.cBdsCgcs2000SmiMajorAxis_m
+    meo_approximate_radius_m = 21528 * constants.cMetersPerKilometer + constants.cBdsCgcs2000SmiMajorAxis_m
+    radius_threshold_m = (meo_approximate_radius_m - geo_and_igso_approximate_radius_m) / 2
+    inclination_threshold_rad = inclination_igso_and_meo_rad / 2
+    is_geo = (semi_major_axis_m > radius_threshold_m) & (inclination_rad < inclination_threshold_rad)
+    return is_geo
+
+
 # Adapted from gnss_lib_py's find_sat()
-def compute_kepler_orbit_position_and_velocity(ephem):
-    # Extract parameters
-    c_is = ephem["C_is"]
-    c_ic = ephem["C_ic"]
-    c_rs = ephem["C_rs"]
-    c_rc = ephem["C_rc"]
-    c_uc = ephem["C_uc"]
-    c_us = ephem["C_us"]
-    M_0 = ephem["M_0"]
-    dN = ephem["deltaN"]
-
-    ecc = ephem["e"]  # eccentricity
-    omega = ephem["omega"]  # argument of perigee
-    omega_0 = ephem["Omega_0"]
-    sqrt_sma = ephem["sqrtA"]  # sqrt of semi-major axis
-    sma = sqrt_sma**2  # semi-major axis
-
-    sqrt_mu_A = (
-        np.sqrt(constants.cMuEarth_m3ps2) * sqrt_sma**-3
-    )  # mean angular motion
-
-    sv_posvel = pd.DataFrame()
-    sv_posvel.loc[:, "sv"] = ephem.index
-    sv_posvel.set_index("sv", inplace=True)
-
-    dt = ephem["query_time_wrt_ephemeris_reference_time_s"]
-
-    # Calculate the mean anomaly with corrections
-    M_corr = dN * dt
-    M = M_0 + (sqrt_mu_A * dt) + M_corr
-
-    # Compute Eccentric Anomaly
-    E = eccentric_anomaly(M, ecc, tol=1e-5)
-
-    cos_E = np.cos(E)
-    sin_E = np.sin(E)
-    e_cos_E = 1 - ecc * cos_E
-
-    # Calculate the true anomaly from the eccentric anomaly
-    sin_nu = np.sqrt(1 - ecc**2) * (sin_E / e_cos_E)
-    cos_nu = (cos_E - ecc) / e_cos_E
-    nu = np.arctan2(sin_nu, cos_nu)
-
-    # Calculate the argument of latitude iteratively
-    phi_0 = nu + omega
-    phi = phi_0
-    for i in range(5):
-        cos_to_phi = np.cos(2.0 * phi)
-        sin_to_phi = np.sin(2.0 * phi)
-        phi_corr = c_uc * cos_to_phi + c_us * sin_to_phi
-        phi = phi_0 + phi_corr
-
-    # Calculate the longitude of ascending node with correction
-    omega_corr = ephem["OmegaDot"] * dt
-
-    # Also correct for the rotation since the beginning of the system time scale week for
-    # which the Omega0 is defined.
-    # TODO Is this valid for all constellations?
-    week_second = ephem["query_time_isagpst"].apply(
-        lambda t: helpers.timedelta_2_weeks_and_seconds(t)[1]
+def bds_orbit_position_and_velocity(eph):
+    # Semi-major axis
+    A = eph.sqrtA**2
+    # Computed mean motion
+    n_0 = (
+        np.sqrt(constants.cBdsMuEarth_m3ps2) * eph.sqrtA**-3
     )
-    omega = omega_0 - (constants.cOmegaDotEarth_rps * (week_second)) + omega_corr
+    # Time since ephemeris reference epch
+    eph['t_k'] = eph.query_time_wrt_ephemeris_reference_time_s
+    # Corrected mean motion
+    n = n_0 + eph.deltaN
+    # Computed mean anomaly
+    M_k = eph.M_0 + (n * eph.t_k)
+    # Eccentric Anomaly
+    E_k = eccentric_anomaly(M_k, eph.e, tol=1e-5)
+    # Computed true anomaly
+    sin_nu = np.sqrt(1 - eph.e**2) * (np.sin(E_k) / (1 - eph.e * np.cos(E_k)))
+    cos_nu = (np.cos(E_k) - eph.e) / (1 - eph.e * np.cos(E_k))
+    nu_k = np.arctan2(sin_nu, cos_nu)
+    # Computed argument of latitude
+    phi_k = nu_k + eph.omega
+    # Argument of latitude correction
+    delta_u_k = eph.C_us * np.sin(2 * phi_k) + eph.C_uc * np.cos(2 * phi_k)
+    # Radius correction
+    delta_r_k = eph.C_rs * np.sin(2 * phi_k) + eph.C_rc * np.cos(2 * phi_k)
+    # Inclination correction
+    delta_i_k = eph.C_is * np.sin(2 * phi_k) + eph.C_ic * np.cos(2 * phi_k)
+    # Corrected argument of latitude
+    u_k = phi_k + delta_u_k
+    # Corrected radius
+    r_k = A * (1 - eph.e * np.cos(E_k)) + delta_r_k
+    # Corrected inclination
+    eph['i_k'] = eph.i_0 + eph.IDOT * eph.t_k + delta_i_k
+    # Satellite positions in the orbital plane
+    eph['x_k'] = r_k * np.cos(u_k)
+    eph['y_k'] = r_k * np.sin(u_k)
+    # Derivatives for velocity computation
+    dE_k = n_0 + eph.deltaN / (1 - eph.e * np.cos(E_k))
+    dphi_k = np.sqrt(1 - eph.e**2) * dE_k / (1 - eph.e * np.cos(E_k))
+    dr_k = (A * eph.e * dE_k * np.sin(E_k)) + 2 * (eph.C_rs * np.cos(2.0 * phi_k) - eph.C_rc * np.sin(2.0 * phi_k)) * dphi_k
+    eph['di_k'] = 2 * (eph.C_is * np.cos(2.0 * phi_k) - eph.C_ic * np.sin(2.0 * phi_k)) * dphi_k + eph.IDOT
+    du_k = (1 + 2 * (eph.C_us * np.cos(2.0 * phi_k) - eph.C_uc * np.cos(2.0 * phi_k))) * dphi_k
+    eph['dx_k'] = dr_k * np.cos(phi_k) - r_k * np.sin(phi_k) * du_k
+    eph['dy_k'] = dr_k * np.sin(phi_k) + r_k * np.cos(phi_k) * du_k
 
-    # Calculate orbital radius with correction
-    r_corr = c_rc * cos_to_phi + c_rs * sin_to_phi
-    r = sma * e_cos_E + r_corr
+    # GEO orbits are handled differently
+    eph['is_geo_orbit'] = is_bds_geo(eph.i_0, A)
+
+    def compute_bdcs_position(sub_df):
+        if not sub_df['is_geo_orbit'].iloc[0]:
+            # Corrected longitude of ascending node in BDCS
+            Omega_k = sub_df.Omega_0 + (sub_df.OmegaDot - constants.cBdsOmegaDotEarth_rps) * sub_df.t_k - constants.cBdsOmegaDotEarth_rps * sub_df.t_oe
+            Omega_k_dot = sub_df.OmegaDot - constants.cBdsOmegaDotEarth_rps
+            # Satellite positions in BDCS
+            sub_df['X_k'] = sub_df['x_k'] * np.cos(Omega_k) - sub_df['y_k'] * np.cos(sub_df['i_k']) * np.sin(Omega_k)
+            sub_df['Y_k'] = sub_df['x_k'] * np.sin(Omega_k) + sub_df['y_k'] * np.cos(sub_df['i_k']) * np.cos(Omega_k)
+            sub_df['Z_k'] = sub_df['y_k'] * np.sin(sub_df['i_k'])
+
+            sub_df["dX_k"] = (
+                    dxp * cos_omega
+                    - dyp * cos_i * sin_omega
+                    + yp * sin_omega * sin_i * di
+                    - (xp * sin_omega + yp * cos_i * cos_omega) * omega_dot
+            )
+        else:
+            # Corrected longitude of ascending node in BDCS for GEO satellites
+            Omega_k = sub_df.Omega_0 + sub_df.OmegaDot*sub_df.t_k - constants.cBdsOmegaDotEarth_rps * sub_df.t_oe
+            Omega_k_dot = sub_df.OmegaDot
+            # Satellite positions in inertial frame
+            X_GK = sub_df['x_k'] * np.cos(Omega_k) - sub_df['y_k'] * np.cos(sub_df['i_k']) * np.sin(Omega_k)
+            Y_GK = sub_df['x_k'] * np.sin(Omega_k) + sub_df['y_k'] * np.cos(sub_df['i_k']) * np.cos(Omega_k)
+            Z_GK = sub_df['y_k'] * np.sin(sub_df['i_k'])
+            P_GK = np.transpose(np.array([X_GK, Y_GK, Z_GK]))
+            # Do special rotation for Beidou GEO satellites, see Beidou_ICD_B3I_v1.0.pdf, Table 5-11
+            z_angles = constants.cBdsOmegaDotEarth_rps * sub_df.t_k
+            rotation_matrices = []
+            for i, z_angle in enumerate(z_angles):
+                x_angle = helpers.deg_2_rad(-5.0)
+                Rx = np.array(
+                    [[1, 0, 0], [0, np.cos(x_angle), np.sin(x_angle)], [0, -np.sin(x_angle), np.cos(x_angle)]])
+                Rz = np.array(
+                    [[np.cos(z_angle), np.sin(z_angle), 0], [-np.sin(z_angle), np.cos(z_angle), 0], [0, 0, 1]])
+                rotation_matrices.append(np.matmul(Rz, Rx))
+            R = scipy.linalg.block_diag(*rotation_matrices)
+            P_K = np.matmul(R, np.reshape(P_GK, (-1, 1)))
+            P_K = np.reshape(P_K, (-1, 3))
+            sub_df['X_k'] = P_K[:, 0]
+            sub_df['Y_k'] = P_K[:, 1]
+            sub_df['Z_k'] = P_K[:, 2]
+        return sub_df
+    eph.groupby('is_geo_orbit').apply(compute_bdcs_position)
 
     ############################################
     ######  Lines added for velocity (1)  ######
     ############################################
-    dE = (sqrt_mu_A + dN) / e_cos_E
-    dphi = np.sqrt(1 - ecc**2) * dE / e_cos_E
+    dE = (n0 + delta_n) / e_cos_E
+    dphi = np.sqrt(1 - e**2) * dE / e_cos_E
     # Changed from the paper
-    dr = (sma * ecc * dE * sin_E) + 2 * (c_rs * cos_to_phi - c_rc * sin_to_phi) * dphi
+    dr = (sma * e * dE * sin_E) + 2 * (c_rs * cos_to_phi - c_rc * sin_to_phi) * dphi
 
     # Calculate the inclination with correction
-    i_corr = c_ic * cos_to_phi + c_is * sin_to_phi + ephem["IDOT"] * dt
-    i = ephem["i_0"] + i_corr
-
-    ############################################
-    ######  Lines added for velocity (2)  ######
-    ############################################
     di = 2 * (c_is * cos_to_phi - c_ic * sin_to_phi) * dphi + ephem["IDOT"]
 
-    # Find the position in the orbital plane
-    xp = r * np.cos(phi)
-    yp = r * np.sin(phi)
-
-    ############################################
-    ######  Lines added for velocity (3)  ######
-    ############################################
     du = (1 + 2 * (c_us * cos_to_phi - c_uc * sin_to_phi)) * dphi
     dxp = dr * np.cos(phi) - r * np.sin(phi) * du
     dyp = dr * np.sin(phi) + r * np.cos(phi) * du
-    # Find satellite position in ECEF coordinates
-    cos_omega = np.cos(omega)
-    sin_omega = np.sin(omega)
-    cos_i = np.cos(i)
-    sin_i = np.sin(i)
 
-    sv_posvel.loc[:, "x"] = xp * cos_omega - yp * cos_i * sin_omega
-    sv_posvel.loc[:, "y"] = xp * sin_omega + yp * cos_i * cos_omega
-    sv_posvel.loc[:, "z"] = yp * sin_i
-
-    # Do special rotation for Beidou GEO satellites, see Beidou_ICD_B3I_v1.0.pdf, Table 5-11
-    z_angles = constants.cOmegaDotEarth_rps * dt
-    rotation_matrices = []
-    for i, z_angle in enumerate(z_angles):
-        x_angle = helpers.deg_2_rad(-5.0)
-        Rx = np.array([[1, 0, 0],[0, np.cos(x_angle), np.sin(x_angle)],[0, -np.sin(x_angle), np.cos(x_angle)]])
-        Rz = np.array([[np.cos(z_angle), np.sin(z_angle), 0],[-np.sin(z_angle), np.cos(z_angle), 0],[0, 0, 1]])
-        rotation_matrices.append(np.matmul(Rz, Rx))
-    R = scipy.linalg.block_diag(*rotation_matrices)
-    new_pos = np.matmul(R, sv_posvel.stack().to_numpy())
-    new_pos = pd.DataFrame(new_pos).unstack()
-
-    ############################################
-    ######  Lines added for velocity (4)  ######
-    ############################################
-    omega_dot = ephem["OmegaDot"] - constants.cOmegaDotEarth_rps
+    omega_dot = ephem["OmegaDot"] - constants.cBdsOmegaDotEarth_rps
     sv_posvel.loc[:, "vx"] = (
         dxp * cos_omega
         - dyp * cos_i * sin_omega
@@ -454,48 +456,6 @@ def select_nav_ephemeris(
     return ephemerides_of_requested_sat_before_requested_time.iloc[[-1]]
 
 
-def compute_satellite_clock_offset_and_clock_offset_rate(
-    parsed_rinex_3_nav_file: pd.DataFrame,
-    satellite: str,
-    time_constellation_time_ns: pd.Timedelta,
-):
-    ephemeris_df = select_nav_ephemeris(
-        parsed_rinex_3_nav_file, satellite, time_constellation_time_ns
-    )
-    # Convert to 64-bit float seconds here, as pandas.Timedelta has only nanosecond resolution
-    time_wrt_ephemeris_epoch_s = helpers.timedelta_2_seconds(
-        time_constellation_time_ns - ephemeris_df["time"].iloc[0]
-    )
-    if satellite[0] == "R":
-        offset_at_epoch_s = ephemeris_df["SVclockBias"].iloc[0]
-        offset_rate_at_epoch_sps = ephemeris_df["SVrelFreqBias"].iloc[0]
-        offset_acceleration_sps2 = 0
-    elif satellite[0] == "S":
-        # TODO RINEX 3.05 mentions a W0 time offset term for SBAS, where do we get that from?
-        offset_at_epoch_s = ephemeris_df["SVclockBias"].iloc[0]
-        offset_rate_at_epoch_sps = ephemeris_df["SVrelFreqBias"].iloc[0]
-        offset_acceleration_sps2 = 0
-    else:
-        offset_at_epoch_s = ephemeris_df["SVclockBias"].iloc[0]
-        offset_rate_at_epoch_sps = ephemeris_df["SVclockDrift"].iloc[0]
-        offset_acceleration_sps2 = ephemeris_df["SVclockDriftRate"].iloc[0]
-
-    offset_s = (
-        offset_at_epoch_s
-        + offset_rate_at_epoch_sps * time_wrt_ephemeris_epoch_s
-        + offset_acceleration_sps2 * math.pow(time_wrt_ephemeris_epoch_s, 2)
-    )
-    offset_rate_sps = (
-        offset_rate_at_epoch_sps
-        + 2 * offset_acceleration_sps2 * time_wrt_ephemeris_epoch_s
-    )
-
-    return (
-        constants.cGpsIcdSpeedOfLight_mps * offset_s,
-        constants.cGpsIcdSpeedOfLight_mps * offset_rate_sps,
-    )
-
-
 def to_isagpst(time: pd.Timedelta, timescale: str):
     return time + time_scale_integer_second_offset(timescale, "GPST")
 
@@ -525,17 +485,26 @@ def compute(rinex_nav_file_path, query_times_isagpst):
         .first()
     )
     df.reset_index(inplace=True)
-    df["clock_offset_m"] = constants.cGpsIcdSpeedOfLight_mps * (
+    df["clock_offset_m"] = constants.cGpsSpeedOfLight_mps * (
         df["SVclockBias"]
         + df["SVclockDrift"] * df["query_time_wrt_clock_reference_time_s"]
         + df["SVclockDriftRate"] * df["query_time_wrt_clock_reference_time_s"] ** 2
     )
-    df["clock_offset_rate_mps"] = constants.cGpsIcdSpeedOfLight_mps * (
+    df["clock_offset_rate_mps"] = constants.cGpsSpeedOfLight_mps * (
         df["SVclockDrift"]
         + 2 * df["SVclockDriftRate"] * df["query_time_wrt_clock_reference_time_s"]
     )
-    df = compute_kepler_orbit_position_and_velocity(df)
-    # df = compute_propagated_position_and_velocity(df)
+
+    def evaluate_orbit(sub_df):
+        match sub_df["constellation"].iloc[0]:
+            case "C":
+                sub_df = bds_orbit_position_and_velocity(sub_df)
+            case "R":
+                sub_df = compute_propagated_position_and_velocity(sub_df)
+            case other:
+                assert False, f"Unexpected orbit type: {other}"
+        return sub_df
+    df = df.groupby("constellation").apply(evaluate_orbit)
     df = df[
         [
             "sv",

@@ -73,8 +73,8 @@ def compute_klobuchar_l1_correction(
     # iono time delay, in m
     iono_correction_l1_m = np.where(
         np.fabs(X_i) < np.pi / 2,
-        constants.cGpsIcdSpeedOfLight_mps * (5e-9 + A_i * np.cos(X_i)) * F,
-        constants.cGpsIcdSpeedOfLight_mps * 5e-9 * F,
+        constants.cGpsSpeedOfLight_mps * (5e-9 + A_i * np.cos(X_i)) * F,
+        constants.cGpsSpeedOfLight_mps * 5e-9 * F,
     )
 
     return iono_correction_l1_m

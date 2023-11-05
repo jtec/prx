@@ -60,7 +60,7 @@ def test_at_sample(input_for_test):
         sat_states[sat_states["sv"] == "G01"][["clock_s"]].to_numpy(),
         np.array([469.979467 / constants.cMicrosecondsPerSecond]),
         rtol=1e-5,
-        atol=1e-3 / constants.cGpsIcdSpeedOfLight_mps,
+        atol=1e-3 / constants.cGpsSpeedOfLight_mps,
     )
 
 
@@ -80,5 +80,5 @@ def test_between_samples(input_for_test):
         sat_states[sat_states["sv"] == "G01"][["clock_s"]].to_numpy(),
         np.array([469.973744 / constants.cMicrosecondsPerSecond]),
         rtol=1e-5,
-        atol=1e-3 / constants.cGpsIcdSpeedOfLight_mps,
+        atol=1e-3 / constants.cGpsSpeedOfLight_mps,
     )

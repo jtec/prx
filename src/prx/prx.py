@@ -95,7 +95,7 @@ def build_header(input_files):
         {"name": file.name, "md5": helpers.md5_of_file_content(file)}
         for file in input_files
     ]
-    prx_header["speed_of_light_mps"] = constants.cGpsIcdSpeedOfLight_mps
+    prx_header["speed_of_light_mps"] = constants.cGpsSpeedOfLight_mps
     prx_header["carrier_frequencies_hz"] = constants.carrier_frequencies_hz()
     prx_header["prx_git_commit_id"] = git.Repo(
         search_parent_directories=True
@@ -160,7 +160,7 @@ def build_records(rinex_3_obs_file, rinex_3_ephemerides_file):
     ] - pd.to_timedelta(
         per_sat[code_phase_columns]
         .mean(axis=1, skipna=True)
-        .divide(constants.cGpsIcdSpeedOfLight_mps),
+        .divide(constants.cGpsSpeedOfLight_mps),
         unit="s",
     )
 

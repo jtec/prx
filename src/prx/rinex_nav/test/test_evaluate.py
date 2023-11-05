@@ -43,13 +43,21 @@ def test_position(input_for_test):
         pd.Timestamp("2022-01-01T01:00:00.000000000") - constants.cGpstUtcEpoch
     )
     # Time-of-transmission is different for each satellite, simulate that here
-    # Multiple satellites with Kepler orbits
-    query_times["G01"] = sat_state_query_time_gpst + pd.Timedelta(seconds=1)/1e3
-    query_times["E02"] = sat_state_query_time_gpst + pd.Timedelta(seconds=2)/1e3
-    query_times["C03"] = sat_state_query_time_gpst + pd.Timedelta(seconds=3)/1e3
+    # Multiple satellites with ephemerides provided as Kepler orbits
+    # Two Beidou GEO (from http://www.csno-tarc.cn/en/system/constellation)
+    query_times["C03"] = sat_state_query_time_gpst + pd.Timedelta(seconds=30)/1e3
+    query_times["C59"] = sat_state_query_time_gpst + pd.Timedelta(seconds=31) / 1e3
+    # One Beidou IGSO
+    query_times["C38"] = sat_state_query_time_gpst + pd.Timedelta(seconds=32) / 1e3
+    # One Beidou MEO
+    query_times["C30"] = sat_state_query_time_gpst + pd.Timedelta(seconds=33) / 1e3
+    # One GPS
+    #query_times["G01"] = sat_state_query_time_gpst + pd.Timedelta(seconds=1)/1e3
+    # One Galileo
+    #query_times["E02"] = sat_state_query_time_gpst + pd.Timedelta(seconds=10)/1e3
     # Multiple satellites with orbits that require propagation of an initial state
-    query_times["R04"] = sat_state_query_time_gpst + pd.Timedelta(seconds=4)/1e3
-    query_times["R05"] = sat_state_query_time_gpst + pd.Timedelta(seconds=5)/1e3
+    #query_times["R04"] = sat_state_query_time_gpst + pd.Timedelta(seconds=20)/1e3
+    #query_times["R05"] = sat_state_query_time_gpst + pd.Timedelta(seconds=21)/1e3
     sp3_sat_states = sp3_evaluate.compute(
         input_for_test["sp3_file"], sat_state_query_time_gpst
     )

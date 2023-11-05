@@ -298,8 +298,8 @@ def compute_satellite_clock_offset_and_clock_offset_rate(
     )
 
     return (
-        constants.cGpsIcdSpeedOfLight_mps * offset_s,
-        constants.cGpsIcdSpeedOfLight_mps * offset_rate_sps,
+        constants.cGpsSpeedOfLight_mps * offset_s,
+        constants.cGpsSpeedOfLight_mps * offset_rate_sps,
     )
 
 
