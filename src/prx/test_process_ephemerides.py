@@ -493,12 +493,8 @@ def test_compute_gal_group_delay_rnx3(input_for_test):
     )
 
     assert abs(tgd_e1_s - tgd_e1_s_expected) * constants.cGpsSpeedOfLight_mps < 1e-3
-    assert (
-            abs(tgd_e5a_s - tgd_e5a_s_expected) * constants.cGpsSpeedOfLight_mps < 1e-3
-    )
-    assert (
-            abs(tgd_e5b_s - tgd_e5b_s_expected) * constants.cGpsSpeedOfLight_mps < 1e-3
-    )
+    assert abs(tgd_e5a_s - tgd_e5a_s_expected) * constants.cGpsSpeedOfLight_mps < 1e-3
+    assert abs(tgd_e5b_s - tgd_e5b_s_expected) * constants.cGpsSpeedOfLight_mps < 1e-3
     assert np.isnan(tgd_e6b_s)
 
 
@@ -587,15 +583,9 @@ def test_compute_bds_group_delay_rnx3(input_for_test):
     tgd_c7i_s_expected = -1.020000000000e-08
     tgd_c6i_s_expected = 0
 
-    assert (
-            abs(tgd_c2i_s - tgd_c2i_s_expected) * constants.cGpsSpeedOfLight_mps < 1e-3
-    )
-    assert (
-            abs(tgd_c7i_s - tgd_c7i_s_expected) * constants.cGpsSpeedOfLight_mps < 1e-3
-    )
-    assert (
-            abs(tgd_c6i_s - tgd_c6i_s_expected) * constants.cGpsSpeedOfLight_mps < 1e-3
-    )
+    assert abs(tgd_c2i_s - tgd_c2i_s_expected) * constants.cGpsSpeedOfLight_mps < 1e-3
+    assert abs(tgd_c7i_s - tgd_c7i_s_expected) * constants.cGpsSpeedOfLight_mps < 1e-3
+    assert abs(tgd_c6i_s - tgd_c6i_s_expected) * constants.cGpsSpeedOfLight_mps < 1e-3
     assert np.isnan(tgd_c1d_s)
     assert np.isnan(tgd_c1p_s)
     assert np.isnan(tgd_c5x_s)

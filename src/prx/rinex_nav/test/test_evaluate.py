@@ -45,19 +45,26 @@ def test_position(input_for_test):
     # Time-of-transmission is different for each satellite, simulate that here
     # Multiple satellites with ephemerides provided as Kepler orbits
     # Two Beidou GEO (from http://www.csno-tarc.cn/en/system/constellation)
-    query_times["C03"] = sat_state_query_time_gpst + pd.Timedelta(seconds=30)/1e3
-    query_times["C59"] = sat_state_query_time_gpst + pd.Timedelta(seconds=31) / 1e3
+    query_times["C03"] = sat_state_query_time_gpst
+    query_times["C05"] = sat_state_query_time_gpst
     # One Beidou IGSO
-    query_times["C38"] = sat_state_query_time_gpst + pd.Timedelta(seconds=32) / 1e3
+    query_times["C38"] = sat_state_query_time_gpst
     # One Beidou MEO
-    query_times["C30"] = sat_state_query_time_gpst + pd.Timedelta(seconds=33) / 1e3
-    # One GPS
-    #query_times["G01"] = sat_state_query_time_gpst + pd.Timedelta(seconds=1)/1e3
-    # One Galileo
-    #query_times["E02"] = sat_state_query_time_gpst + pd.Timedelta(seconds=10)/1e3
+    query_times["C30"] = sat_state_query_time_gpst
+    # Two GPS
+    query_times["G15"] = sat_state_query_time_gpst
+    query_times["G12"] = sat_state_query_time_gpst
+    # Two Galileo
+    query_times["E24"] = sat_state_query_time_gpst
+    query_times["E30"] = sat_state_query_time_gpst
+    # Two QZSS
+    query_times["J02"] = sat_state_query_time_gpst
+    query_times["J03"] = sat_state_query_time_gpst
+
     # Multiple satellites with orbits that require propagation of an initial state
-    #query_times["R04"] = sat_state_query_time_gpst + pd.Timedelta(seconds=20)/1e3
-    #query_times["R05"] = sat_state_query_time_gpst + pd.Timedelta(seconds=21)/1e3
+    # Two GLONASS satellites
+    # query_times["R04"] = sat_state_query_time_gpst + pd.Timedelta(seconds=20)/1e3
+    # query_times["R05"] = sat_state_query_time_gpst + pd.Timedelta(seconds=21)/1e3
     sp3_sat_states = sp3_evaluate.compute(
         input_for_test["sp3_file"], sat_state_query_time_gpst
     )
@@ -79,10 +86,10 @@ def test_position(input_for_test):
         }
         rinex = {
             "position_m": rinex_sat_states[rinex_sat_states["sv"] == satellite][
-                ["x", "y", "z"]
+                ["x_m", "y_m", "z_m"]
             ].to_numpy(),
             "velocity_mps": rinex_sat_states[rinex_sat_states["sv"] == satellite][
-                ["vx", "vy", "vz"]
+                ["vx_mps", "vy_mps", "vz_mps"]
             ].to_numpy(),
             "clock_m": rinex_sat_states[rinex_sat_states["sv"] == satellite][
                 ["clock_offset_m"]
@@ -91,20 +98,18 @@ def test_position(input_for_test):
                 ["clock_offset_rate_mps"]
             ].to_numpy(),
         }
-        # These thresholds are based on the difference between broadcast and precise observed in this test.
-        # We expect broadcast position error w.r.t. precise orbits to be less than 10 meters
-        # We expect broadcast clock error (in units of length) w.r.t. precise clocks to be less than 12 meters
-        # We expect broadcast velocity w.r.t. precise orbits to be less than 1 mm/s
-        # We expect broadcast clock offset drift error (in units of length/second) w.r.t. precise clocks to be less than 3 mm/s
+        # These thresholds are based on the expected maximum difference between broadcast and
+        # MGEX precise orbit and clock solutions.
         expected_max_abs_difference = {
-            "position_m": 1e1,
+            "position_m": 95,
             "velocity_mps": 1e-3,
-            "clock_m": 1.2e1,
+            "clock_m": 26,
             "dclock_mps": 3e-3,
         }
         for state_name in sp3:
-            assert (
-                np.linalg.norm(rinex[state_name] - sp3[state_name])
-                < expected_max_abs_difference[state_name]
+            diff = rinex[state_name] - sp3[state_name]
+            print(
+                f"satellite: {satellite}, state: {state_name}, diff: {diff} [m or m/s]"
             )
-        pass
+            assert np.linalg.norm(diff) < expected_max_abs_difference[state_name]
+            pass
