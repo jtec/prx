@@ -116,7 +116,7 @@ def rinex_header_time_string_2_timestamp_ns(time_string: str) -> pd.Timestamp:
 
 def repair_with_gfzrnx(file):
     gfzrnx_binaries = glob.glob(
-        str(prx_root().joinpath("tools/gfzrnx/**gfzrnx**")), recursive=True
+        str(prx_root().joinpath("prx/tools/gfzrnx/**gfzrnx**")), recursive=True
     )
     for gfzrnx_binary in gfzrnx_binaries:
         command = f" {gfzrnx_binary} -finp {file} -fout {file}  -chk -kv -f"
@@ -124,7 +124,7 @@ def repair_with_gfzrnx(file):
         if result.returncode == 0:
             log.info(f"Ran gfzrnx file repair on {file}")
             return file
-    assert False, "gdzrnx file repair run failed!"
+    assert False, f"gdzrnx file repair run failed: {result}"
 
 
 def deg_2_rad(angle_deg):
