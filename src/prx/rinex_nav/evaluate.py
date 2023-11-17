@@ -1,43 +1,24 @@
-import functools
 import math
-import subprocess
 import pandas as pd
 import numpy as np
-import glob
 from functools import lru_cache
 import georinex
 from pathlib import Path
 import joblib
 import scipy
 
-from .. import helpers
-from .. import constants
+from prx import helpers
+from prx import constants
 
 memory = joblib.Memory(Path(__file__).parent.joinpath("diskcache"), verbose=0)
 log = helpers.get_logger(__name__)
 
 
-def repair_with_gfzrnx(file):
-    gfzrnx_binaries = glob.glob(
-        str(Path(__file__).parent.joinpath("tools/gfzrnx/**gfzrnx**")), recursive=True
-    )
-    for gfzrnx_binary in gfzrnx_binaries:
-        command = f" {gfzrnx_binary} -finp {file} -fout {file}  -chk -kv -f"
-        result = subprocess.run(command, capture_output=True, shell=True)
-        if result.returncode == 0:
-            log.info(f"Ran gfzrnx file repair on {file}")
-            log.debug(result.stdout)
-            log.info(f"gfzrnx binary used: {gfzrnx_binary}")
-            return file
-    assert False, "gdzrnx file repair run failed!"
-
-
-# Can speed up RINEX parsing by using parsing results previously obtained and saved to disk.
 def parse_rinex_nav_file(rinex_file: Path):
     @lru_cache
     @memory.cache
     def cached_load(rinex_file: Path, file_hash: str):
-        repair_with_gfzrnx(rinex_file)
+        helpers.repair_with_gfzrnx(rinex_file)
         log.info(f"Parsing {rinex_file} ...")
         ds = georinex.load(rinex_file)
         df = convert_nav_dataset_to_dataframe(ds)
@@ -64,53 +45,10 @@ def parse_rinex_nav_file(rinex_file: Path):
     return cached_load(rinex_file, file_content_hash)
 
 
-def convert_rnx3_nav_file_to_dataframe(path):
-    # parse RNX3 NAV file using georinex module
-    nav_ds = parse_rinex_nav_file(path)
-    nav_df = convert_nav_dataset_to_dataframe(nav_ds)
-    return nav_df
-
-
-constellation_2_system_time_scale = {
-    "G": "GPST",
-    "S": "SBAST",
-    "E": "GST",
-    "C": "BDT",
-    "R": "GLONASST",
-    "J": "QZSST",
-    "I": "IRNSST",
-}
-
-# Validity interval w.r.t. ephemeris reference time, e.g. GPS's ToE.
-constellation_2_ephemeris_validity_interval = {
-    "G": [pd.Timedelta(-2, "hours"), pd.Timedelta(2, "hours")],
-    "S": [pd.Timedelta(-2, "hours"), pd.Timedelta(2, "hours")],
-    "E": [pd.Timedelta(-2, "hours"), pd.Timedelta(2, "hours")],
-    "C": [pd.Timedelta(-1, "hours"), pd.Timedelta(1, "hours")],
-    "R": [pd.Timedelta(0, "hours"), pd.Timedelta(2 * 0.5, "hours")],
-    "J": [pd.Timedelta(-1, "hours"), pd.Timedelta(1, "hours")],
-    "I": [pd.Timedelta(-1, "hours"), pd.Timedelta(1, "hours")],
-}
-
-system_time_scale_2_rinex_utc_epoch = {
-    "GPST": constants.cGpstUtcEpoch,
-    "SBAST": constants.cGpstUtcEpoch,
-    "GST": constants.cGpstUtcEpoch,
-    "BDT": (
-        constants.cGpstUtcEpoch
-        + pd.Timedelta(1356 * constants.cSecondsPerWeek, "seconds")
-        + pd.Timedelta(14, "seconds")
-    ),
-    "GLONASST": constants.cArbitraryGlonassUtcEpoch,
-    "QZSST": constants.cGpstUtcEpoch,
-    "IRNSST": constants.cGpstUtcEpoch,
-}
-
-
 def time_scale_integer_second_offset(time_scale_a, time_scale_b):
     offset = (
-        system_time_scale_2_rinex_utc_epoch[time_scale_a]
-        - system_time_scale_2_rinex_utc_epoch[time_scale_b]
+        constants.system_time_scale_2_rinex_utc_epoch[time_scale_a]
+        - constants.system_time_scale_2_rinex_utc_epoch[time_scale_b]
     )
     offset = offset.round("s")
     return offset
@@ -120,7 +58,7 @@ def satellite_id_2_system_time_scale(satellite_id):
     assert (
         len(satellite_id) == 3
     ), f"Satellite ID unexpectedly not three characters long: {satellite_id}"
-    return constellation_2_system_time_scale[constellation(satellite_id)]
+    return constants.constellation_2_system_time_scale[constellation(satellite_id)]
 
 
 def glonass_xdot(x, a):
@@ -403,7 +341,9 @@ def convert_nav_dataset_to_dataframe(nav_ds):
     # The downstream code expects three-letter satellite IDs, so remove suffixes.
     df["sv"] = df.apply(lambda row: row["sv"][:3], axis=1)
     df["constellation"] = df["sv"].str[0]
-    df["time_scale"] = df["constellation"].replace(constellation_2_system_time_scale)
+    df["time_scale"] = df["constellation"].replace(
+        constants.constellation_2_system_time_scale
+    )
 
     def compute_ephemeris_and_clock_offset_reference_times(group):
         week_field = {
@@ -437,7 +377,8 @@ def convert_nav_dataset_to_dataframe(nav_ds):
             "ephemeris_reference_time_system_time"
         ] + time_scale_integer_second_offset(group_time_scale, "GPST")
         group["clock_offset_reference_time_system_time"] = (
-            group["time"] - system_time_scale_2_rinex_utc_epoch[group_time_scale]
+            group["time"]
+            - constants.system_time_scale_2_rinex_utc_epoch[group_time_scale]
         )
         group["clock_reference_time_isagpst"] = group[
             "clock_offset_reference_time_system_time"
@@ -445,11 +386,15 @@ def convert_nav_dataset_to_dataframe(nav_ds):
 
         group["validity_start"] = (
             group["ephemeris_reference_time_isagpst"]
-            + constellation_2_ephemeris_validity_interval[group_constellation][0]
+            + constants.constellation_2_ephemeris_validity_interval[
+                group_constellation
+            ][0]
         )
         group["validity_end"] = (
             group["ephemeris_reference_time_isagpst"]
-            + constellation_2_ephemeris_validity_interval[group_constellation][1]
+            + constants.constellation_2_ephemeris_validity_interval[
+                group_constellation
+            ][1]
         )
         return group
 

@@ -86,3 +86,39 @@ def carrier_frequencies_hz():
     cf["I"]["L5"] = 1176.45 * cHzPerMhz
     cf["I"]["S"] = 2492.028 * cHzPerMhz
     return cf
+
+
+constellation_2_system_time_scale = {
+    "G": "GPST",
+    "S": "SBAST",
+    "E": "GST",
+    "C": "BDT",
+    "R": "GLONASST",
+    "J": "QZSST",
+    "I": "IRNSST",
+}
+
+# Validity interval w.r.t. ephemeris reference time, e.g. GPS's ToE.
+constellation_2_ephemeris_validity_interval = {
+    "G": [pd.Timedelta(-2, "hours"), pd.Timedelta(2, "hours")],
+    "S": [pd.Timedelta(-2, "hours"), pd.Timedelta(2, "hours")],
+    "E": [pd.Timedelta(-2, "hours"), pd.Timedelta(2, "hours")],
+    "C": [pd.Timedelta(-1, "hours"), pd.Timedelta(1, "hours")],
+    "R": [pd.Timedelta(0, "hours"), pd.Timedelta(2 * 0.5, "hours")],
+    "J": [pd.Timedelta(-1, "hours"), pd.Timedelta(1, "hours")],
+    "I": [pd.Timedelta(-1, "hours"), pd.Timedelta(1, "hours")],
+}
+
+system_time_scale_2_rinex_utc_epoch = {
+    "GPST": cGpstUtcEpoch,
+    "SBAST": cGpstUtcEpoch,
+    "GST": cGpstUtcEpoch,
+    "BDT": (
+        cGpstUtcEpoch
+        + pd.Timedelta(1356 * cSecondsPerWeek, "seconds")
+        + pd.Timedelta(14, "seconds")
+    ),
+    "GLONASST": cArbitraryGlonassUtcEpoch,
+    "QZSST": cGpstUtcEpoch,
+    "IRNSST": cGpstUtcEpoch,
+}
