@@ -46,7 +46,7 @@ def test_position(input_for_test):
     # Multiple satellites with ephemerides provided as Kepler orbits
     # Two Beidou GEO (from http://www.csno-tarc.cn/en/system/constellation)
     query_times["C03"] = sat_state_query_time_gpst
-    # query_times["C05"] = sat_state_query_time_gpst
+    query_times["C05"] = sat_state_query_time_gpst
     # One Beidou IGSO
     # query_times["C38"] = sat_state_query_time_gpst
     # One Beidou MEO
