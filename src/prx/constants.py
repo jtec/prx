@@ -34,7 +34,7 @@ cGalOmegaDotEarth_rps = 7.2921151467e-5
 # QZSS ICD constants
 cQzssPi = cGpsPi
 cQzssSpeedOfLight_mps = cGpsSpeedOfLight_mps
-cQzssMuEarth_m3ps2 = 3.986005e-14
+cQzssMuEarth_m3ps2 = 3.986005e14
 cQzssOmegaDotEarth_rps = 7.2921151467e-5
 
 # Heuristic: demand micrometer precision in computations involving distances

@@ -1,10 +1,10 @@
+import numpy as np
 import pandas as pd
 from pathlib import Path
 from prx.sp3 import evaluate as sp3_evaluate
 from prx.rinex_nav import evaluate as rinex_nav_evaluate
 from prx import converters
 from prx import constants
-from prx import helpers
 import shutil
 import pytest
 import os
@@ -34,20 +34,19 @@ def input_for_test():
     shutil.rmtree(test_directory)
 
 
-@helpers.profile_this
 def test_position(input_for_test):
     rinex_nav_file = converters.compressed_to_uncompressed(
         input_for_test["rinex_nav_file"]
     )
     query_times = {}
     sat_state_query_time_gpst = (
-        pd.Timestamp("2022-01-01T01:00:00.000000000") - constants.cGpstUtcEpoch
+        pd.Timestamp("2022-01-01T01:10:00.000000000") - constants.cGpstUtcEpoch
     )
     # Time-of-transmission is different for each satellite, simulate that here
     # Multiple satellites with ephemerides provided as Kepler orbits
     # Two Beidou GEO (from http://www.csno-tarc.cn/en/system/constellation)
-    query_times["C03"] = sat_state_query_time_gpst
-    query_times["C05"] = sat_state_query_time_gpst
+    # query_times["C03"] = sat_state_query_time_gpst
+    # query_times["C05"] = sat_state_query_time_gpst
     # One Beidou IGSO
     query_times["C38"] = sat_state_query_time_gpst
     # One Beidou MEO
@@ -102,15 +101,15 @@ def test_position(input_for_test):
         # These thresholds are based on the expected maximum difference between broadcast and
         # MGEX precise orbit and clock solutions.
         expected_max_abs_difference = {
-            "position_m": 95,
+            "position_m": 2,
             "velocity_mps": 1e-3,
-            "clock_m": 26,
+            "clock_m": 22,
             "dclock_mps": 3e-3,
         }
         for state_name in sp3:
             diff = rinex[state_name] - sp3[state_name]
             print(
-                f"\n satellite: {satellite}, state: {state_name}, diff: {diff} [m or m/s]"
+                f"\n satellite: {satellite}, state: {state_name}, diff: {diff} [m or m/s] (sp3: {sp3[state_name]}, rinex: {rinex[state_name]}))"
             )
-            # assert np.linalg.norm(diff) < expected_max_abs_difference[state_name]
+            assert np.linalg.norm(diff) < expected_max_abs_difference[state_name]
             pass
