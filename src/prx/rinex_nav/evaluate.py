@@ -278,9 +278,7 @@ def handle_bds_geos(eph):
         )
         rotation_matrices.append(np.matmul(Rz, Rx))
     R = scipy.linalg.block_diag(*rotation_matrices)
-    P_K = np.matmul(Rx, P_GK)
-    P_K = np.matmul(Rz, P_K)
-    # P_K = np.matmul(R, P_GK)
+    P_K = np.matmul(R, P_GK)
     P_K = np.reshape(P_K, (-1, 3))
     geos["X_k"] = P_K[:, 0]
     geos["Y_k"] = P_K[:, 1]
