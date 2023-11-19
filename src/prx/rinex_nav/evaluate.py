@@ -214,7 +214,8 @@ def orbital_plane_to_earth_centered_cartesian(eph):
         + (eph.OmegaDot - eph.OmegaEarthIcd_rps) * eph.t_k
         - eph.OmegaEarthIcd_rps * eph.t_oe
     )
-    eph[eph.is_bds_geo]["Omega_k"] = (
+    # Note that eph.loc[eph.is_bds_geo]["Omega_k"] would modify a copy of the GEO slice, not the original DataFrame.
+    eph.loc[eph.is_bds_geo, "Omega_k"] = (
         eph[eph.is_bds_geo].Omega_0
         + eph[eph.is_bds_geo].OmegaDot * eph[eph.is_bds_geo].t_k
         - eph[eph.is_bds_geo].OmegaEarthIcd_rps * eph[eph.is_bds_geo].t_oe
@@ -256,7 +257,7 @@ def handle_bds_geos(eph):
     geos = eph[eph.is_bds_geo]
     if geos.empty:
         return
-    P_GK = np.transpose(geos[["X_k", "Y_k", "Z_k"]].to_numpy())
+    P_GK = np.reshape(geos[["X_k", "Y_k", "Z_k"]].to_numpy(), (-1, 1))
     z_angles = geos.OmegaEarthIcd_rps * geos.t_k
     rotation_matrices = []
     for i, z_angle in enumerate(z_angles):
@@ -277,7 +278,9 @@ def handle_bds_geos(eph):
         )
         rotation_matrices.append(np.matmul(Rz, Rx))
     R = scipy.linalg.block_diag(*rotation_matrices)
-    P_K = np.matmul(R, np.reshape(P_GK, (-1, 1)))
+    P_K = np.matmul(Rx, P_GK)
+    P_K = np.matmul(Rz, P_K)
+    # P_K = np.matmul(R, P_GK)
     P_K = np.reshape(P_K, (-1, 3))
     geos["X_k"] = P_K[:, 0]
     geos["Y_k"] = P_K[:, 1]
