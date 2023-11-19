@@ -42,7 +42,11 @@ def benchmark_1():
 
 if __name__ == "__main__":
     p = profile.Profile()
-    p.runcall(benchmark_1)
+    # warm up cache
+    benchmark_1()
+    p.enable()
+    benchmark_1()
+    p.disable()
     stats_file = Path("benchmark_1.prof").resolve()
     p.dump_stats(stats_file)
-    print(f"Call snakeviz {stats_file} to inspect profiling results.")
+    print(f"To inspect profiling results, call \n snakeviz {stats_file}")

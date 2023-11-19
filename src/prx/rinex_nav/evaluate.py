@@ -1,3 +1,4 @@
+import json
 import math
 import pandas as pd
 import numpy as np
@@ -12,6 +13,12 @@ from prx import constants
 
 memory = joblib.Memory(Path(__file__).parent.joinpath("diskcache"), verbose=0)
 log = helpers.get_logger(__name__)
+
+
+consts = {
+    "MU_EARTH": constants.cGpsMuEarth_m3ps2,
+    "OMEGA_E_DOT": constants.cGpsOmegaDotEarth_rps,
+}
 
 
 def parse_rinex_nav_file(rinex_file: Path):
@@ -161,9 +168,9 @@ def position_in_orbital_plane(eph):
     # Eccentric Anomaly
     eph["E_k"] = eccentric_anomaly(M_k.to_numpy(), eph.e.to_numpy())
     # Computed true anomaly
-    sin_nu = np.sqrt(1 - eph.e**2) * (np.sin(eph.E_k) / (1 - eph.e * np.cos(eph.E_k)))
-    cos_nu = (np.cos(eph.E_k) - eph.e) / (1 - eph.e * np.cos(eph.E_k))
-    eph["nu_k"] = np.arctan2(sin_nu, cos_nu)
+    eph["nu_k"] = 2 * np.arctan(
+        np.sqrt((1 + eph.e) / (1 - eph.e)) * np.tan(eph.E_k / 2)
+    )
     # Computed argument of latitude
     eph["phi_k"] = eph.nu_k + eph.omega
     # Argument of latitude correction
@@ -194,8 +201,8 @@ def position_in_orbital_plane(eph):
     eph["dr_k"] = (eph.e * eph.A * eph.dE_k * np.sin(eph.E_k)) + 2 * eph.dnu_k * (
         eph.C_rs * np.cos(2.0 * eph.phi_k) - eph.C_rc * np.sin(2.0 * eph.phi_k)
     )
-    eph["dx_k"] = eph.dr_k * np.cos(eph.phi_k) - eph.r_k * np.sin(eph.phi_k) * eph.du_k
-    eph["dy_k"] = eph.dr_k * np.sin(eph.phi_k) + eph.r_k * np.cos(eph.phi_k) * eph.du_k
+    eph["dx_k"] = eph.dr_k * np.cos(eph.u_k) - eph.r_k * eph.du_k * np.sin(eph.u_k)
+    eph["dy_k"] = eph.dr_k * np.sin(eph.u_k) + eph.r_k * eph.du_k * np.cos(eph.u_k)
     # We need to know which orbits are Beidou GEOs later on
     eph["is_bds_geo"] = is_bds_geo(eph.constellation, eph.i_k, eph.A)
 
@@ -212,7 +219,7 @@ def orbital_plane_to_earth_centered_cartesian(eph):
         + eph[eph.is_bds_geo].OmegaDot * eph[eph.is_bds_geo].t_k
         - eph[eph.is_bds_geo].OmegaEarthIcd_rps * eph[eph.is_bds_geo].t_oe
     )
-    eph["Omega_k_dot"] = eph.OmegaDot - eph.OmegaEarthIcd_rps
+    eph["dOmega_k"] = eph.OmegaDot - eph.OmegaEarthIcd_rps
     # Satellite positions in cartesian frame (for BDS GEOs this is an inertial frame, for others the system ECEF frame)
     # For BDS GEOs we apply an additional rotation later on.
     eph["X_k"] = eph.x_k * np.cos(eph.Omega_k) - eph.y_k * np.cos(eph.i_k) * np.sin(
@@ -224,26 +231,31 @@ def orbital_plane_to_earth_centered_cartesian(eph):
     eph["Z_k"] = eph.y_k * np.sin(eph.i_k)
     # ECEF velocity, from
     # IS-GPS-200N, Table 20-IV
-    eph["dX_k"] = -eph.x_k * eph.Omega_k_dot * np.sin(eph.Omega_k)
-    +eph.dx_k * np.cos(eph.Omega_k)
-    -eph.dy_k * np.sin(eph.Omega_k) * np.cos(eph.i_k)
-    -eph.y_k * eph.Omega_k_dot * np.cos(eph.Omega_k) * np.cos(eph.i_k)
-    +eph.y_k * eph.di_k * np.sin(eph.Omega_k) * np.sin(eph.i_k)
-
-    eph["dY_k"] = eph.x_k * eph.Omega_k_dot * np.cos(eph.Omega_k)
-    -eph.y_k * (
-        eph.Omega_k_dot * np.sin(eph.Omega_k) * np.cos(eph.i_k)
-        + eph.di_k * np.cos(eph.Omega_k) * np.sin(eph.i_k)
+    eph["dX_k"] = (
+        -eph.x_k * eph.dOmega_k * np.sin(eph.Omega_k)
+        + eph.dx_k * np.cos(eph.Omega_k)
+        - eph.dy_k * np.sin(eph.Omega_k) * np.cos(eph.i_k)
+        - eph.y_k * eph.dOmega_k * np.cos(eph.Omega_k) * np.cos(eph.i_k)
+        + eph.y_k * eph.di_k * np.sin(eph.Omega_k) * np.sin(eph.i_k)
     )
-    +eph.dx_k * np.sin(eph.Omega_k)
-    +eph.dy_k * np.cos(eph.Omega_k) * np.cos(eph.i_k)
+    eph["dY_k"] = (
+        eph.x_k * eph.dOmega_k * np.cos(eph.Omega_k)
+        - eph.y_k * eph.dOmega_k * np.sin(eph.Omega_k) * np.cos(eph.i_k)
+        - eph.y_k * eph.di_k * np.cos(eph.Omega_k) * np.sin(eph.i_k)
+        + eph.dx_k * np.sin(eph.Omega_k)
+        + eph.dy_k * np.cos(eph.Omega_k) * np.cos(eph.i_k)
+    )
+
     eph["dZ_k"] = eph.y_k * eph.di_k * np.cos(eph.i_k) + eph.dy_k * np.sin(eph.i_k)
+    pass
 
 
 def handle_bds_geos(eph):
     # Do special rotation from inertial to BDCS (ECEF) frame for Beidou GEO satellites, see
     # Beidou_ICD_B3I_v1.0.pdf, Table 5-11
     geos = eph[eph.is_bds_geo]
+    if geos.empty:
+        return
     P_GK = np.transpose(geos[["X_k", "Y_k", "Z_k"]].to_numpy())
     z_angles = geos.OmegaEarthIcd_rps * geos.t_k
     rotation_matrices = []
@@ -275,7 +287,10 @@ def handle_bds_geos(eph):
 
 # Adapted from gnss_lib_py's find_sat()
 def kepler_orbit_position_and_velocity(eph):
-    # BDS GEO orbits are handled a little  differently
+    eph["gps_week"] = eph["GPSWeek"]
+    eph["gnss_id"] = eph["constellation"]
+    eph["sv_id"] = eph["sv"]
+
     eph["OmegaEarthIcd_rps"] = eph.constellation.map(
         {
             "C": constants.cBdsOmegaDotEarth_rps,
@@ -307,18 +322,6 @@ def kepler_orbit_position_and_velocity(eph):
         inplace=True,
     )
     return eph
-
-    eph_1 = eph.copy()
-    eph_1 = eph_1.select_dtypes(include=np.number)
-    eph_2 = eph_1.copy()
-    dt = 1e-3
-    eph_2["query_time_wrt_ephemeris_reference_time_s"] += dt
-    position_in_orbital_plane(eph_1)
-    position_in_orbital_plane(eph_2)
-    orbital_plane_to_earth_centered_cartesian(eph_1)
-    orbital_plane_to_earth_centered_cartesian(eph_2)
-
-    d_eph = (eph_2 - eph_1) / dt
 
 
 def constellation(satellite_id: str):
