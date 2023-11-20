@@ -221,8 +221,10 @@ def orbital_plane_to_earth_centered_cartesian(eph):
         - eph[eph.is_bds_geo].OmegaEarthIcd_rps * eph[eph.is_bds_geo].t_oe
     )
     eph["dOmega_k"] = eph.OmegaDot - eph.OmegaEarthIcd_rps
-    # Satellite positions in cartesian frame (for BDS GEOs this is an inertial frame, for others the system ECEF frame)
-    # For BDS GEOs we apply an additional rotation later on.
+    eph.loc[eph.is_bds_geo, "dOmega_k"] = eph[eph.is_bds_geo].OmegaDot
+    # Satellite positions in cartesian frame (for BDS GEOs this is a particular inertial
+    # frame, for others the system ECEF frame)
+    # For BDS GEOs we apply an additional rotation later-on to compute their position in Beidou's ECEF frame.
     eph["X_k"] = eph.x_k * np.cos(eph.Omega_k) - eph.y_k * np.cos(eph.i_k) * np.sin(
         eph.Omega_k
     )
@@ -258,6 +260,7 @@ def handle_bds_geos(eph):
     if geos.empty:
         return
     P_GK = np.reshape(geos[["X_k", "Y_k", "Z_k"]].to_numpy(), (-1, 1))
+    V_GK = np.reshape(geos[["dX_k", "dX_k", "dX_k"]].to_numpy(), (-1, 1))
     z_angles = geos.OmegaEarthIcd_rps * geos.t_k
     rotation_matrices = []
     for i, z_angle in enumerate(z_angles):
@@ -283,6 +286,21 @@ def handle_bds_geos(eph):
     geos["X_k"] = P_K[:, 0]
     geos["Y_k"] = P_K[:, 1]
     geos["Z_k"] = P_K[:, 2]
+    # Velocity in inertial frame that coincides with BDCS at this time, ie a "frozen" ECEF frame
+    V_K_frozen = np.matmul(R, V_GK)
+    V_K_frozen = np.reshape(V_K_frozen, (-1, 3))
+    # Add term due to ECEFs angular velocity w.r.t. the frozen frame
+    geos["dX_k"] = V_K_frozen[:, 0]
+    geos["dY_k"] = V_K_frozen[:, 1]
+    geos["dZ_k"] = V_K_frozen[:, 2]
+
+    def frozen_to_rotating_bdcs(row):
+        p = np.array([row["X_k"], row["Y_k"], row["Z_k"]])
+        v_frozen = np.array([row["dX_k"], row["dY_k"], row["dZ_k"]])
+        v_rotating = v_frozen + np.cross(np.array([0, 0, -constants.cBdsOmegaDotEarth_rps]), p)
+        return row
+
+    geos = geos.apply(frozen_to_rotating_bdcs, axis=1)
     eph[eph.is_bds_geo] = geos
 
 

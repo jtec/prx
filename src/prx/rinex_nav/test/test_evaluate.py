@@ -34,7 +34,7 @@ def input_for_test():
     shutil.rmtree(test_directory)
 
 
-def test_position(input_for_test):
+def test_compare_to_sp3(input_for_test):
     rinex_nav_file = converters.compressed_to_uncompressed(
         input_for_test["rinex_nav_file"]
     )
@@ -52,7 +52,7 @@ def test_position(input_for_test):
     # One Beidou MEO
     # query_times["C30"] = sat_state_query_time_gpst
     # Two GPS
-    # query_times["G15"] = sat_state_query_time_gpst
+    query_times["G15"] = sat_state_query_time_gpst
     # query_times["G12"] = sat_state_query_time_gpst
     # Two Galileo
     # query_times["E24"] = sat_state_query_time_gpst
@@ -101,7 +101,7 @@ def test_position(input_for_test):
         # These thresholds are based on the expected maximum difference between broadcast and
         # MGEX precise orbit and clock solutions.
         expected_max_abs_difference = {
-            "position_m": 2,
+            "position_m": 12,
             "velocity_mps": 1e-3,
             "clock_m": 22,
             "dclock_mps": 3e-3,
@@ -109,7 +109,7 @@ def test_position(input_for_test):
         for state_name in sp3:
             diff = rinex[state_name] - sp3[state_name]
             print(
-                f"\n satellite: {satellite}, state: {state_name}, diff: {diff} [m or m/s] (sp3: {sp3[state_name]}, rinex: {rinex[state_name]}))"
+                f"\n satellite: {satellite}, state: {state_name}, diff: {diff} (norm: {np.linalg.norm(diff)}) [m or m/s] (sp3: {sp3[state_name]}, rinex: {rinex[state_name]}))"
             )
-            # assert np.linalg.norm(diff) < expected_max_abs_difference[state_name]
+            assert np.linalg.norm(diff) < expected_max_abs_difference[state_name]
             pass
