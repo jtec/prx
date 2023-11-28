@@ -63,12 +63,13 @@ def test_compare_to_sp3(input_for_test):
 
     # Multiple satellites with orbits that require propagation of an initial state
     # Two GLONASS satellites
-    # query_times["R04"] = sat_state_query_time_gpst + pd.Timedelta(seconds=20)/1e3
-    # query_times["R05"] = sat_state_query_time_gpst + pd.Timedelta(seconds=21)/1e3
+    # query_times["R04"] = sat_state_query_time_gpst
+    # query_times["R05"] = sat_state_query_time_gpst
     sp3_sat_states = sp3_evaluate.compute(
         input_for_test["sp3_file"], sat_state_query_time_gpst
     )
     rinex_sat_states = rinex_nav_evaluate.compute(rinex_nav_file, query_times)
+    max_diffs_l2 = {}
     for satellite, query_time in query_times.items():
         sp3 = {
             "position_m": sp3_sat_states[sp3_sat_states["sv"] == satellite][
@@ -98,18 +99,26 @@ def test_compare_to_sp3(input_for_test):
                 ["clock_offset_rate_mps"]
             ].to_numpy(),
         }
-        # These thresholds are based on the expected maximum difference between broadcast and
-        # MGEX precise orbit and clock solutions.
-        expected_max_abs_difference = {
-            "position_m": 12,
-            "velocity_mps": 1e-3,
-            "clock_m": 22,
-            "dclock_mps": 3e-3,
+        # These thresholds are based on the achieved maximum difference between broadcast and
+        # MGEX precise orbit and clock solutions in this test.
+        expected_max_difference_l2 = {
+            "position_m": 11.9,
+            "velocity_mps": 2e-4,
+            "clock_m": 26,
+            "dclock_mps": 2e-4,
         }
         for state_name in sp3:
             diff = rinex[state_name] - sp3[state_name]
+            assert np.linalg.norm(diff, 2) < expected_max_difference_l2[state_name]
             print(
                 f"\n satellite: {satellite}, state: {state_name}, diff: {diff} (norm: {np.linalg.norm(diff)}) [m or m/s] (sp3: {sp3[state_name]}, rinex: {rinex[state_name]}))"
             )
-            #assert np.linalg.norm(diff) < expected_max_abs_difference[state_name]
-            pass
+            if state_name not in max_diffs_l2 or np.linalg.norm(diff, 2) > np.linalg.norm(max_diffs_l2[state_name]['difference'], 2):
+                max_diffs_l2[state_name] = {'difference': diff,
+                                              'satellite': satellite
+                                              }
+    print("Maximum differences between broadcast and MGEX precise solutions:")
+    for state_name, max_diff in max_diffs_l2.items():
+        print(
+            f"\n state: {state_name}, satellite: {max_diff['satellite']}, diff: {max_diff['difference']} (l2 norm: {np.linalg.norm(max_diff['difference'], 2)}) [m or m/s])"
+        )
