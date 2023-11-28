@@ -260,7 +260,7 @@ def handle_bds_geos(eph):
     if geos.empty:
         return
     P_GK = np.reshape(geos[["X_k", "Y_k", "Z_k"]].to_numpy(), (-1, 1))
-    V_GK = np.reshape(geos[["dX_k", "dX_k", "dX_k"]].to_numpy(), (-1, 1))
+    V_GK = np.reshape(geos[["dX_k", "dY_k", "dZ_k"]].to_numpy(), (-1, 1))
     z_angles = geos.OmegaEarthIcd_rps * geos.t_k
     rotation_matrices = []
     for i, z_angle in enumerate(z_angles):
@@ -289,15 +289,16 @@ def handle_bds_geos(eph):
     # Velocity in inertial frame that coincides with BDCS at this time, ie a "frozen" ECEF frame
     V_K_frozen = np.matmul(R, V_GK)
     V_K_frozen = np.reshape(V_K_frozen, (-1, 3))
-    # Add term due to ECEFs angular velocity w.r.t. the frozen frame
     geos["dX_k"] = V_K_frozen[:, 0]
     geos["dY_k"] = V_K_frozen[:, 1]
     geos["dZ_k"] = V_K_frozen[:, 2]
+    # Add term due to ECEFs angular velocity w.r.t. the frozen frame
 
     def frozen_to_rotating_bdcs(row):
         p = np.array([row["X_k"], row["Y_k"], row["Z_k"]])
         v_frozen = np.array([row["dX_k"], row["dY_k"], row["dZ_k"]])
-        v_rotating = v_frozen + np.cross(np.array([0, 0, -constants.cBdsOmegaDotEarth_rps]), p)
+        v_rotating = v_frozen + np.cross(np.array([0, 0, -row.OmegaEarthIcd_rps]), p)
+        row[["dX_k", "dY_k", "dZ_k"]] = v_rotating
         return row
 
     geos = geos.apply(frozen_to_rotating_bdcs, axis=1)
