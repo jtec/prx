@@ -113,10 +113,10 @@ def test_compare_to_sp3(input_for_test):
             print(
                 f"\n satellite: {satellite}, state: {state_name}, diff: {diff} (norm: {np.linalg.norm(diff)}) [m or m/s] (sp3: {sp3[state_name]}, rinex: {rinex[state_name]}))"
             )
-            if state_name not in max_diffs_l2 or np.linalg.norm(diff, 2) > np.linalg.norm(max_diffs_l2[state_name]['difference'], 2):
-                max_diffs_l2[state_name] = {'difference': diff,
-                                              'satellite': satellite
-                                              }
+            if state_name not in max_diffs_l2 or np.linalg.norm(
+                diff, 2
+            ) > np.linalg.norm(max_diffs_l2[state_name]["difference"], 2):
+                max_diffs_l2[state_name] = {"difference": diff, "satellite": satellite}
     print("Maximum differences between broadcast and MGEX precise solutions:")
     for state_name, max_diff in max_diffs_l2.items():
         print(
