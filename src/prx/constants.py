@@ -36,7 +36,6 @@ cQzssPi = cGpsPi
 cQzssSpeedOfLight_mps = cGpsSpeedOfLight_mps
 cQzssMuEarth_m3ps2 = 3.986005e14
 cQzssOmegaDotEarth_rps = 7.2921151467e-5
-
 # Heuristic: demand micrometer precision in computations involving distances
 cPrxPrecision_m = 1e-6
 cMaxOrbitalSpeedOfAnyGnssSatellite_mps = 1e4
