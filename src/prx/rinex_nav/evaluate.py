@@ -26,6 +26,7 @@ def parse_rinex_nav_file(rinex_file: Path):
     @memory.cache
     def cached_load(rinex_file: Path, file_hash: str):
         helpers.repair_with_gfzrnx(rinex_file)
+
         log.info(f"Parsing {rinex_file} ...")
         ds = georinex.load(rinex_file)
         df = convert_nav_dataset_to_dataframe(ds)
@@ -410,7 +411,7 @@ def convert_nav_dataset_to_dataframe(nav_ds):
     df = df.groupby("constellation").apply(
         compute_ephemeris_and_clock_offset_reference_times
     )
-    df.rename(
+    df = df.rename(
         columns={
             "M0": "M_0",
             "Eccentricity": "e",
@@ -425,8 +426,12 @@ def convert_nav_dataset_to_dataframe(nav_ds):
             "Io": "i_0",
             "Omega0": "Omega_0",
         },
-        inplace=True,
     )
+    df = gal_inav_fnav_indicators(df)
+    return df
+
+
+def gal_inav_fnav_indicators(df):
     return df
 
 
@@ -459,17 +464,18 @@ def sort_out_gal_fnav_inav(df):
     return df
 
 
-def select_ephemerides(df, query_time_isagpst):
+def select_ephemerides(df, query):
     # Keep only ephemerides for the satellites of interest
-    df = df[df["sv"].isin(query_time_isagpst.keys())]
-    # Copy query times (The time for which we compute the satellite state) into dataframe
-    df["query_time_isagpst"] = df["sv"].apply(lambda sat: query_time_isagpst[sat])
+    df = df[df["sv"].isin(query['satellite'])]
+    # Copy query times (the time for which we compute the satellite state) into ephemeris dataframe
+    # We also need to
+    df["query_time_isagpst"] = df["sv"].apply(lambda sat: [sat])
     # Kick out all ephemerides that are not valid at the time of interest
     df = df[df["query_time_isagpst"] > df["validity_start"]]
     df = df[df["query_time_isagpst"] < df["validity_end"]]
     # For Galileo satellites we can have both F/NAV and I/NAV ephemerides for the same satellite and time, keep
     # only one
-    df = sort_out_gal_fnav_inav(df)
+    #df = sort_out_gal_fnav_inav(df)
     # Compute times w.r.t. orbit and clock reference times used by downstream computations
     df["query_time_wrt_ephemeris_reference_time_s"] = (
         df["query_time_isagpst"] - df["ephemeris_reference_time_isagpst"]
@@ -477,6 +483,7 @@ def select_ephemerides(df, query_time_isagpst):
     df["query_time_wrt_clock_reference_time_s"] = (
         df["query_time_isagpst"] - df["clock_reference_time_isagpst"]
     ).apply(helpers.timedelta_2_seconds)
+    # Select the ephemeris whose time of reference is closest, but before the query time
     df = df[df["query_time_wrt_ephemeris_reference_time_s"] >= 0.0]
     df = (
         df.sort_values("query_time_wrt_ephemeris_reference_time_s")
@@ -499,10 +506,10 @@ def compute_clock_offsets(df):
     )
 
 
-def compute(rinex_nav_file_path, query_times_isagpst):
+def compute(rinex_nav_file_path, query):
     rinex_nav_file_path = Path(rinex_nav_file_path)
     df = parse_rinex_nav_file(rinex_nav_file_path)
-    df = select_ephemerides(df, query_times_isagpst)
+    df = select_ephemerides(df, query)
     compute_clock_offsets(df)
 
     def evaluate_orbit(sub_df):

@@ -42,34 +42,34 @@ def test_compare_to_sp3(input_for_test):
     sat_state_query_time_isagpst = (
         pd.Timestamp("2022-01-01T01:10:00.000000000") - constants.cGpstUtcEpoch
     )
-    queries = [
+    query = pd.DataFrame([
     # Multiple satellites with ephemerides provided as Kepler orbits
     # Two Beidou GEO (from http://www.csno-tarc.cn/en/system/constellation)
-        {"satellite": "C03", "query_time_isagpst": sat_state_query_time_gpst},
-    query_times["C05"] = sat_state_query_time_isagpst
-    # One Beidou IGSO
-    query_times["C38"] = sat_state_query_time_isagpst
+        {"satellite": "C03", "query_time_isagpst": sat_state_query_time_isagpst},
+        {"satellite": "C05", "query_time_isagpst": sat_state_query_time_isagpst},
+        # One Beidou IGSO
+    {"satellite": "C38", "query_time_isagpst": sat_state_query_time_isagpst},
     # One Beidou MEO
-    query_times["C30"] = sat_state_query_time_isagpst
+    {"satellite": "C30", "query_time_isagpst": sat_state_query_time_isagpst},
     # Two GPS
-    query_times["G15"] = sat_state_query_time_isagpst
-    # query_times["G12"] = sat_state_query_time_gpst
+    {"satellite": "G15", "query_time_isagpst": sat_state_query_time_isagpst},
+    {"satellite": "G12", "query_time_isagpst": sat_state_query_time_isagpst},
     # Two Galileo
-    query_times["E24"] = sat_state_query_time_isagpst
-    query_times["E30"] = sat_state_query_time_isagpst
+    {"satellite": "E24", "query_time_isagpst": sat_state_query_time_isagpst},
+    {"satellite": "E30", "query_time_isagpst": sat_state_query_time_isagpst},
     # Two QZSS
-    query_times["J02"] = sat_state_query_time_isagpst
-    query_times["J03"] = sat_state_query_time_isagpst
-
+    {"satellite": "J02", "query_time_isagpst": sat_state_query_time_isagpst},
+    {"satellite": "J03", "query_time_isagpst": sat_state_query_time_isagpst},
     # Multiple satellites with orbits that require propagation of an initial state
     # Two GLONASS satellites
-    # query_times["R04"] = sat_state_query_time_gpst
-    # query_times["R05"] = sat_state_query_time_gpst
+    # {"satellite": "R04", "query_time_isagpst": sat_state_query_time_isagpst},
+    # {"satellite": "R05", "query_time_isagpst": sat_state_query_time_isagpst},
+    ])
+
     sp3_sat_states = sp3_evaluate.compute(
-        input_for_test["sp3_file"], sat_state_query_time_isagpst
+        input_for_test["sp3_file"], query
     )
-    rinex_sat_states = rinex_nav_evaluate.compute(rinex_nav_file, query_times)
-    max_diffs_l2 = {}
+    rinex_sat_states = rinex_nav_evaluate.compute(rinex_nav_file, query)
     for satellite, query_time in query_times.items():
         sp3 = {
             "position_m": sp3_sat_states[sp3_sat_states["sv"] == satellite][
@@ -107,18 +107,19 @@ def test_compare_to_sp3(input_for_test):
             "clock_m": 26,
             "dclock_mps": 2e-4,
         }
+        max_diffs_l2norm = {}
         for state_name in sp3:
             diff = rinex[state_name] - sp3[state_name]
             assert np.linalg.norm(diff, 2) < expected_max_difference_l2[state_name]
             print(
                 f"\n satellite: {satellite}, state: {state_name}, diff: {diff} (norm: {np.linalg.norm(diff)}) [m or m/s] (sp3: {sp3[state_name]}, rinex: {rinex[state_name]}))"
             )
-            if state_name not in max_diffs_l2 or np.linalg.norm(
+            if state_name not in max_diffs_l2norm or np.linalg.norm(
                 diff, 2
-            ) > np.linalg.norm(max_diffs_l2[state_name]["difference"], 2):
-                max_diffs_l2[state_name] = {"difference": diff, "satellite": satellite}
+            ) > np.linalg.norm(max_diffs_l2norm[state_name]["difference"], 2):
+                max_diffs_l2norm[state_name] = {"difference": diff, "satellite": satellite}
     print("Maximum differences between broadcast and MGEX precise solutions:")
-    for state_name, max_diff in max_diffs_l2.items():
+    for state_name, max_diff in max_diffs_l2norm.items():
         print(
             f"\n state: {state_name}, satellite: {max_diff['satellite']}, diff: {max_diff['difference']} (l2 norm: {np.linalg.norm(max_diff['difference'], 2)}) [m or m/s])"
         )
