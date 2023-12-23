@@ -41,6 +41,7 @@ def parse_rinex_nav_file(rinex_file: Path):
                 "I": "irnss",
             }
         )
+        df = df.reset_index(drop=True)
         return df
 
     t0 = pd.Timestamp.now()
@@ -329,9 +330,9 @@ def kepler_orbit_position_and_velocity(eph):
             "X_k": "x_m",
             "Y_k": "y_m",
             "Z_k": "z_m",
-            "dX_k": "vx_mps",
-            "dY_k": "vy_mps",
-            "dZ_k": "vz_mps",
+            "dX_k": "dx_mps",
+            "dY_k": "dy_mps",
+            "dZ_k": "dz_mps",
         },
         inplace=True,
     )
@@ -465,42 +466,39 @@ def sort_out_gal_fnav_inav(df):
 
 
 def select_ephemerides(df, query):
-    # Keep only ephemerides for the satellites of interest
-    df = df[df["sv"].isin(query['satellite'])]
-    # Copy query times (the time for which we compute the satellite state) into ephemeris dataframe
-    # We also need to
-    df["query_time_isagpst"] = df["sv"].apply(lambda sat: [sat])
-    # Kick out all ephemerides that are not valid at the time of interest
-    df = df[df["query_time_isagpst"] > df["validity_start"]]
-    df = df[df["query_time_isagpst"] < df["validity_end"]]
+    # Keep only ephemerides of the satellites of interest
+    # df = df[df["sv"].isin(query['satellite'])]
+
+    def find_ephemeris_index(row, df):
+        # For each query, find the ephemeris whose time of reference is closest, but before the query time
+        query_time_wrt_ephemeris_reference_time = row['query_time_isagpst'] - df[df["sv"] == row['sv']]['ephemeris_reference_time_isagpst']
+        match = query_time_wrt_ephemeris_reference_time[query_time_wrt_ephemeris_reference_time >= pd.Timedelta(seconds=0)].idxmin()
+        return match
+    query['ephemeris_index'] = query.apply(find_ephemeris_index, args=(df,), axis=1)
+    df['ephemeris_index'] = df.index
+    # Copy ephemerides into query dataframe
+    # We are doing it this way around because the same satellite might show up multiple times in the query dataframe
+    query = query.merge(df.drop(columns=['sv']), on='ephemeris_index')
     # For Galileo satellites we can have both F/NAV and I/NAV ephemerides for the same satellite and time, keep
     # only one
     #df = sort_out_gal_fnav_inav(df)
     # Compute times w.r.t. orbit and clock reference times used by downstream computations
-    df["query_time_wrt_ephemeris_reference_time_s"] = (
-        df["query_time_isagpst"] - df["ephemeris_reference_time_isagpst"]
+    query["query_time_wrt_ephemeris_reference_time_s"] = (
+        query["query_time_isagpst"] - query["ephemeris_reference_time_isagpst"]
     ).apply(helpers.timedelta_2_seconds)
-    df["query_time_wrt_clock_reference_time_s"] = (
-        df["query_time_isagpst"] - df["clock_reference_time_isagpst"]
+    query["query_time_wrt_clock_reference_time_s"] = (
+        query["query_time_isagpst"] - query["clock_reference_time_isagpst"]
     ).apply(helpers.timedelta_2_seconds)
-    # Select the ephemeris whose time of reference is closest, but before the query time
-    df = df[df["query_time_wrt_ephemeris_reference_time_s"] >= 0.0]
-    df = (
-        df.sort_values("query_time_wrt_ephemeris_reference_time_s")
-        .groupby(["sv"])
-        .first()
-    )
-    df.reset_index(inplace=True)
-    return df
+    return query
 
 
 def compute_clock_offsets(df):
-    df["clock_offset_m"] = constants.cGpsSpeedOfLight_mps * (
+    df["clock_m"] = constants.cGpsSpeedOfLight_mps * (
         df["SVclockBias"]
         + df["SVclockDrift"] * df["query_time_wrt_clock_reference_time_s"]
         + df["SVclockDriftRate"] * df["query_time_wrt_clock_reference_time_s"] ** 2
     )
-    df["clock_offset_rate_mps"] = constants.cGpsSpeedOfLight_mps * (
+    df["dclock_mps"] = constants.cGpsSpeedOfLight_mps * (
         df["SVclockDrift"]
         + 2 * df["SVclockDriftRate"] * df["query_time_wrt_clock_reference_time_s"]
     )
@@ -529,15 +527,15 @@ def compute(rinex_nav_file_path, query):
             "x_m",
             "y_m",
             "z_m",
-            "vx_mps",
-            "vy_mps",
-            "vz_mps",
-            "clock_offset_m",
-            "clock_offset_rate_mps",
+            "dx_mps",
+            "dy_mps",
+            "dz_mps",
+            "clock_m",
+            "dclock_mps",
             "query_time_isagpst",
         ]
     ]
-    return df
+    return df.reset_index(drop=True)
 
 
 def compute_total_group_delay(
