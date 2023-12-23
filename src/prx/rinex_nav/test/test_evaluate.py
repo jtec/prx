@@ -45,81 +45,64 @@ def test_compare_to_sp3(input_for_test):
     query = pd.DataFrame([
     # Multiple satellites with ephemerides provided as Kepler orbits
     # Two Beidou GEO (from http://www.csno-tarc.cn/en/system/constellation)
-        {"satellite": "C03", "query_time_isagpst": sat_state_query_time_isagpst},
-        {"satellite": "C05", "query_time_isagpst": sat_state_query_time_isagpst},
+        {"sv": "C03", "query_time_isagpst": sat_state_query_time_isagpst},
+        {"sv": "C05", "query_time_isagpst": sat_state_query_time_isagpst},
         # One Beidou IGSO
-    {"satellite": "C38", "query_time_isagpst": sat_state_query_time_isagpst},
+    {"sv": "C38", "query_time_isagpst": sat_state_query_time_isagpst},
     # One Beidou MEO
-    {"satellite": "C30", "query_time_isagpst": sat_state_query_time_isagpst},
+    {"sv": "C30", "query_time_isagpst": sat_state_query_time_isagpst},
     # Two GPS
-    {"satellite": "G15", "query_time_isagpst": sat_state_query_time_isagpst},
-    {"satellite": "G12", "query_time_isagpst": sat_state_query_time_isagpst},
+    {"sv": "G15", "query_time_isagpst": sat_state_query_time_isagpst},
+    {"sv": "G12", "query_time_isagpst": sat_state_query_time_isagpst},
+    # Query one GPS satellite at two different times to cover that case
+    {"sv": "G15", "query_time_isagpst": sat_state_query_time_isagpst + pd.Timedelta(seconds=1)},
     # Two Galileo
-    {"satellite": "E24", "query_time_isagpst": sat_state_query_time_isagpst},
-    {"satellite": "E30", "query_time_isagpst": sat_state_query_time_isagpst},
+    {"sv": "E24", "query_time_isagpst": sat_state_query_time_isagpst},
+    {"sv": "E30", "query_time_isagpst": sat_state_query_time_isagpst},
     # Two QZSS
-    {"satellite": "J02", "query_time_isagpst": sat_state_query_time_isagpst},
-    {"satellite": "J03", "query_time_isagpst": sat_state_query_time_isagpst},
+    {"sv": "J02", "query_time_isagpst": sat_state_query_time_isagpst},
+    {"sv": "J03", "query_time_isagpst": sat_state_query_time_isagpst},
     # Multiple satellites with orbits that require propagation of an initial state
     # Two GLONASS satellites
-    # {"satellite": "R04", "query_time_isagpst": sat_state_query_time_isagpst},
-    # {"satellite": "R05", "query_time_isagpst": sat_state_query_time_isagpst},
+    # {"sv": "R04", "query_time_isagpst": sat_state_query_time_isagpst},
+    # {"sv": "R05", "query_time_isagpst": sat_state_query_time_isagpst},
     ])
 
     sp3_sat_states = sp3_evaluate.compute(
         input_for_test["sp3_file"], query
     )
+    sp3_sat_states = sp3_sat_states.sort_values(by=["sv", "query_time_isagpst"]).sort_index(axis=1).reset_index().drop(columns=["index"])
     rinex_sat_states = rinex_nav_evaluate.compute(rinex_nav_file, query)
-    for satellite, query_time in query_times.items():
-        sp3 = {
-            "position_m": sp3_sat_states[sp3_sat_states["sv"] == satellite][
-                ["x_m", "y_m", "z_m"]
-            ].to_numpy(),
-            "velocity_mps": sp3_sat_states[sp3_sat_states["sv"] == satellite][
-                ["dx_mps", "dy_mps", "dz_mps"]
-            ].to_numpy(),
-            "clock_m": sp3_sat_states[sp3_sat_states["sv"] == satellite][
-                ["clock_m"]
-            ].to_numpy(),
-            "dclock_mps": sp3_sat_states[sp3_sat_states["sv"] == satellite][
-                ["dclock_mps"]
-            ].to_numpy(),
-        }
-        rinex = {
-            "position_m": rinex_sat_states[rinex_sat_states["sv"] == satellite][
-                ["x_m", "y_m", "z_m"]
-            ].to_numpy(),
-            "velocity_mps": rinex_sat_states[rinex_sat_states["sv"] == satellite][
-                ["vx_mps", "vy_mps", "vz_mps"]
-            ].to_numpy(),
-            "clock_m": rinex_sat_states[rinex_sat_states["sv"] == satellite][
-                ["clock_offset_m"]
-            ].to_numpy(),
-            "dclock_mps": rinex_sat_states[rinex_sat_states["sv"] == satellite][
-                ["clock_offset_rate_mps"]
-            ].to_numpy(),
-        }
-        # These thresholds are based on the achieved maximum difference between broadcast and
-        # MGEX precise orbit and clock solutions in this test.
-        expected_max_difference_l2 = {
-            "position_m": 11.9,
-            "velocity_mps": 2e-4,
-            "clock_m": 26,
-            "dclock_mps": 2e-4,
-        }
-        max_diffs_l2norm = {}
-        for state_name in sp3:
-            diff = rinex[state_name] - sp3[state_name]
-            assert np.linalg.norm(diff, 2) < expected_max_difference_l2[state_name]
-            print(
-                f"\n satellite: {satellite}, state: {state_name}, diff: {diff} (norm: {np.linalg.norm(diff)}) [m or m/s] (sp3: {sp3[state_name]}, rinex: {rinex[state_name]}))"
-            )
-            if state_name not in max_diffs_l2norm or np.linalg.norm(
-                diff, 2
-            ) > np.linalg.norm(max_diffs_l2norm[state_name]["difference"], 2):
-                max_diffs_l2norm[state_name] = {"difference": diff, "satellite": satellite}
-    print("Maximum differences between broadcast and MGEX precise solutions:")
-    for state_name, max_diff in max_diffs_l2norm.items():
-        print(
-            f"\n state: {state_name}, satellite: {max_diff['satellite']}, diff: {max_diff['difference']} (l2 norm: {np.linalg.norm(max_diff['difference'], 2)}) [m or m/s])"
-        )
+    rinex_sat_states = rinex_sat_states.sort_values(by=["sv", "query_time_isagpst"]).sort_index(axis=1).reset_index().drop(columns=["index"])
+    # Verify that the SP3 states are ordered the same as the RINEX states
+    assert sp3_sat_states["sv"].equals(rinex_sat_states["sv"])
+    # Verify that query times are the same for each row. We can check for equality here
+    # as the timestamps are based on integers with nanosecond resolution, so no need to
+    # worry about floating point precision.
+    assert sp3_sat_states["query_time_isagpst"].equals(rinex_sat_states["query_time_isagpst"])
+    # Verify that sorting columns worked as expected
+    assert sp3_sat_states.columns.equals(rinex_sat_states.columns)
+    diff = rinex_sat_states.drop(columns='sv') - sp3_sat_states.drop(columns='sv')
+    diff = pd.concat((rinex_sat_states['sv'], diff), axis=1)
+    diff['diff_xyz_l2_m'] = np.linalg.norm(diff[['x_m', 'y_m', 'z_m']].to_numpy(), axis=1)
+    diff['diff_dxyz_l2_mps'] = np.linalg.norm(diff[['dx_mps', 'dy_mps', 'dz_mps']].to_numpy(), axis=1)
+
+    # The following thresholds are the achieved maximum difference between broadcast and
+    # MGEX precise orbit and clock solutions seen in this test.
+    # TODO It would be desirable to have an independent reference for expected broadcast values.
+    # Reasons for differences between SP3 and RINEX:
+    # - The regular broadcast ephemeris error
+    # - Different Satellite Reference Points (Center of Mass, iono-free phase center etc.)
+    # - Using integer-second-aligned GPST (i.e. system time integer-second aligned to GPST) as query time,
+    #   whereas SP3 uses GPST, so we will see the satellite displacement within time offset between
+    #   system time and GPST. The offset is typically tens of nanoseconds though, so this should not account
+    #   for more than millimeter-level, much smaller than the ephemeris error.
+    expected_max_differences = {
+        "diff_xyz_l2_m": 11.9,
+        "diff_dxyz_l2_mps": 1.8e-4,
+        "clock_m": 26,  # TODO Broadcast clock error should be much smaller than this.
+        "dclock_mps": 1.2e-4,
+    }
+    print('\n' + diff.to_string())
+    for column, expected_max_difference in expected_max_differences.items():
+        assert diff[column].max() < expected_max_difference, f"Expected maximum difference {expected_max_difference} for column {column}, but got {diff[column].max()}"
