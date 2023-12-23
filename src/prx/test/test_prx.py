@@ -26,8 +26,8 @@ def input_for_test():
     compressed_compact_rinex_file = "TLSE00FRA_R_20230010100_10S_01S_MO.crx.gz"
     test_file = test_directory.joinpath(compressed_compact_rinex_file)
     shutil.copy(
-        Path(__file__).parent / f"datasets/TLSE_2023001/{compressed_compact_rinex_file}"
-        ,
+        Path(__file__).parent
+        / f"datasets/TLSE_2023001/{compressed_compact_rinex_file}",
         test_file,
     )
     assert test_file.exists()

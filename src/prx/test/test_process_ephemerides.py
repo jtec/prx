@@ -164,7 +164,7 @@ def test_beidou_position_and_velocity_sanity_check(input_for_test):
     )
 
     # Compare to semi-major-axis:
-    assert abs(np.linalg.norm(p_ecef) - 6.493410568237e03 ** 2) < 1e6
+    assert abs(np.linalg.norm(p_ecef) - 6.493410568237e03**2) < 1e6
     # C01 is on a geosynchronous orbit, so its velocity in ECEF should be smaller than those on MEO orbits
     assert abs(np.linalg.norm(v_ecef) - 2 * 1e2) < 1e1
 
@@ -606,16 +606,17 @@ def test_compute_bds_group_delay_rnx3(input_for_test):
 def test_sagnac_effect():
     # load validation data
     path_to_validation_file = helpers.prx_root().joinpath(
-            f"tools/validation_data/sagnac_effect.csv"
-        )
+        f"tools/validation_data/sagnac_effect.csv"
+    )
     # read satellite position in header line 2
     sat_pos = np.array((28400000, 0, 0))
 
     # read data
-    data = np.loadtxt(path_to_validation_file,
-                      delimiter=",",
-                      skiprows=3,
-                      )
+    data = np.loadtxt(
+        path_to_validation_file,
+        delimiter=",",
+        skiprows=3,
+    )
 
     sagnac_effect_reference = np.zeros((data.shape[0],))
     sagnac_effect_computed = np.zeros((data.shape[0],))
@@ -627,7 +628,7 @@ def test_sagnac_effect():
     # errors come from the approximation of cos and sin for small angles
     # millimeter accuracy should be sufficient
     tolerance = 1e-3
-    assert(np.max(np.abs(sagnac_effect_computed - sagnac_effect_reference)) < tolerance)
+    assert np.max(np.abs(sagnac_effect_computed - sagnac_effect_reference)) < tolerance
 
 
 def test_ecef_to_geodetic():
@@ -637,31 +638,58 @@ def test_ecef_to_geodetic():
     ecef_coords = [6378137.0, 0.0, 0.0]
     expected_geodetic = [0.0, 0.0, 0.0]
     computed_geodetic = eph.ecef_2_geodetic(ecef_coords)
-    assert (np.abs(np.array(expected_geodetic[:2]) - np.array(computed_geodetic[:2])) < tolerance_rad).all()
+    assert (
+        np.abs(np.array(expected_geodetic[:2]) - np.array(computed_geodetic[:2]))
+        < tolerance_rad
+    ).all()
     assert np.abs(expected_geodetic[2] - computed_geodetic[2]) < tolerance_alt
 
     ecef_coords = [0.0, 6378137.0, 0.0]
     expected_geodetic = [np.deg2rad(0.0), np.deg2rad(90), 0.0]
     computed_geodetic = eph.ecef_2_geodetic(ecef_coords)
-    assert (np.abs(np.array(expected_geodetic[:2]) - np.array(computed_geodetic[:2])) < tolerance_rad).all()
+    assert (
+        np.abs(np.array(expected_geodetic[:2]) - np.array(computed_geodetic[:2]))
+        < tolerance_rad
+    ).all()
     assert np.abs(expected_geodetic[2] - computed_geodetic[2]) < tolerance_alt
 
     ecef_coords = [4624518, 116590, 4376497]  # Toulouse, France
-    expected_geodetic = [np.deg2rad(43.604698100243851), np.deg2rad(1.444193786348353), 151.9032]
+    expected_geodetic = [
+        np.deg2rad(43.604698100243851),
+        np.deg2rad(1.444193786348353),
+        151.9032,
+    ]
     computed_geodetic = eph.ecef_2_geodetic(ecef_coords)
-    assert (np.abs(np.array(expected_geodetic[:2]) - np.array(computed_geodetic[:2])) < tolerance_rad).all()
+    assert (
+        np.abs(np.array(expected_geodetic[:2]) - np.array(computed_geodetic[:2]))
+        < tolerance_rad
+    ).all()
     assert np.abs(expected_geodetic[2] - computed_geodetic[2]) < tolerance_alt
 
-    ecef_coords = [-4.646050004314417e+06, 2.553206120634516e+06, -3.534374202256767e+06]  # Sidney
+    ecef_coords = [
+        -4.646050004314417e06,
+        2.553206120634516e06,
+        -3.534374202256767e06,
+    ]  # Sidney
     expected_geodetic = [np.deg2rad(-33.8688197), np.deg2rad(151.2092955), 0]
     computed_geodetic = eph.ecef_2_geodetic(ecef_coords)
-    assert (np.abs(np.array(expected_geodetic[:2]) - np.array(computed_geodetic[:2])) < tolerance_rad).all()
+    assert (
+        np.abs(np.array(expected_geodetic[:2]) - np.array(computed_geodetic[:2]))
+        < tolerance_rad
+    ).all()
     assert np.abs(expected_geodetic[2] - computed_geodetic[2]) < tolerance_alt
 
-    ecef_coords = [1.362205559782862e+06, -3.423584689115747e+06, -5.188704112366104e+06]  # Ushuaia, Argentina
+    ecef_coords = [
+        1.362205559782862e06,
+        -3.423584689115747e06,
+        -5.188704112366104e06,
+    ]  # Ushuaia, Argentina
     expected_geodetic = [np.deg2rad(-54.8019121), np.deg2rad(-68.3029511), 0]
     computed_geodetic = eph.ecef_2_geodetic(ecef_coords)
-    assert (np.abs(np.array(expected_geodetic[:2]) - np.array(computed_geodetic[:2])) < tolerance_rad).all()
+    assert (
+        np.abs(np.array(expected_geodetic[:2]) - np.array(computed_geodetic[:2]))
+        < tolerance_rad
+    ).all()
     assert np.abs(expected_geodetic[2] - computed_geodetic[2]) < tolerance_alt
 
 
@@ -671,20 +699,28 @@ def test_satellite_elevation_and_azimuth():
     sat_pos_ecef = np.array([26600e3, 0.0, 0.0])
     rx_pos_ecef = np.array([6400e3, 0.0, 0.0])
     expected_el, expected_az = np.deg2rad(90), np.deg2rad(0)
-    computed_el, computed_az = eph.compute_satellite_elevation_and_azimuth(sat_pos_ecef, rx_pos_ecef)
+    computed_el, computed_az = eph.compute_satellite_elevation_and_azimuth(
+        sat_pos_ecef, rx_pos_ecef
+    )
     assert np.abs(expected_el - computed_el) < tolerance
     assert np.abs(expected_az - computed_az) < tolerance
 
-    sat_pos_ecef = np.array([2.066169397996826e+07, 0.0, 1.428355697996826e+07])
+    sat_pos_ecef = np.array([2.066169397996826e07, 0.0, 1.428355697996826e07])
     rx_pos_ecef = np.array([6378137.0, 0.0, 0.0])
     expected_el, expected_az = np.deg2rad(45), np.deg2rad(0)
-    computed_el, computed_az = eph.compute_satellite_elevation_and_azimuth(sat_pos_ecef, rx_pos_ecef)
+    computed_el, computed_az = eph.compute_satellite_elevation_and_azimuth(
+        sat_pos_ecef, rx_pos_ecef
+    )
     assert np.abs(expected_el - computed_el) < tolerance
     assert np.abs(expected_az - computed_az) < tolerance
 
-    sat_pos_ecef = np.array([2.066169397996826e+07, 7.141778489984130e+06, 1.236992320105505e+07])
+    sat_pos_ecef = np.array(
+        [2.066169397996826e07, 7.141778489984130e06, 1.236992320105505e07]
+    )
     rx_pos_ecef = np.array([6378137.0, 0.0, 0.0])
     expected_el, expected_az = np.deg2rad(45), np.deg2rad(30)
-    computed_el, computed_az = eph.compute_satellite_elevation_and_azimuth(sat_pos_ecef, rx_pos_ecef)
+    computed_el, computed_az = eph.compute_satellite_elevation_and_azimuth(
+        sat_pos_ecef, rx_pos_ecef
+    )
     assert np.abs(expected_el - computed_el) < tolerance
     assert np.abs(expected_az - computed_az) < tolerance

@@ -183,9 +183,13 @@ def build_glonass_slot_dictionary(header_line):
     header_line_split = header_line.split()
     n_sat = int(header_line_split[0])
     glonass_slot_dict = {}
-    for sat in range(1,n_sat+1):
+    for sat in range(1, n_sat + 1):
         # append entry to dict
-        glonass_slot_dict |= {int(header_line_split[1+2*(sat-1)][1:]): int(header_line_split[1+2*(sat-1)+1])}
+        glonass_slot_dict |= {
+            int(header_line_split[1 + 2 * (sat - 1)][1:]): int(
+                header_line_split[1 + 2 * (sat - 1) + 1]
+            )
+        }
     return glonass_slot_dict
 
 
@@ -207,7 +211,7 @@ def satellite_id_2_system_time_scale(satellite_id):
 
 def constellation(satellite_id: str):
     assert (
-            len(satellite_id) == 3
+        len(satellite_id) == 3
     ), f"Satellite ID unexpectedly not three characters long: {satellite_id}"
     return satellite_id[0]
 
@@ -215,31 +219,38 @@ def constellation(satellite_id: str):
 def compute_sagnac_effect(sat_pos_m, rx_pos_m):
     """compute the sagnac effect (effect of the Earth rotation during signal propagation°
 
-        Input:
-        - sat_pos_m: satellite ECEF position. np.ndarray of shape (3,)
-        - rx_pos_m: satellite ECEF position. np.ndarray of shape (3,)
+    Input:
+    - sat_pos_m: satellite ECEF position. np.ndarray of shape (3,)
+    - rx_pos_m: satellite ECEF position. np.ndarray of shape (3,)
 
-        Note:
-        The computation uses small angle approximation of cos and sin.
+    Note:
+    The computation uses small angle approximation of cos and sin.
 
-        Reference:
-        RTKLIB v2.4.2 manual, eq E.3.8b, p 140
+    Reference:
+    RTKLIB v2.4.2 manual, eq E.3.8b, p 140
     """
-    sagnac_effect_m = constants.cEarthRotationRate_radps / constants.cGpsIcdSpeedOfLight_mps \
-                      * (sat_pos_m[0] * rx_pos_m[1] - sat_pos_m[1] * rx_pos_m[0])
+    sagnac_effect_m = (
+        constants.cEarthRotationRate_radps
+        / constants.cGpsIcdSpeedOfLight_mps
+        * (sat_pos_m[0] * rx_pos_m[1] - sat_pos_m[1] * rx_pos_m[0])
+    )
     return sagnac_effect_m
 
 
 def compute_relativistic_clock_effect(
-        sat_pos_m: np.array(3, ),
-        sat_vel_mps: np.array(3, )
+    sat_pos_m: np.array(
+        3,
+    ),
+    sat_vel_mps: np.array(
+        3,
+    ),
 ):
     """
     Reference:
     GNSS Data Processing, Vol. I: Fundamentals and Algorithms. Equation (5.19)
     """
     relativistic_clock_effect_m = (
-            -2 * np.dot(sat_pos_m, sat_vel_mps) / constants.cGpsIcdSpeedOfLight_mps
+        -2 * np.dot(sat_pos_m, sat_vel_mps) / constants.cGpsIcdSpeedOfLight_mps
     )
 
     return relativistic_clock_effect_m
@@ -250,7 +261,9 @@ def compute_satellite_elevation_and_azimuth(sat_pos_ecef, receiver_pos_ecef):
     Reference:
     GNSS Data Processing, Vol. I: Fundamentals and Algorithms. Equations (B.9),(B.13),(B.14)
     """
-    rho = (sat_pos_ecef - receiver_pos_ecef) / np.linalg.norm(sat_pos_ecef - receiver_pos_ecef)
+    rho = (sat_pos_ecef - receiver_pos_ecef) / np.linalg.norm(
+        sat_pos_ecef - receiver_pos_ecef
+    )
     [lat, lon, __] = ecef_2_geodetic(receiver_pos_ecef)
     unit_e = [-np.sin(lon), np.cos(lon), 0]
     unit_n = [-np.cos(lon) * np.sin(lat), -np.sin(lon) * np.sin(lat), np.cos(lat)]
@@ -269,13 +282,18 @@ def ecef_2_geodetic(pos_ecef):
     precision_m = 1e-3
     delta_h_m = 1  # initialization to a value larger than precision
     altitude_m = 0
-    latitude_rad = np.arctan2(pos_ecef[2], p * (1 - constants.cWgs84EarthEccentricity ** 2))
+    latitude_rad = np.arctan2(
+        pos_ecef[2], p * (1 - constants.cWgs84EarthEccentricity**2)
+    )
     while delta_h_m > precision_m:
         n = constants.cWgs84EarthSemiMajorAxis_m / np.sqrt(
-            1 - constants.cWgs84EarthEccentricity ** 2 * np.sin(latitude_rad) ** 2)
+            1 - constants.cWgs84EarthEccentricity**2 * np.sin(latitude_rad) ** 2
+        )
         altitude_previous = altitude_m
         altitude_m = p / np.cos(latitude_rad) - n
         delta_h_m = np.abs(altitude_m - altitude_previous)
-        latitude_rad = np.arctan2(pos_ecef[2], p * (1 - n * constants.cWgs84EarthEccentricity ** 2 / (n + altitude_m)))
+        latitude_rad = np.arctan2(
+            pos_ecef[2],
+            p * (1 - n * constants.cWgs84EarthEccentricity**2 / (n + altitude_m)),
+        )
     return [latitude_rad, longitude_rad, altitude_m]
-

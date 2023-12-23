@@ -11,22 +11,26 @@ def generate_query(n_epochs=1):
         Path(__file__).parent / "datasets/BRDC00IGS_R_20220010000_01D_MN.zip"
     )
     df = rinex_nav_evaluate.parse_rinex_nav_file(rinex_nav_file)
-    df['constellation'] = df['sv'].str[0]
+    df["constellation"] = df["sv"].str[0]
     sats = []
     # Grab ten (or all, if the constellation has less than ten) satellites of each constellation as an approximation
     # of what an open-sky receiver would see
-    for _, constellation_df in df.groupby('constellation'):
+    for _, constellation_df in df.groupby("constellation"):
         constellation_sats = constellation_df["sv"].unique()
-        sats.extend(constellation_sats[0:min(10, len(constellation_sats))])
+        sats.extend(constellation_sats[0 : min(10, len(constellation_sats))])
     # Only Kepler orbits supported:
-    sats = [sat for sat in sats if sat[0] not in ['S', 'R']]
-    query_template = pd.DataFrame({
-        'sv': sats,
-        'query_time_isagpst': pd.Timestamp('2022-01-01T01:10:00.000000000') - constants.cGpstUtcEpoch})
+    sats = [sat for sat in sats if sat[0] not in ["S", "R"]]
+    query_template = pd.DataFrame(
+        {
+            "sv": sats,
+            "query_time_isagpst": pd.Timestamp("2022-01-01T01:10:00.000000000")
+            - constants.cGpstUtcEpoch,
+        }
+    )
     query = query_template.copy()
-    for i in range(1, n_epochs+1):
+    for i in range(1, n_epochs + 1):
         next_query = query_template.copy()
-        next_query['query_time_isagpst'] += pd.Timedelta(seconds=i)
+        next_query["query_time_isagpst"] += pd.Timedelta(seconds=i)
         query = pd.concat((query, next_query), axis=0)
     return query
 
