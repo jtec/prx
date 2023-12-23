@@ -441,7 +441,7 @@ def to_isagpst(time: pd.Timedelta, timescale: str):
 
 
 def sort_out_gal_fnav_inav(df):
-# If the considered satellite is Galileo, there is a need to check which type of ephemeris has to be retrieved (
+    # If the considered satellite is Galileo, there is a need to check which type of ephemeris has to be retrieved (
     # F/NAV or I/NAV)
     # The 8th and 9th bit of the `data source` parameter in the Galileo navigation message allows to identify the type of message (F/NAV vs I/NAV)
     cGalileoFnavDataSourceIndicator = 512
@@ -452,12 +452,12 @@ def sort_out_gal_fnav_inav(df):
                 ephemerides_of_requested_sat = ephemerides_of_requested_sat.loc[
                     ephemerides_of_requested_sat.DataSrc
                     >= constants.cGalileoFnavDataSourceIndicator
-                    ]
+                ]
             case "5":  # DataSrc < 512
                 ephemerides_of_requested_sat = ephemerides_of_requested_sat.loc[
                     ephemerides_of_requested_sat.DataSrc
                     < constants.cGalileoFnavDataSourceIndicator
-                    ]
+                ]
             case _:  # other galileo signals not supported in rnx3
                 log.info(
                     f"Could not retrieve ephemeris for satellite id: {satellite_id} and obs: {obs_type}"
@@ -471,17 +471,23 @@ def select_ephemerides(df, query):
 
     def find_ephemeris_index(row, df):
         # For each query, find the ephemeris whose time of reference is closest, but before the query time
-        query_time_wrt_ephemeris_reference_time = row['query_time_isagpst'] - df[df["sv"] == row['sv']]['ephemeris_reference_time_isagpst']
-        match = query_time_wrt_ephemeris_reference_time[query_time_wrt_ephemeris_reference_time >= pd.Timedelta(seconds=0)].idxmin()
+        query_time_wrt_ephemeris_reference_time = (
+            row["query_time_isagpst"]
+            - df[df["sv"] == row["sv"]]["ephemeris_reference_time_isagpst"]
+        )
+        match = query_time_wrt_ephemeris_reference_time[
+            query_time_wrt_ephemeris_reference_time >= pd.Timedelta(seconds=0)
+        ].idxmin()
         return match
-    query['ephemeris_index'] = query.apply(find_ephemeris_index, args=(df,), axis=1)
-    df['ephemeris_index'] = df.index
+
+    query["ephemeris_index"] = query.apply(find_ephemeris_index, args=(df,), axis=1)
+    df["ephemeris_index"] = df.index
     # Copy ephemerides into query dataframe
     # We are doing it this way around because the same satellite might show up multiple times in the query dataframe
-    query = query.merge(df.drop(columns=['sv']), on='ephemeris_index')
+    query = query.merge(df.drop(columns=["sv"]), on="ephemeris_index")
     # For Galileo satellites we can have both F/NAV and I/NAV ephemerides for the same satellite and time, keep
     # only one
-    #df = sort_out_gal_fnav_inav(df)
+    # df = sort_out_gal_fnav_inav(df)
     # Compute times w.r.t. orbit and clock reference times used by downstream computations
     query["query_time_wrt_ephemeris_reference_time_s"] = (
         query["query_time_isagpst"] - query["ephemeris_reference_time_isagpst"]
@@ -539,10 +545,10 @@ def compute(rinex_nav_file_path, query):
 
 
 def compute_total_group_delay(
-        rinex_nav_file_path: Path,
-        time_constellation_time_ns: pd.Timedelta,
-        satellite: str,
-        obs_type: str,
+    rinex_nav_file_path: Path,
+    time_constellation_time_ns: pd.Timedelta,
+    satellite: str,
+    obs_type: str,
 ):
     """compute the total group delay from a RINEX 3.05´ file, for a specific satellite, time and observation type
 
@@ -573,9 +579,9 @@ def compute_total_group_delay(
                     gamma = 1
                 case "2":
                     gamma = (
-                                    constants.carrier_frequencies_hz()["G"]["L1"]
-                                    / constants.carrier_frequencies_hz()["G"]["L2"]
-                            ) ** 2
+                        constants.carrier_frequencies_hz()["G"]["L1"]
+                        / constants.carrier_frequencies_hz()["G"]["L2"]
+                    ) ** 2
                 case _:
                     gamma = np.nan
         case "E":
@@ -586,15 +592,15 @@ def compute_total_group_delay(
                 case "5":
                     group_delay = ephemeris_df.BGDe5a.values[0]
                     gamma = (
-                                    constants.carrier_frequencies_hz()["E"]["L1"]
-                                    / constants.carrier_frequencies_hz()["E"]["L5"]
-                            ) ** 2
+                        constants.carrier_frequencies_hz()["E"]["L1"]
+                        / constants.carrier_frequencies_hz()["E"]["L5"]
+                    ) ** 2
                 case "7":
                     group_delay = ephemeris_df.BGDe5b.values[0]
                     gamma = (
-                                    constants.carrier_frequencies_hz()["E"]["L1"]
-                                    / constants.carrier_frequencies_hz()["E"]["L7"]
-                            ) ** 2
+                        constants.carrier_frequencies_hz()["E"]["L1"]
+                        / constants.carrier_frequencies_hz()["E"]["L7"]
+                    ) ** 2
                 case _:
                     group_delay = np.nan
                     gamma = np.nan
