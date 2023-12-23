@@ -6,46 +6,46 @@ from prx import converters
 import cProfile as profile
 
 
-def benchmark_1():
+def generate_query(n_epochs=1):
     rinex_nav_file = converters.compressed_to_uncompressed(
         Path(__file__).parent / "datasets/BRDC00IGS_R_20220010000_01D_MN.zip"
     )
-    query_times = {}
-    sat_state_query_time_gpst = (
-        pd.Timestamp("2022-01-01T01:00:00.000000000") - constants.cGpstUtcEpoch
-    )
-    # Time-of-transmission is different for each satellite, simulate that here
-    # Multiple satellites with ephemerides provided as Kepler orbits
-    # Two Beidou GEO (from http://www.csno-tarc.cn/en/system/constellation)
-    query_times["C03"] = sat_state_query_time_gpst
-    query_times["C05"] = sat_state_query_time_gpst
-    # One Beidou IGSO
-    query_times["C38"] = sat_state_query_time_gpst
-    # One Beidou MEO
-    query_times["C30"] = sat_state_query_time_gpst
-    # Two GPS
-    query_times["G15"] = sat_state_query_time_gpst
-    query_times["G12"] = sat_state_query_time_gpst
-    # Two Galileo
-    query_times["E24"] = sat_state_query_time_gpst
-    query_times["E30"] = sat_state_query_time_gpst
-    # Two QZSS
-    query_times["J02"] = sat_state_query_time_gpst
-    query_times["J03"] = sat_state_query_time_gpst
+    df = rinex_nav_evaluate.parse_rinex_nav_file(rinex_nav_file)
+    df['constellation'] = df['sv'].str[0]
+    sats = []
+    # Grab ten (or all, if the constellation has less than ten) satellites of each constellation as an approximation
+    # of what an open-sky receiver would see
+    for _, constellation_df in df.groupby('constellation'):
+        constellation_sats = constellation_df["sv"].unique()
+        sats.extend(constellation_sats[0:min(10, len(constellation_sats))])
+    # Only Kepler orbits supported:
+    sats = [sat for sat in sats if sat[0] not in ['S', 'R']]
+    query_template = pd.DataFrame({
+        'sv': sats,
+        'query_time_isagpst': pd.Timestamp('2022-01-01T01:10:00.000000000') - constants.cGpstUtcEpoch})
+    query = query_template.copy()
+    for i in range(1, n_epochs+1):
+        next_query = query_template.copy()
+        next_query['query_time_isagpst'] += pd.Timedelta(seconds=i)
+        query = pd.concat((query, next_query), axis=0)
+    return query
 
-    # Multiple satellites with orbits that require propagation of an initial state
-    # Two GLONASS satellites
-    # query_times["R04"] = sat_state_query_time_gpst + pd.Timedelta(seconds=20)/1e3
-    # query_times["R05"] = sat_state_query_time_gpst + pd.Timedelta(seconds=21)/1e3
-    rinex_sat_states = rinex_nav_evaluate.compute(rinex_nav_file, query_times)
+
+def benchmark_1(query):
+    rinex_nav_file = converters.compressed_to_uncompressed(
+        Path(__file__).parent / "datasets/BRDC00IGS_R_20220010000_01D_MN.zip"
+    )
+    rinex_sat_states = rinex_nav_evaluate.compute(rinex_nav_file, query)
+    pass
 
 
 if __name__ == "__main__":
+    query = generate_query(10)
     p = profile.Profile()
     # warm up cache
-    benchmark_1()
+    benchmark_1(query)
     p.enable()
-    benchmark_1()
+    benchmark_1(query)
     p.disable()
     stats_file = Path("benchmark_1.prof").resolve()
     p.dump_stats(stats_file)

@@ -517,7 +517,7 @@ def compute(rinex_nav_file_path, query):
         else:
             assert (
                 False
-            ), f"Ephemeris evaluation not implemented or under development for {sub_df['constellation'].iloc[0]}"
+            ), f"Ephemeris evaluation not implemented or under development for constellation {sub_df['constellation'].iloc[0]}"
         return sub_df
 
     df = df.groupby("orbit_type").apply(evaluate_orbit)
