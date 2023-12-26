@@ -22,26 +22,19 @@ consts = {
 
 
 def parse_rinex_nav_file(rinex_file: Path):
+
     @lru_cache
     @memory.cache
-    def cached_load(rinex_file: Path, file_hash: str):
-        helpers.repair_with_gfzrnx(rinex_file)
-
+    def cached_parse(rinex_file: Path, file_hash: str):
         log.info(f"Parsing {rinex_file} ...")
         ds = georinex.load(rinex_file)
+        return ds
+
+    @lru_cache
+    #@memory.cache
+    def cached_load(rinex_file: Path, file_hash: str):
+        ds = cached_parse(rinex_file, file_hash)
         df = convert_nav_dataset_to_dataframe(ds)
-        df["orbit_type"] = df.constellation.map(
-            {
-                "C": "kepler",
-                "G": "kepler",
-                "E": "kepler",
-                "J": "kepler",
-                "S": "sbas",
-                "R": "glonass",
-                "I": "irnss",
-            }
-        )
-        df = df.reset_index(drop=True)
         return df
 
     t0 = pd.Timestamp.now()
@@ -250,7 +243,7 @@ def orbital_plane_to_earth_centered_cartesian(eph):
 
 def handle_bds_geos(eph):
     # Do special rotation from inertial to BDCS (ECEF) frame for Beidou GEO satellites, see
-    # Beidou_ICD_B3I_v1.0.pdf, Table 5-11
+    # Beidou_ICD_B3I_v1.0, Table 5-11
     geos = eph[eph.is_bds_geo]
     if geos.empty:
         return
@@ -339,7 +332,6 @@ def kepler_orbit_position_and_velocity(eph):
     return eph
 
 
-# @memory.cache
 def convert_nav_dataset_to_dataframe(nav_ds):
     """convert ephemerides from xarray.Dataset to pandas.DataFrame"""
     df = nav_ds.to_dataframe()
@@ -428,41 +420,41 @@ def convert_nav_dataset_to_dataframe(nav_ds):
             "Omega0": "Omega_0",
         },
     )
-    df = gal_inav_fnav_indicators(df)
+    df["orbit_type"] = df.constellation.map(
+        {
+            "C": "kepler",
+            "G": "kepler",
+            "E": "kepler",
+            "J": "kepler",
+            "S": "sbas",
+            "R": "glonass",
+            "I": "irnss",
+        }
+    )
+    df = df.reset_index(drop=True)
+    df = compute_gal_inav_fnav_indicators(df)
     return df
 
 
-def gal_inav_fnav_indicators(df):
+def compute_gal_inav_fnav_indicators(df):
+    """
+    Based on RINEX 3.05, section A8
+    """
+    df["fnav_or_inav"] = ''
+    is_gal = df.sv.str[0] == 'E'
+    df.loc[is_gal, "fnav_or_inav_indicator"] = np.bitwise_and(df[is_gal].DataSrc.astype(np.uint).to_numpy(), 0b111)
+    # We expect only the following navigation message types for Galileo:
+    indicators = set(df[is_gal].fnav_or_inav_indicator.unique())
+    assert len(indicators.intersection({1, 2, 4, 5})) == len(indicators), f"Unexpected Galileo navigation message type: {indicators}"
+    df.loc[is_gal & (df.fnav_or_inav_indicator == 1), 'fnav_or_inav'] = 'inav'
+    df.loc[is_gal & (df.fnav_or_inav_indicator == 2), 'fnav_or_inav'] = 'fnav'
+    df.loc[is_gal & (df.fnav_or_inav_indicator == 4), 'fnav_or_inav'] = 'inav'
+    df.loc[is_gal & (df.fnav_or_inav_indicator == 5), 'fnav_or_inav'] = 'inav'
     return df
 
 
 def to_isagpst(time: pd.Timedelta, timescale: str):
     return time + time_scale_integer_second_offset(timescale, "GPST")
-
-
-def sort_out_gal_fnav_inav(df):
-    # If the considered satellite is Galileo, there is a need to check which type of ephemeris has to be retrieved (
-    # F/NAV or I/NAV)
-    # The 8th and 9th bit of the `data source` parameter in the Galileo navigation message allows to identify the type of message (F/NAV vs I/NAV)
-    cGalileoFnavDataSourceIndicator = 512
-    if obs_type is not None and constellation(satellite_id) == "E":
-        frequency_letter = obs_type[1]
-        match frequency_letter:
-            case "1" | "7":  # DataSrc >= 512
-                ephemerides_of_requested_sat = ephemerides_of_requested_sat.loc[
-                    ephemerides_of_requested_sat.DataSrc
-                    >= constants.cGalileoFnavDataSourceIndicator
-                ]
-            case "5":  # DataSrc < 512
-                ephemerides_of_requested_sat = ephemerides_of_requested_sat.loc[
-                    ephemerides_of_requested_sat.DataSrc
-                    < constants.cGalileoFnavDataSourceIndicator
-                ]
-            case _:  # other galileo signals not supported in rnx3
-                log.info(
-                    f"Could not retrieve ephemeris for satellite id: {satellite_id} and obs: {obs_type}"
-                )
-    return df
 
 
 def select_ephemerides(df, query):
@@ -472,22 +464,29 @@ def select_ephemerides(df, query):
     def find_ephemeris_index(row, df):
         # For each query, find the ephemeris whose time of reference is closest, but before the query time
         query_time_wrt_ephemeris_reference_time = (
-            row["query_time_isagpst"]
-            - df[df["sv"] == row["sv"]]["ephemeris_reference_time_isagpst"]
+            row.query_time_isagpst
+            - df[df.sv == row.sv]["ephemeris_reference_time_isagpst"]
         )
+        eligible_ephemerides  = df.sv == row.sv
+        # For Galileo, select the FNAV ephemeris for E5b signals, and INAV for other signals
+        if row["sv"][0] == "E" and row["signal"][1] == "5":
+            eligible_ephemerides = df.fnav_or_inav == "fnav"
+        if row["sv"][0] == "E" and row["signal"][1] != "5":
+            eligible_ephemerides = df.fnav_or_inav == "inav"
         match = query_time_wrt_ephemeris_reference_time[
-            query_time_wrt_ephemeris_reference_time >= pd.Timedelta(seconds=0)
+            eligible_ephemerides &
+            (query_time_wrt_ephemeris_reference_time >= pd.Timedelta(seconds=0))
         ].idxmin()
         return match
 
     query["ephemeris_index"] = query.apply(find_ephemeris_index, args=(df,), axis=1)
     df["ephemeris_index"] = df.index
     # Copy ephemerides into query dataframe
-    # We are doing it this way around because the same satellite might show up multiple times in the query dataframe
+    # We are doing it this way around because the same satellite might show up multiple times in the query dataframe,
+    # e.g. with different query times
     query = query.merge(df.drop(columns=["sv"]), on="ephemeris_index")
     # For Galileo satellites we can have both F/NAV and I/NAV ephemerides for the same satellite and time, keep
     # only one
-    # df = sort_out_gal_fnav_inav(df)
     # Compute times w.r.t. orbit and clock reference times used by downstream computations
     query["query_time_wrt_ephemeris_reference_time_s"] = (
         query["query_time_isagpst"] - query["ephemeris_reference_time_isagpst"]
@@ -508,13 +507,21 @@ def compute_clock_offsets(df):
         df["SVclockDrift"]
         + 2 * df["SVclockDriftRate"] * df["query_time_wrt_clock_reference_time_s"]
     )
+    return df
 
 
-def compute(rinex_nav_file_path, query):
+def compute(rinex_nav_file_path, per_signal_query):
     rinex_nav_file_path = Path(rinex_nav_file_path)
-    df = parse_rinex_nav_file(rinex_nav_file_path)
-    df = select_ephemerides(df, query)
-    compute_clock_offsets(df)
+    ephemerides = parse_rinex_nav_file(rinex_nav_file_path)
+    # Group delays and clock offsets can be signal-specific, so we need to match ephemerides to signals, not only to
+    # satellites
+    # Example: Galileo transmits E5a clock and group delay parameters in the F/NAV message, but parameters for other
+    # signals in the I/NAV message
+    per_signal_query = select_ephemerides(ephemerides, per_signal_query)
+    per_signal_query = compute_clock_offsets(per_signal_query)
+    # Compute orbital states for each satellite only once:
+    per_sat_query = per_signal_query.groupby(["sv", "query_time_isagpst"]).first().reset_index()
+    per_sat_query = per_sat_query.drop(columns=["clock_m", "dclock_mps"])
 
     def evaluate_orbit(sub_df):
         orbit_type = sub_df["orbit_type"].iloc[0]
@@ -526,108 +533,109 @@ def compute(rinex_nav_file_path, query):
             ), f"Ephemeris evaluation not implemented or under development for constellation {sub_df['constellation'].iloc[0]}"
         return sub_df
 
-    df = df.groupby("orbit_type").apply(evaluate_orbit)
-    df = df[
-        [
-            "sv",
-            "x_m",
-            "y_m",
-            "z_m",
-            "dx_mps",
-            "dy_mps",
-            "dz_mps",
-            "clock_m",
-            "dclock_mps",
-            "query_time_isagpst",
-        ]
+    per_sat_query = per_sat_query.groupby("orbit_type").apply(evaluate_orbit)
+    columns_to_keep = [
+        "sv",
+        "x_m",
+        "y_m",
+        "z_m",
+        "dx_mps",
+        "dy_mps",
+        "dz_mps",
+        "query_time_isagpst",
     ]
-    return df.reset_index(drop=True)
+    per_sat_query = per_sat_query[columns_to_keep]
+    # Expand the computed satellite states into the larger signal-specific query dataframe
+    per_signal_query = per_signal_query.merge(
+        per_sat_query, on=["sv", "query_time_isagpst"]
+    )
+    per_signal_query = compute_total_group_delays(per_signal_query)
+
+    if "signal" in per_signal_query.columns:
+        columns_to_keep = ["signal", "group_delay_m"] + columns_to_keep
+    per_signal_query = per_signal_query[
+        columns_to_keep
+    ].reset_index(drop=True)
+    return per_signal_query
 
 
-def compute_total_group_delay(
-    rinex_nav_file_path: Path,
-    time_constellation_time_ns: pd.Timedelta,
-    satellite: str,
-    obs_type: str,
+def compute_total_group_delays(
+    query,
 ):
-    """compute the total group delay from a RINEX 3.05´ file, for a specific satellite, time and observation type
-
-    Reference:
-    - GPS: IS-GPS-200N.pdf, §20.3.3.3.3.2
-    - Galileo: Galileo_OS_SIS_ICD_v2.0.pdf, §5.1.5
-    - Beidou B1I, B2I, B3I: Beidou_ICD_B1I_v3.0.pdf, §5.2.4.10
-    - Beidou B1Cp, B1Cd: Beidou_ICD_B1C_v1.0.pdf, §7.6.2 (not supported by rnx3)
-    - Beidou B2bi: Beidou_ICD_B2b_v1.0.pdf, §7.5.2 (not supported by rnx3)
-
-    Note: rinex v3 nav files only support a subset of observations.
     """
-    ephemeris_df = select_nav_ephemeris(
-        parsed_rinex_3_nav_file,
-        satellite,
-        time_constellation_time_ns,
-        obs_type=obs_type,
+    This computes TGD terms, not ISCs, which are not captured by RINEX 3 - we'll have them with RINEX 4.
+    References:
+    - GPS: IS-GPS-200N, §20.3.3.3.3.2, IS-GPS-705J, §20.3.3.3.1.2.
+    - Galileo: Galileo_OS_SIS_ICD_v2.0, §5.1.5
+    - QZSS: is-qzss-pnt-005 §5.8.2
+    - Beidou B1I, B2I, B3I: Beidou_ICD_B1I_v3.0, §5.2.4.10
+    - Beidou B1Cp, B1Cd: Beidou_ICD_B1C_v1.0, §7.6.2 (not supported by rnx3)
+    - Beidou B2bi: Beidou_ICD_B2b_v1.0, §7.5.2 (not supported by rnx3)
+    """
+    if "signal" not in query.columns:
+        query["group_delay"] = np.nan
+        return query
+    query['constellation'] = query['sv'].str[0]
+    query['frequency_code'] = query['signal'].str[1]
+    query["speedOfLightIcd_mps"] = query.constellation.map(
+        {
+            "C": constants.cBdsSpeedOfLight_mps,
+            "G": constants.cGpsSpeedOfLight_mps,
+            "E": constants.cGalSpeedOfLight_mps,
+            "J": constants.cQzssSpeedOfLight_mps,
+        }
     )
 
-    # compute the scale factor, depending on the constellation and frequency
-    constellation = satellite[0]
-    frequency_code = obs_type[1]
-    match constellation:
-        case "G":
-            group_delay = ephemeris_df.TGD.values[0]
-            match frequency_code:
-                case "1":
-                    gamma = 1
-                case "2":
-                    gamma = (
-                        constants.carrier_frequencies_hz()["G"]["L1"]
-                        / constants.carrier_frequencies_hz()["G"]["L2"]
-                    ) ** 2
-                case _:
-                    gamma = np.nan
-        case "E":
-            match frequency_code:
-                case "1":
-                    group_delay = ephemeris_df.BGDe5b.values[0]
-                    gamma = 1
-                case "5":
-                    group_delay = ephemeris_df.BGDe5a.values[0]
-                    gamma = (
-                        constants.carrier_frequencies_hz()["E"]["L1"]
-                        / constants.carrier_frequencies_hz()["E"]["L5"]
-                    ) ** 2
-                case "7":
-                    group_delay = ephemeris_df.BGDe5b.values[0]
-                    gamma = (
-                        constants.carrier_frequencies_hz()["E"]["L1"]
-                        / constants.carrier_frequencies_hz()["E"]["L7"]
-                    ) ** 2
-                case _:
-                    group_delay = np.nan
-                    gamma = np.nan
-        case "C":
-            match obs_type:
-                case "C2I":  # called B1I in Beidou ICD
-                    group_delay = ephemeris_df.TGD1.values[0]
-                    gamma = 1
-                case "C7I":  # called B2I in Beidou ICD
-                    group_delay = ephemeris_df.TGD2.values[0]
-                    gamma = 1
-                case "C6I":  # called B3I in Beidou ICD
-                    group_delay = 0
-                    gamma = 1
-                case _:
-                    group_delay = np.nan
-                    gamma = np.nan
-        case _:
-            group_delay = np.nan
-            gamma = np.nan
+    def compute_tgds(df):
+        assert len(df.constellation.unique()) == 1
+        assert len(df.signal.unique()) == 1
+        df['gamma'] = np.nan
+        df['tgd'] = np.nan
 
-    if np.isnan(gamma):
-        log.info(
-            f"Could not retrieve total group delay for satellite id: {satellite} and obs: {obs_type}"
-        )
-
-    return group_delay * gamma
+        match df.constellation.values[0]:
+            case "G":
+                df.tgd = df.TGD.values[0]
+                match df.frequency_code.values[0]:
+                    case "1":
+                        df.gamma = 1
+                    case "2":
+                        df.gamma = (
+                            constants.carrier_frequencies_hz()["G"]["L1"]
+                            / constants.carrier_frequencies_hz()["G"]["L2"]
+                        ) ** 2
+            case "J":
+                df.tgd = df.TGD.values[0]
+                df.gamma = 1
+            case "E":
+                match df.frequency_code.values[0]:
+                    case "1":
+                        df.tgd = df.BGDe5b.values[0]
+                        df.gamma = 1
+                    case "5":
+                        df.tgd = df.BGDe5a.values[0]
+                        df.gamma = (
+                            constants.carrier_frequencies_hz()["E"]["L1"]
+                            / constants.carrier_frequencies_hz()["E"]["L5"]
+                        ) ** 2
+                    case "7":
+                        df.tgd = df.BGDe5b.values[0]
+                        df.gamma = (
+                            constants.carrier_frequencies_hz()["E"]["L1"]
+                            / constants.carrier_frequencies_hz()["E"]["L7"]
+                        ) ** 2
+            case "C":
+                df.gamma = 1
+                match df.signal.values[0]:
+                    case "C2I":  # called B1I in Beidou ICD
+                        df.tgd = df.TGD1.values[0]
+                    case "C7I":  # called B2I in Beidou ICD
+                        df.tgd = df.TGD2.values[0]
+                    case "C6I":  # called B3I in Beidou ICD
+                        df.tgd = 0
+        df['group_delay_m'] = df.tgd * df.gamma * df.speedOfLightIcd_mps
+        return df
+    query = query.groupby(['signal', 'constellation']).apply(compute_tgds)
+    return query
 
 
 if __name__ == "main":
