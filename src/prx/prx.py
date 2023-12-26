@@ -181,7 +181,8 @@ def build_records(
         columns=["observation_type"],
         values="observation_value",
     ).reset_index()
-    # when using useindicator=True in georinex.load(), there are additional ssi columns such as C1Cssi. To exclude them, we check the length of the column name
+    # when using useindicator=True in georinex.load(), there are additional ssi columns such as C1Cssi.
+    # To exclude them, we check the length of the column name
     code_phase_columns = [c for c in per_sat.columns if c[0] == "C" and len(c) == 3]
     per_sat["time_of_emission_in_satellite_time"] = per_sat[
         "time_of_reception_in_receiver_time"

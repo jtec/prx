@@ -5,10 +5,11 @@ from prx.sp3 import evaluate as sp3_evaluate
 from prx.rinex_nav import evaluate as rinex_nav_evaluate
 from prx import converters
 from prx import constants
+from prx.helpers import timestamp_2_timedelta
 import shutil
 import pytest
 import os
-
+import itertools
 
 @pytest.fixture
 def input_for_test():
@@ -159,5 +160,230 @@ def test_group_delays(input_for_test):
             {"sv": "J02", 'signal': 'C2S', "query_time_isagpst": query_time_isagpst},
         ]
     )
-
     rinex_sat_states = rinex_nav_evaluate.compute(rinex_nav_file, query)
+    # Check that group delays are computed for all signals
+    assert not rinex_sat_states["group_delay_m"].isna().any()
+
+
+def max_abs_diff_smaller_than(a, b, threshold):
+    if isinstance(a, pd.Series):
+        a = a.to_numpy()
+    if isinstance(b, pd.Series):
+        b = b.to_numpy()
+    return np.max(np.abs(a - b)) < threshold
+
+
+def test_gps_group_delay(input_for_test):
+    """
+    Computes the total group delay (TGD) from a RNX3 NAV file containing the following ephemerides. The TGD is
+    highlighted between **
+
+    This tests also validates
+    - the choice of the right ephemeris for the correct time: 3 epochs are used
+    - the scaling of the tgd with the carrier frequency: the 3 observations types considered in IS-GPS-200N are tested (
+    C1C, C1P, C2P) and 1 not considered shall return NaN (C1Y)
+
+    G02 2022 01 01 00 00 00-6.473939865830e-04-1.136868377220e-12 0.000000000000e+00
+         4.100000000000e+01-1.427187500000e+02 4.556261215140e-09-4.532451297190e-01
+        -7.487833499910e-06 2.063889056440e-02 4.231929779050e-06 5.153668174740e+03
+         5.184000000000e+05-2.589076757430e-07-1.124962932550e+00 1.229345798490e-07
+         9.647440889150e-01 3.036250000000e+02-1.464769118290e+00-8.689647672990e-09
+        -2.621537769000e-10 1.000000000000e+00 2.190000000000e+03 0.000000000000e+00
+         2.000000000000e+00 0.000000000000e+00**-1.769512891770e-08** 4.100000000000e+01
+         5.112180000000e+05 4.000000000000e+00 0.000000000000e+00 0.000000000000e+00
+    G02 2022 01 01 02 00 00-6.474019028246e-04-1.136868377216e-12 0.000000000000e+00
+         4.200000000000e+01-1.350312500000e+02 4.654122434309e-09 5.969613050574e-01
+        -7.288530468941e-06 2.063782420009e-02 4.164874553680e-06 5.153666042328e+03
+         5.256000000000e+05-2.495944499969e-07-1.125024713041e+00-1.173466444016e-07
+         9.647413912942e-01 3.089375000000e+02-1.464791005008e+00-8.692504934864e-09
+        -4.328751738457e-10 1.000000000000e+00 2.190000000000e+03 0.000000000000e+00
+         2.000000000000e+00 0.000000000000e+00**-1.769512891769e-08** 4.200000000000e+01
+         5.184180000000e+05 4.000000000000e+00 0.000000000000e+00 0.000000000000e+00
+    """
+    rinex_3_navigation_file = converters.anything_to_rinex_3(
+        input_for_test["rinex_nav_file"]
+    )
+    # Retrieve total group delays for 4 different observation codes, at 3 different times
+    codes = ['C1C', 'C1P', 'C2P', 'C5X']
+    times = [timestamp_2_timedelta(
+                    pd.Timestamp("2022-01-01T00:00:00.000000000"), "GPST"
+                ),
+        timestamp_2_timedelta(
+            pd.Timestamp("2022-01-01T01:30:00.000000000"), "GPST"
+        ),
+        timestamp_2_timedelta(
+            pd.Timestamp("2022-01-01T02:15:00.000000000"), "GPST"
+        )
+    ]
+    query = pd.DataFrame()
+    for code, time in itertools.product(codes, times):
+        query = pd.concat([query, pd.DataFrame(
+            [{"sv": "G02", 'signal': code, "query_time_isagpst": time}])])
+    tgds = rinex_nav_evaluate.compute(rinex_3_navigation_file, query)
+    # Verify that rows are in chronological order
+    for code in codes:
+        assert tgds[tgds.signal == code]['query_time_isagpst'].reset_index(drop=True).equals(pd.Series(times))
+    assert max_abs_diff_smaller_than(tgds[tgds.signal == 'C1C']['group_delay_m'],
+                                     constants.cGpsSpeedOfLight_mps *
+                                     pd.Series([-1.769512891770e-08, -1.769512891770e-08, -1.769512891769e-08]),
+                                        1e-6)
+    assert max_abs_diff_smaller_than(tgds[tgds.signal == 'C1P']['group_delay_m'],
+                                     constants.cGpsSpeedOfLight_mps *
+                                     pd.Series([-1.769512891770e-08, -1.769512891770e-08, -1.769512891769e-08]),
+                                        1e-6)
+    assert max_abs_diff_smaller_than(tgds[tgds.signal == 'C2P']['group_delay_m'],
+                                     constants.cGpsSpeedOfLight_mps *
+                                     pd.Series([-1.769512891770e-08, -1.769512891770e-08, -1.769512891769e-08])
+                                     * (
+                                             constants.carrier_frequencies_hz()["G"]["L1"]
+                                             / constants.carrier_frequencies_hz()["G"]["L2"]
+                                     )
+                                     ** 2,
+                                     1e-6)
+    assert np.all(np.isnan(tgds[tgds.signal == 'C5X']['group_delay_m'].to_numpy()))
+
+
+def test_gal_group_delay(input_for_test):
+    """
+    E25 2022 01 01 00 00 00-5.587508785538e-04-1.278976924368e-12 0.000000000000e+00
+         9.600000000000e+01 1.960625000000e+02 2.576178736756e-09 1.034878564309e+00
+         9.007751941681e-06 3.147422103211e-04 1.221708953381e-05 5.440630062103e+03
+         5.184000000000e+05 1.303851604462e-08 2.996653673305e+00 9.313225746155e-09
+         9.752953840989e-01 8.875000000000e+01-5.349579038983e-01-5.132356640398e-09
+        -2.260808457461e-10 2.580000000000e+02 2.190000000000e+03 0.000000000000e+00
+         3.120000000000e+00 0.000000000000e+00 **4.423782229424e-09** **0.000000000000e+00**
+         5.191430000000e+05 0.000000000000e+00 0.000000000000e+00 0.000000000000e+00
+    E25 2022 01 01 00 00 00-5.587504128930e-04-1.278976924370e-12 0.000000000000e+00
+         9.600000000000e+01 1.960625000000e+02 2.576178736760e-09 1.034878564310e+00
+         9.007751941680e-06 3.147422103210e-04 1.221708953380e-05 5.440630062100e+03
+         5.184000000000e+05 1.303851604460e-08 2.996653673310e+00 9.313225746150e-09
+         9.752953840990e-01 8.875000000000e+01-5.349579038980e-01-5.132356640400e-09
+        -2.260808457460e-10 5.160000000000e+02 2.190000000000e+03
+         3.120000000000e+00 0.000000000000e+00 **4.423782229420e-09** **4.889443516730e-09**
+         5.190640000000e+05
+    """
+    # parse rinex 3 nav file
+    rinex_3_navigation_file = converters.anything_to_rinex_3(
+        input_for_test["rinex_nav_file"]
+    )
+    query = pd.DataFrame()
+    codes = ['C1C', 'C5X', 'C7X', 'C6B']
+    for code in codes:
+        query = pd.concat([query, pd.DataFrame(
+            [{"sv": "E25", 'signal': code, "query_time_isagpst": timestamp_2_timedelta(
+            pd.Timestamp("2022-01-01T01:30:00.000000000"), "GST"
+        )}])])
+    tgds = rinex_nav_evaluate.compute(rinex_3_navigation_file, query)
+    assert max_abs_diff_smaller_than(tgds[tgds.signal == 'C1C']['group_delay_m'],
+                                     4.889443516730e-09 * constants.cGpsSpeedOfLight_mps,
+                                     1e-6)
+    assert max_abs_diff_smaller_than(tgds[tgds.signal == 'C5X']['group_delay_m'],
+                                     4.423782229424e-09
+                                     * (
+                                             constants.carrier_frequencies_hz()["E"]["L1"]
+                                             / constants.carrier_frequencies_hz()["E"]["L5"]
+                                     )
+                                     ** 2 * constants.cGpsSpeedOfLight_mps,
+                                     1e-6)
+    assert max_abs_diff_smaller_than(tgds[tgds.signal == 'C7X']['group_delay_m'],
+                                     4.889443516730e-09
+                                     * (
+                                             constants.carrier_frequencies_hz()["E"]["L1"]
+                                             / constants.carrier_frequencies_hz()["E"]["L7"]
+                                     )
+                                     ** 2 * constants.cGpsSpeedOfLight_mps,
+                                     1e-6)
+    assert np.all(np.isnan(tgds[tgds.signal == 'C6B']['group_delay_m'].to_numpy()))
+
+
+def test_bds_group_delay(input_for_test):
+    """
+    C01 2022 01 01 00 00 00-2.854013582692E-04 4.026112776501E-11 0.000000000000E+00
+         1.000000000000E+00 7.552500000000E+02-4.922705050425E-09 5.928667085353E-01
+         2.444302663207E-05 6.108939414844E-04 2.280483022332E-05 6.493410568237E+03
+         5.184000000000E+05-2.812594175339E-07-2.969991558287E+00-6.519258022308E-08
+         8.077489154703E-02-7.019375000000E+02-1.279165335399E+00 6.122397879589E-09
+        -1.074687622196E-09 0.000000000000E+00 8.340000000000E+02 0.000000000000E+00
+         2.000000000000E+00 0.000000000000E+00**-5.800000000000E-09-1.020000000000E-08**
+         5.184276000000E+05 0.000000000000E+00
+    C01 2022 01 01 01 00 00-2.852565376088E-04 4.024691691029E-11 0.000000000000E+00
+         1.000000000000E+00 9.752656250000E+02-8.727863550550E-09 8.501598658737E-01
+         3.171199932694E-05 6.130223628134E-04 5.824025720358E-06 6.493419839859E+03
+         5.220000000000E+05-2.081505954266E-07-2.690127624533E+00 4.563480615616E-08
+         8.254541302207E-02-1.764687500000E+02-1.553735793709E+00 9.873625561851E-09
+        -8.761079219830E-10 0.000000000000E+00 8.340000000000E+02 0.000000000000E+00
+         2.000000000000E+00 0.000000000000E+00**-5.800000000000E-09-1.020000000000E-08**
+         5.220276000000E+05 0.000000000000E+00
+    """
+    # parse rinex3 nav file
+    rinex_3_navigation_file = converters.anything_to_rinex_3(
+        input_for_test["rinex_nav_file"]
+    )
+    eph_rnx3_df = eph.convert_rnx3_nav_file_to_dataframe(rinex_3_navigation_file)
+
+    # B1I -> C2I
+    tgd_c2i_s = eph.compute_total_group_delay_rnx3(
+        eph_rnx3_df,
+        helpers.timestamp_2_timedelta(
+            pd.Timestamp("2022-01-01T00:30:00.000000000"), "BDT"
+        ),
+        "C01",
+        "C2I",
+    )
+    # B2I -> C7I
+    tgd_c7i_s = eph.compute_total_group_delay_rnx3(
+        eph_rnx3_df,
+        helpers.timestamp_2_timedelta(
+            pd.Timestamp("2022-01-01T00:30:00.000000000"), "BDT"
+        ),
+        "C01",
+        "C7I",
+    )
+    # B3I -> C6I
+    tgd_c6i_s = eph.compute_total_group_delay_rnx3(
+        eph_rnx3_df,
+        helpers.timestamp_2_timedelta(
+            pd.Timestamp("2022-01-01T00:30:00.000000000"), "BDT"
+        ),
+        "C01",
+        "C6I",
+    )
+
+    # B1Cd -> C1D
+    tgd_c1d_s = eph.compute_total_group_delay_rnx3(
+        eph_rnx3_df,
+        helpers.timestamp_2_timedelta(
+            pd.Timestamp("2022-01-01T00:30:00.000000000"), "BDT"
+        ),
+        "C01",
+        "C1D",
+    )
+    # B1Cp -> C1P
+    tgd_c1p_s = eph.compute_total_group_delay_rnx3(
+        eph_rnx3_df,
+        helpers.timestamp_2_timedelta(
+            pd.Timestamp("2022-01-01T00:30:00.000000000"), "BDT"
+        ),
+        "C01",
+        "C1P",
+    )
+    # B2bi -> C7D
+    tgd_c5x_s = eph.compute_total_group_delay_rnx3(
+        eph_rnx3_df,
+        helpers.timestamp_2_timedelta(
+            pd.Timestamp("2022-01-01T00:30:00.000000000"), "BDT"
+        ),
+        "C01",
+        "C7D",
+    )
+
+    tgd_c2i_s_expected = -5.800000000000e-09
+    tgd_c7i_s_expected = -1.020000000000e-08
+    tgd_c6i_s_expected = 0
+
+    assert abs(tgd_c2i_s - tgd_c2i_s_expected) * constants.cGpsSpeedOfLight_mps < 1e-3
+    assert abs(tgd_c7i_s - tgd_c7i_s_expected) * constants.cGpsSpeedOfLight_mps < 1e-3
+    assert abs(tgd_c6i_s - tgd_c6i_s_expected) * constants.cGpsSpeedOfLight_mps < 1e-3
+    assert np.isnan(tgd_c1d_s)
+    assert np.isnan(tgd_c1p_s)
+    assert np.isnan(tgd_c5x_s)

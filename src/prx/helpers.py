@@ -58,7 +58,6 @@ def timestamp_2_timedelta(timestamp: pd.Timestamp, time_scale):
     ):
         return timestamp - constants.cGpstUtcEpoch
     if time_scale == "BDT":
-        # TODO double-check the offset between BDT and GPST
         return (
             (timestamp - constants.cGpstUtcEpoch)
             - pd.Timedelta(1356 * constants.cSecondsPerWeek, "seconds")

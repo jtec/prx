@@ -311,7 +311,6 @@ def test_compute_gps_group_delay_rnx3(input_for_test):
         input_for_test["gps_nav_file"]
     )
     eph_rnx3_df = eph.convert_rnx3_nav_file_to_dataframe(rinex_3_navigation_file)
-
     # retrieve total group delays for 4 different observation codes, at 3 different times
     tgd_c1c_s = pd.Series(
         data=[
