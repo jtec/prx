@@ -34,7 +34,7 @@ def input_for_test():
     shutil.rmtree(test_directory)
 
 
-def generate_query(sat_state_query_time_isagpst):
+def generate_sat_query(sat_state_query_time_isagpst):
     query = pd.DataFrame(
         [
             # Multiple satellites with ephemerides provided as Kepler orbits
@@ -77,17 +77,17 @@ def test_compare_to_sp3(input_for_test):
         pd.Timestamp("2022-01-01T01:10:00.000000000") - constants.cGpstUtcEpoch
     )
 
-    sp3_sat_states = sp3_evaluate.compute(input_for_test["sp3_file"], query)
-    sp3_sat_states = (
-        sp3_sat_states.sort_values(by=["sv", "query_time_isagpst"])
+    rinex_sat_states = rinex_nav_evaluate.compute(rinex_nav_file, query)
+    rinex_sat_states = (
+        rinex_sat_states.sort_values(by=["sv", "query_time_isagpst"])
         .sort_index(axis=1)
         .reset_index()
         .drop(columns=["index"])
     )
 
-    rinex_sat_states = rinex_nav_evaluate.compute(rinex_nav_file, query)
-    rinex_sat_states = (
-        rinex_sat_states.sort_values(by=["sv", "query_time_isagpst"])
+    sp3_sat_states = sp3_evaluate.compute(input_for_test["sp3_file"], query)
+    sp3_sat_states = (
+        sp3_sat_states.sort_values(by=["sv", "query_time_isagpst"])
         .sort_index(axis=1)
         .reset_index()
         .drop(columns=["index"])
@@ -133,3 +133,31 @@ def test_compare_to_sp3(input_for_test):
         assert (
             diff[column].max() < expected_max_difference
         ), f"Expected maximum difference {expected_max_difference} for column {column}, but got {diff[column].max()}"
+
+
+def test_group_delays(input_for_test):
+    rinex_nav_file = converters.compressed_to_uncompressed(
+        input_for_test["rinex_nav_file"]
+    )
+    query_time_isagpst = (
+        pd.Timestamp("2022-01-01T01:10:00.000000000") - constants.cGpstUtcEpoch
+    )
+    query = pd.DataFrame(
+        [
+            {"sv": "C30", 'signal': 'C2I', "query_time_isagpst": query_time_isagpst},
+            {"sv": "C30", 'signal': 'C7I', "query_time_isagpst": query_time_isagpst},
+            {"sv": "G15", 'signal': 'C1C', "query_time_isagpst": query_time_isagpst},
+            # Query one GPS satellite at two different times to cover that case
+            {
+                "sv": "G15",
+                'signal': 'C2C',
+                "query_time_isagpst": query_time_isagpst + pd.Timedelta(seconds=1),
+            },
+            {"sv": "E24", 'signal': 'C1A', "query_time_isagpst": query_time_isagpst},
+            {"sv": "E24", 'signal': 'C5Q', "query_time_isagpst": query_time_isagpst},
+            {"sv": "J02", 'signal': 'C1C', "query_time_isagpst": query_time_isagpst},
+            {"sv": "J02", 'signal': 'C2S', "query_time_isagpst": query_time_isagpst},
+        ]
+    )
+
+    rinex_sat_states = rinex_nav_evaluate.compute(rinex_nav_file, query)
