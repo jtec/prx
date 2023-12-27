@@ -22,7 +22,6 @@ consts = {
 
 
 def parse_rinex_nav_file(rinex_file: Path):
-
     @lru_cache
     @memory.cache
     def cached_parse(rinex_file: Path, file_hash: str):
@@ -31,7 +30,7 @@ def parse_rinex_nav_file(rinex_file: Path):
         return ds
 
     @lru_cache
-    #@memory.cache
+    # @memory.cache
     def cached_load(rinex_file: Path, file_hash: str):
         ds = cached_parse(rinex_file, file_hash)
         df = convert_nav_dataset_to_dataframe(ds)
@@ -440,16 +439,20 @@ def compute_gal_inav_fnav_indicators(df):
     """
     Based on RINEX 3.05, section A8
     """
-    df["fnav_or_inav"] = ''
-    is_gal = df.sv.str[0] == 'E'
-    df.loc[is_gal, "fnav_or_inav_indicator"] = np.bitwise_and(df[is_gal].DataSrc.astype(np.uint).to_numpy(), 0b111)
+    df["fnav_or_inav"] = ""
+    is_gal = df.sv.str[0] == "E"
+    df.loc[is_gal, "fnav_or_inav_indicator"] = np.bitwise_and(
+        df[is_gal].DataSrc.astype(np.uint).to_numpy(), 0b111
+    )
     # We expect only the following navigation message types for Galileo:
     indicators = set(df[is_gal].fnav_or_inav_indicator.unique())
-    assert len(indicators.intersection({1, 2, 4, 5})) == len(indicators), f"Unexpected Galileo navigation message type: {indicators}"
-    df.loc[is_gal & (df.fnav_or_inav_indicator == 1), 'fnav_or_inav'] = 'inav'
-    df.loc[is_gal & (df.fnav_or_inav_indicator == 2), 'fnav_or_inav'] = 'fnav'
-    df.loc[is_gal & (df.fnav_or_inav_indicator == 4), 'fnav_or_inav'] = 'inav'
-    df.loc[is_gal & (df.fnav_or_inav_indicator == 5), 'fnav_or_inav'] = 'inav'
+    assert len(indicators.intersection({1, 2, 4, 5})) == len(
+        indicators
+    ), f"Unexpected Galileo navigation message type: {indicators}"
+    df.loc[is_gal & (df.fnav_or_inav_indicator == 1), "fnav_or_inav"] = "inav"
+    df.loc[is_gal & (df.fnav_or_inav_indicator == 2), "fnav_or_inav"] = "fnav"
+    df.loc[is_gal & (df.fnav_or_inav_indicator == 4), "fnav_or_inav"] = "inav"
+    df.loc[is_gal & (df.fnav_or_inav_indicator == 5), "fnav_or_inav"] = "inav"
     return df
 
 
@@ -467,15 +470,15 @@ def select_ephemerides(df, query):
             row.query_time_isagpst
             - df[df.sv == row.sv]["ephemeris_reference_time_isagpst"]
         )
-        eligible_ephemerides  = df.sv == row.sv
+        eligible_ephemerides = (df.sv == row.sv)
         # For Galileo, select the FNAV ephemeris for E5b signals, and INAV for other signals
         if row["sv"][0] == "E" and row["signal"][1] == "5":
             eligible_ephemerides = df.fnav_or_inav == "fnav"
         if row["sv"][0] == "E" and row["signal"][1] != "5":
             eligible_ephemerides = df.fnav_or_inav == "inav"
         match = query_time_wrt_ephemeris_reference_time[
-            eligible_ephemerides &
-            (query_time_wrt_ephemeris_reference_time >= pd.Timedelta(seconds=0))
+            eligible_ephemerides
+            & (query_time_wrt_ephemeris_reference_time >= pd.Timedelta(seconds=0))
         ].idxmin()
         return match
 
@@ -520,7 +523,9 @@ def compute(rinex_nav_file_path, per_signal_query):
     per_signal_query = select_ephemerides(ephemerides, per_signal_query)
     per_signal_query = compute_clock_offsets(per_signal_query)
     # Compute orbital states for each satellite only once:
-    per_sat_query = per_signal_query.groupby(["sv", "query_time_isagpst"]).first().reset_index()
+    per_sat_query = (
+        per_signal_query.groupby(["sv", "query_time_isagpst"]).first().reset_index()
+    )
     per_sat_query = per_sat_query.drop(columns=["clock_m", "dclock_mps"])
 
     def evaluate_orbit(sub_df):
@@ -553,9 +558,7 @@ def compute(rinex_nav_file_path, per_signal_query):
 
     if "signal" in per_signal_query.columns:
         columns_to_keep = ["signal", "group_delay_m"] + columns_to_keep
-    per_signal_query = per_signal_query[
-        columns_to_keep
-    ].reset_index(drop=True)
+    per_signal_query = per_signal_query[columns_to_keep].reset_index(drop=True)
     return per_signal_query
 
 
@@ -575,8 +578,8 @@ def compute_total_group_delays(
     if "signal" not in query.columns:
         query["group_delay"] = np.nan
         return query
-    query['constellation'] = query['sv'].str[0]
-    query['frequency_code'] = query['signal'].str[1]
+    query["constellation"] = query["sv"].str[0]
+    query["frequency_code"] = query["signal"].str[1]
     query["speedOfLightIcd_mps"] = query.constellation.map(
         {
             "C": constants.cBdsSpeedOfLight_mps,
@@ -589,8 +592,8 @@ def compute_total_group_delays(
     def compute_tgds(df):
         assert len(df.constellation.unique()) == 1
         assert len(df.signal.unique()) == 1
-        df['gamma'] = np.nan
-        df['tgd'] = np.nan
+        df["gamma"] = np.nan
+        df["tgd"] = np.nan
 
         match df.constellation.values[0]:
             case "G":
@@ -632,9 +635,10 @@ def compute_total_group_delays(
                         df.tgd = df.TGD2.values[0]
                     case "C6I":  # called B3I in Beidou ICD
                         df.tgd = 0
-        df['group_delay_m'] = df.tgd * df.gamma * df.speedOfLightIcd_mps
+        df["group_delay_m"] = df.tgd * df.gamma * df.speedOfLightIcd_mps
         return df
-    query = query.groupby(['signal', 'constellation']).apply(compute_tgds)
+
+    query = query.groupby(["signal", "constellation"]).apply(compute_tgds)
     return query
 
 
