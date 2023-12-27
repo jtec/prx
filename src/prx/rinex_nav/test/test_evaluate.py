@@ -37,20 +37,27 @@ def input_for_test():
 
 
 def test_compare_rnx3_gps_sat_pos_with_magnitude(input_for_test):
-    """Loads a RNX3 nav file, computes a position for different satellites and time, and compares to MAGNITUDE results
-    """
+    """Loads a RNX3 nav file, computes broadcast position for a GPS satellite and compares to
+    position computed by MAGNITUDE matlab library"""
     path_to_rnx3_nav_file = converters.anything_to_rinex_3(
         input_for_test["rinex_nav_file"]
     )
     query = pd.DataFrame(
-            {"sv": "G01",
-             "query_time_isagpst": week_and_seconds_2_timedelta(weeks=2190, seconds=523800)}, index=[0]
+        {
+            "sv": "G01",
+            "query_time_isagpst": week_and_seconds_2_timedelta(
+                weeks=2190, seconds=523800
+            ),
+        },
+        index=[0],
     )
     rinex_sat_states = rinex_nav_evaluate.compute(path_to_rnx3_nav_file, query)
 
     # MAGNITUDE position
     sv_pos_magnitude = np.array([13053451.235, -12567273.060, 19015357.126])
-    sv_pos_prx = rinex_sat_states[["x_m", "y_m", "z_m"]][rinex_sat_states.sv=='G01'].to_numpy()
+    sv_pos_prx = rinex_sat_states[["x_m", "y_m", "z_m"]][
+        rinex_sat_states.sv == "G01"
+    ].to_numpy()
 
     threshold_pos_error_m = 1e-3
     assert np.linalg.norm(sv_pos_prx - sv_pos_magnitude) < threshold_pos_error_m
@@ -305,16 +312,19 @@ def test_gal_group_delay(input_for_test):
     codes = ["C1C", "C5X", "C7X", "C6B"]
     for code in codes:
         code_query = pd.DataFrame(
-                    [
-                        {
-                            "sv": "E25",
-                            "signal": code,
-                            "query_time_isagpst": rinex_nav_evaluate.to_isagpst(timestamp_2_timedelta(
-                                pd.Timestamp("2022-01-01T01:30:00.000000000"), "GST"
-                            ), 'GST'),
-                        }
-                    ]
-                )
+            [
+                {
+                    "sv": "E25",
+                    "signal": code,
+                    "query_time_isagpst": rinex_nav_evaluate.to_isagpst(
+                        timestamp_2_timedelta(
+                            pd.Timestamp("2022-01-01T01:30:00.000000000"), "GST"
+                        ),
+                        "GST",
+                    ),
+                }
+            ]
+        )
         query = pd.concat(
             [
                 query,
@@ -394,7 +404,8 @@ def test_bds_group_delay(input_for_test):
                     ),
                     "BDT",
                 ),
-            },index=[0]
+            },
+            index=[0],
         )
         query = pd.concat(
             [
@@ -408,9 +419,15 @@ def test_bds_group_delay(input_for_test):
     tgd_c7i_s_expected = -1.020000000000e-08 * constants.cGpsSpeedOfLight_mps
     tgd_c6i_s_expected = 0 * constants.cGpsSpeedOfLight_mps
 
-    assert max_abs_diff_smaller_than(tgds[tgds.signal=='C2I'].group_delay_m,  tgd_c2i_s_expected, 1e-6)
-    assert max_abs_diff_smaller_than(tgds[tgds.signal == 'C7I'].group_delay_m, tgd_c7i_s_expected, 1e-6)
-    assert max_abs_diff_smaller_than(tgds[tgds.signal == 'C6I'].group_delay_m, tgd_c6i_s_expected, 1e-6)
+    assert max_abs_diff_smaller_than(
+        tgds[tgds.signal == "C2I"].group_delay_m, tgd_c2i_s_expected, 1e-6
+    )
+    assert max_abs_diff_smaller_than(
+        tgds[tgds.signal == "C7I"].group_delay_m, tgd_c7i_s_expected, 1e-6
+    )
+    assert max_abs_diff_smaller_than(
+        tgds[tgds.signal == "C6I"].group_delay_m, tgd_c6i_s_expected, 1e-6
+    )
     assert np.all(np.isnan(tgds[tgds.signal == "C1D"]["group_delay_m"].to_numpy()))
     assert np.all(np.isnan(tgds[tgds.signal == "C1P"]["group_delay_m"].to_numpy()))
     assert np.all(np.isnan(tgds[tgds.signal == "C5X"]["group_delay_m"].to_numpy()))
