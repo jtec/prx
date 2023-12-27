@@ -5,7 +5,7 @@ from prx.sp3 import evaluate as sp3_evaluate
 from prx.rinex_nav import evaluate as rinex_nav_evaluate
 from prx import converters
 from prx import constants
-from prx.helpers import timestamp_2_timedelta
+from prx.helpers import timestamp_2_timedelta, week_and_seconds_2_timedelta
 import shutil
 import pytest
 import os
@@ -34,6 +34,26 @@ def input_for_test():
         assert test_file_path.exists()
     yield test_files
     shutil.rmtree(test_directory)
+
+
+def test_compare_rnx3_gps_sat_pos_with_magnitude(input_for_test):
+    """Loads a RNX3 nav file, computes a position for different satellites and time, and compares to MAGNITUDE results
+    """
+    path_to_rnx3_nav_file = converters.anything_to_rinex_3(
+        input_for_test["rinex_nav_file"]
+    )
+    query = pd.DataFrame(
+            {"sv": "G01",
+             "query_time_isagpst": week_and_seconds_2_timedelta(weeks=2190, seconds=523800)}, index=[0]
+    )
+    rinex_sat_states = rinex_nav_evaluate.compute(path_to_rnx3_nav_file, query)
+
+    # MAGNITUDE position
+    sv_pos_magnitude = np.array([13053451.235, -12567273.060, 19015357.126])
+    sv_pos_prx = rinex_sat_states[["x_m", "y_m", "z_m"]][rinex_sat_states.sv=='G01'].to_numpy()
+
+    threshold_pos_error_m = 1e-3
+    assert np.linalg.norm(sv_pos_prx - sv_pos_magnitude) < threshold_pos_error_m
 
 
 def generate_sat_query(sat_state_query_time_isagpst):

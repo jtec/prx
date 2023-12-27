@@ -78,6 +78,10 @@ def timedelta_2_weeks_and_seconds(time_delta: pd.Timedelta):
     return weeks, np.float64(week_nanoseconds) / constants.cNanoSecondsPerSecond
 
 
+def week_and_seconds_2_timedelta(weeks, seconds):
+    return pd.Timedelta(weeks * constants.cSecondsPerWeek + seconds, "seconds")
+
+
 def timedelta_2_seconds(time_delta: pd.Timedelta):
     assert type(time_delta) == pd.Timedelta, "time_delta must be of type pd.Timedelta"
     integer_seconds = np.float64(round(time_delta.total_seconds()))
