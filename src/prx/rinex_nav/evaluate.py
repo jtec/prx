@@ -470,7 +470,7 @@ def select_ephemerides(df, query):
             row.query_time_isagpst
             - df[df.sv == row.sv]["ephemeris_reference_time_isagpst"]
         )
-        eligible_ephemerides = (df.sv == row.sv)
+        eligible_ephemerides = df.sv == row.sv
         # For Galileo, select the FNAV ephemeris for E5b signals, and INAV for other signals
         if row["sv"][0] == "E" and row["signal"][1] == "5":
             eligible_ephemerides = df.fnav_or_inav == "fnav"
