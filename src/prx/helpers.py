@@ -1,13 +1,19 @@
 import hashlib
 from pathlib import Path
 import logging
+
+import prx.helpers
 from . import constants
 import numpy as np
 import pandas as pd
 import glob
 import subprocess
 import math
-import cProfile
+import joblib
+import georinex
+
+
+memory = joblib.Memory(Path(__file__).parent.joinpath("afterburner"), verbose=0)
 
 
 logging.basicConfig(
@@ -23,8 +29,8 @@ def get_logger(label):
     return logging.getLogger(label)
 
 
-def prx_root() -> Path:
-    return Path(__file__).parent.parent
+def prx_repository_root() -> Path:
+    return Path(__file__).parents[2]
 
 
 # From https://stackoverflow.com/a/3431838
@@ -119,8 +125,9 @@ def rinex_header_time_string_2_timestamp_ns(time_string: str) -> pd.Timestamp:
 
 def repair_with_gfzrnx(file):
     gfzrnx_binaries = glob.glob(
-        str(prx_root().joinpath("prx/tools/gfzrnx/**gfzrnx**")), recursive=True
+        str(prx.helpers.prx_repository_root() / "tools/gfzrnx/**gfzrnx**"), recursive=True
     )
+    assert len(gfzrnx_binaries) > 0, "Could not find any gfzrnx binary"
     for gfzrnx_binary in gfzrnx_binaries:
         command = f" {gfzrnx_binary} -finp {file} -fout {file}  -chk -kv -f"
         result = subprocess.run(command, capture_output=True, shell=True)
@@ -300,3 +307,21 @@ def ecef_2_geodetic(pos_ecef):
             p * (1 - n * constants.cWgs84EarthEccentricity**2 / (n + altitude_m)),
         )
     return [latitude_rad, longitude_rad, altitude_m]
+
+
+def parse_rinex_obs_file(rinex_file: Path):
+    @memory.cache
+    def cached_load(rinex_file: Path, file_hash: str):
+        log.info(f"Parsing {rinex_file} ...")
+        repair_with_gfzrnx(rinex_file)
+        parsed = georinex.load(rinex_file)
+        return parsed
+
+    t0 = pd.Timestamp.now()
+    file_content_hash = md5_of_file_content(rinex_file)
+    hash_time = pd.Timestamp.now() - t0
+    if hash_time > pd.Timedelta(seconds=1):
+        log.info(
+            f"Hashing file content took {hash_time}, we might want to partially hash the file"
+        )
+    return cached_load(rinex_file, file_content_hash)

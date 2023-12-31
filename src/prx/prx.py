@@ -1,23 +1,17 @@
 import argparse
 import json
-from methodtools import lru_cache
-import csv
 from pathlib import Path
 import georinex
 import pandas as pd
 import numpy as np
-from collections import defaultdict
 import git
-
-import parse_rinex
-import converters
-import helpers
-import constants
-import aux_file_discovery as aux
 import joblib
 
+from prx import atmospheric_corrections as atmo
+from prx import aux_file_discovery as aux
+from prx import constants, helpers, converters, rinex_nav
+
 memory = joblib.Memory(Path(__file__).parent.joinpath("afterburner"), verbose=0)
-import atmospheric_corrections as atmo
 
 log = helpers.get_logger(__name__)
 
@@ -104,7 +98,6 @@ def build_header(input_files):
         {"name": file.name, "md5": helpers.md5_of_file_content(file)}
         for file in input_files
     ]
-    prx_header["speed_of_light_mps"] = constants.cGpsSpeedOfLight_mps
     prx_header["carrier_frequencies_hz"] = constants.carrier_frequencies_hz()
     prx_header["prx_git_commit_id"] = git.Repo(
         search_parent_directories=True
@@ -130,7 +123,7 @@ def build_records(
     receiver_ecef_position_m=np.full(shape=(3,), fill_value=np.nan),
 ):
     check_assumptions(rinex_3_obs_file, rinex_3_ephemerides_file)
-    obs = parse_rinex.load(rinex_3_obs_file)
+    obs = helpers.parse_rinex_obs_file(rinex_3_obs_file)
 
     # if receiver_ecef_position_m has not been initialized, get it from the RNX OBS header
     obs_header = georinex.rinexheader(rinex_3_obs_file)
@@ -164,14 +157,13 @@ def build_records(
         ]
 
     flat_obs = flat_obs.apply(format_flat_rows, axis=1, result_type="expand")
-    flat_obs.rename(
+    flat_obs = flat_obs.rename(
         columns={
             0: "time_of_reception_in_receiver_time",
             1: "satellite",
             2: "observation_value",
             3: "observation_type",
         },
-        inplace=True,
     )
 
     # Compute time-of-emission in satellite time (we don't have satellite clock offset from constellation time yet)

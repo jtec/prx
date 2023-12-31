@@ -22,7 +22,7 @@ def rnx3_input_for_test():
 
     rnx3_nav_test_file = test_directory.joinpath("BRDC00IGS_R_20220010000_01D_MN.zip")
     shutil.copy(
-        helpers.prx_root().joinpath(f"datasets/TLSE_2022001/{rnx3_nav_test_file.name}"),
+        helpers.prx_package_root().joinpath(f"datasets/TLSE_2022001/{rnx3_nav_test_file.name}"),
         rnx3_nav_test_file,
     )
     assert rnx3_nav_test_file.exists()
@@ -280,7 +280,7 @@ def test_unb3m_corrections():
     tol = 1e-3
 
     tropo_expected = np.genfromtxt(
-        helpers.prx_root().joinpath("tools/UNB3m_pack/tunb3m_.txt"), skip_header=3
+        helpers.prx_package_root().joinpath("tools/UNB3m_pack/tunb3m_.txt"), skip_header=3
     )
 
     lat_rad = np.deg2rad(tropo_expected[:, 0])

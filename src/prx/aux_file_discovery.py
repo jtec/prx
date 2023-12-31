@@ -1,20 +1,12 @@
 import argparse
-import json
 import os
-import shutil
 from pathlib import Path
 import georinex
-from collections import defaultdict
 import urllib.request
-import numpy as np
 import glob
-import subprocess
-
 import pandas as pd
 
-import converters
-import helpers
-import prx
+from prx import converters, helpers
 
 log = helpers.get_logger(__name__)
 
@@ -98,7 +90,7 @@ def discover_or_download_ephemerides(
 def discover_or_download_auxiliary_files(observation_file_path=Path()):
     log.info(f"Finding auxiliary files for {observation_file_path} ...")
     rinex_3_obs_file = converters.anything_to_rinex_3(observation_file_path)
-    header = georinex.rinexheader(rinexx_3_obs_file)
+    header = georinex.rinexheader(rinex_3_obs_file)
     ephs = discover_or_download_ephemerides(
         helpers.rinex_header_time_string_2_timestamp_ns(header["TIME OF FIRST OBS"]),
         helpers.rinex_header_time_string_2_timestamp_ns(header["TIME OF LAST OBS"]),

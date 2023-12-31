@@ -5,9 +5,9 @@ import shutil
 import subprocess
 import pytest
 
-import prx
 from prx import helpers
 from prx import constants
+from prx import prx
 
 
 # This function sets up a temporary directory, copies a rinex observations file into that directory
@@ -45,7 +45,7 @@ def input_for_test():
 
 def test_prx_command_line_call_with_jsonseq_output(input_for_test):
     test_file = input_for_test
-    prx_path = helpers.prx_root().joinpath("minimumLovablePrototype").joinpath("prx.py")
+    prx_path = helpers.prx_package_root().joinpath("minimumLovablePrototype").joinpath("prx.py")
     command = f"python {prx_path} --observation_file_path {test_file}"
     result = subprocess.run(
         command, capture_output=True, shell=True, cwd=str(test_file.parent)

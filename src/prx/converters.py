@@ -46,8 +46,9 @@ def compact_rinex_obs_file_to_rinex_obs_file(file: Path):
     if not is_compact_rinex_obs_file(file):
         return None
     crx2rnx_binaries = glob.glob(
-        str(helpers.prx_root().joinpath("tools/RNXCMP/**/CRX2RNX*")), recursive=True
+        str(helpers.prx_repository_root() / "tools/RNXCMP/**/CRX2RNX*"), recursive=True
     )
+    assert len(crx2rnx_binaries) > 0, "Could not find any CRX2RNX binary"
     for crx2rnx_binary in crx2rnx_binaries:
         command = f" {crx2rnx_binary} {file}"
         result = subprocess.run(command, capture_output=True, shell=True)
@@ -118,17 +119,15 @@ def anything_to_rinex_3(file: Path):
         rinex_2_to_rinex_3,
     ]
     input = file
-    converter_calls = 0
-    max_number_of_conversions = 10
-    for converter in itertools.cycle(converters):
+    max_number_of_cycles = 10
+    for converter_calls, converter in enumerate(itertools.cycle(converters)):
         if is_rinex_3_obs_file(input) or is_rinex_3_nav_file(input):
             return input
-        converter_calls += 1
         output = converter(input)
         if output is not None:
             input = output
-        if converter_calls > max_number_of_conversions * len(converters):
+        if converter_calls > max_number_of_cycles * len(converters):
             log.error(
-                f"Tried converting file {file.name} {max_number_of_conversions} times, still not RINEX 3, giving up."
+                f"Tried converting file {file.name} {max_number_of_cycles} times, still not RINEX 3, giving up."
             )
             return None
