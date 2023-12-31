@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
-import helpers
-import constants
+from prx import helpers
+from prx import constants
 import pandas as pd
 
 
@@ -138,7 +138,7 @@ def test_satellite_elevation_and_azimuth():
 
 def test_sagnac_effect():
     # load validation data
-    path_to_validation_file = helpers.prx_root().joinpath(
+    path_to_validation_file = helpers.prx_package_root().joinpath(
         f"tools/validation_data/sagnac_effect.csv"
     )
     # read satellite position in header line 2
