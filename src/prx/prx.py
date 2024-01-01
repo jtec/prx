@@ -9,7 +9,8 @@ import joblib
 
 from prx import atmospheric_corrections as atmo
 from prx import aux_file_discovery as aux
-from prx import constants, helpers, converters, rinex_nav
+from prx import constants, helpers, converters
+from prx.rinex_nav import evaluate as rinex_evaluate
 
 memory = joblib.Memory(Path(__file__).parent.joinpath("afterburner"), verbose=0)
 
@@ -166,93 +167,77 @@ def build_records(
         },
     )
 
-    # Compute time-of-emission in satellite time (we don't have satellite clock offset from constellation time yet)
+    # Compute time-of-emission in satellite time, i.e. including satellite system time offset, as
+    # we don't have satellite clock offset yet.
     log.info("Computing times of emission in satellite time")
     per_sat = flat_obs.pivot(
         index=["time_of_reception_in_receiver_time", "satellite"],
         columns=["observation_type"],
         values="observation_value",
     ).reset_index()
-    # when using useindicator=True in georinex.load(), there are additional ssi columns such as C1Cssi.
+    # When calling georinex.load() with useindicators=True, there are additional ssi columns such as C1Cssi.
     # To exclude them, we check the length of the column name
     code_phase_columns = [c for c in per_sat.columns if c[0] == "C" and len(c) == 3]
-    per_sat["time_of_emission_in_satellite_time"] = per_sat[
-        "time_of_reception_in_receiver_time"
-    ] - pd.to_timedelta(
+    # TODO Find better name for the following variable; it contains time-of-flight and receiver clock offset.
+    tof_dtrx = pd.to_timedelta(
         per_sat[code_phase_columns]
         .mean(axis=1, skipna=True)
         .divide(constants.cGpsSpeedOfLight_mps),
         unit="s",
     )
-
-    def compute_sat_state(row, ephemerides, rx_ecef_position_m):
-        (
-            position_system_frame_m,
-            velocity_system_frame_mps,
-            clock_offset_m,
-            clock_offset_rate_mps,
-            relativistic_clock_effect_m,
-        ) = eph.compute_satellite_state(
-            ephemerides,
-            row["satellite"],
-            helpers.timestamp_2_timedelta(
-                row["time_of_emission_in_satellite_time"],
-                eph.satellite_id_2_system_time_scale(row["satellite"]),
-            ),
-        )
-        sagnac_effect_m = helpers.compute_sagnac_effect(
-            position_system_frame_m, rx_ecef_position_m
-        )
-        [latitude_user_rad, __, height_user_m] = helpers.ecef_2_geodetic(
-            rx_ecef_position_m
-        )
-        day_of_year = np.array(
-            row["time_of_emission_in_satellite_time"].timetuple().tm_yday
-        )
-        elevation_sat_rad, __ = eph.compute_satellite_elevation_and_azimuth(
-            position_system_frame_m, rx_ecef_position_m
-        )
-        (
-            tropo_delay_m,
-            __,
-            __,
-            __,
-            __,
-        ) = atmo.compute_unb3m_correction(
-            latitude_user_rad, height_user_m, day_of_year, elevation_sat_rad
-        )
-        return pd.Series(
-            [
-                position_system_frame_m,
-                velocity_system_frame_mps,
-                clock_offset_m,
-                clock_offset_rate_mps,
-                sagnac_effect_m,
-                relativistic_clock_effect_m,
-                tropo_delay_m,
-            ]
-        )
-
-    log.info("Computing satellite states")
-    ephemerides = eph.convert_rnx3_nav_file_to_dataframe(rinex_3_ephemerides_file)
-    per_sat[
-        [
-            "satellite_position_m",
-            "satellite_velocity_mps",
-            "satellite_clock_bias_m",
-            "satellite_clock_bias_drift_mps",
-            "sagnac_effect_m",
-            "relativistic_clock_effect_m",
-            "tropo_delay_m",
-        ]
-    ] = per_sat.apply(
-        compute_sat_state,
-        axis=1,
-        args=(
-            ephemerides,
-            receiver_ecef_position_m,
-        ),
+    per_sat["time_of_emission_in_satellite_time"] = per_sat[
+        "time_of_reception_in_receiver_time"
+    ] - tof_dtrx
+    per_sat["time_scale"] = per_sat["satellite"].str[0].map(constants.constellation_2_system_time_scale)
+    per_sat["time_of_emission_isagpst"] = per_sat.apply(lambda row:
+        rinex_evaluate.to_isagpst(row.time_of_reception_in_receiver_time - constants.cGpstUtcEpoch, row.time_scale), axis=1
     )
+
+    flat_obs = flat_obs.merge(
+        per_sat[["time_of_reception_in_receiver_time", "satellite", "time_of_emission_in_satellite_time", "time_of_emission_isagpst"]],
+        on=["time_of_reception_in_receiver_time", "satellite"],
+    )
+
+    # Compute broadcast position, velocity, clock offset, clock offset rate and TGDs
+    query = flat_obs[flat_obs["observation_type"].str.startswith("C")]
+    query[['signal', 'sv', 'query_time_isagpst']] = query[["observation_type", 'satellite', 'time_of_emission_isagpst']]
+
+    sat_states = rinex_evaluate.compute(
+        rinex_3_ephemerides_file,
+        query,
+    )
+    sat_states = sat_states.rename(columns={
+        'sv': 'satellite',
+        'signal': 'observation_type',
+        'query_time_isagpst': 'time_of_emission_isagpst',
+    })
+    flat_obs = flat_obs.merge(sat_states, on=["satellite", "observation_type", "time_of_emission_isagpst"])
+    flat_obs['relativistic_clock_effect_m'] = helpers.compute_relativistic_clock_effect(
+        flat_obs[['x_m', 'y_m', 'z_m']].to_numpy(),
+        flat_obs[['dx_mps', 'dy_mps', 'dz_mps']].to_numpy())
+    flat_obs['sagnac_effect_m'] = helpers.compute_sagnac_effect(
+        flat_obs[['x_m', 'y_m', 'z_m']].to_numpy(),
+        receiver_ecef_position_m)
+    [latitude_user_rad, __, height_user_m] = helpers.ecef_2_geodetic(
+        receiver_ecef_position_m
+    )
+    day_of_year = np.array(
+        flat_obs["time_of_emission_in_satellite_time"].apply(lambda element: element.timetuple().tm_yday).to_numpy()
+    )
+    elevation_sat_rad, __ = helpers.compute_satellite_elevation_and_azimuth(
+        flat_obs[['x_m', 'y_m', 'z_m']].to_numpy(), receiver_ecef_position_m
+    )
+    (
+        tropo_delay_m,
+        __,
+        __,
+        __,
+        __,
+    ) = atmo.compute_unb3m_correction(
+        latitude_user_rad*np.ones(day_of_year.shape), height_user_m*np.ones(day_of_year.shape), day_of_year, elevation_sat_rad
+    )
+    flat_obs['tropo_delay_m'] = tropo_delay_m
+    pass
 
     def convert_to_per_obs(
         row,

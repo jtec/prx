@@ -456,8 +456,15 @@ def compute_gal_inav_fnav_indicators(df):
     return df
 
 
-def to_isagpst(time: pd.Timedelta, timescale: str):
-    return time + time_scale_integer_second_offset(timescale, "GPST")
+def to_isagpst(time, timescale):
+    if isinstance(time, pd.Timedelta) and isinstance(timescale, str):
+        return time + time_scale_integer_second_offset(timescale, "GPST")
+    if isinstance(time, pd.Series) and isinstance(timescale, pd.Series):
+        integer_second_offsets = timescale.groupby(timescale).apply(
+            time_scale_integer_second_offset, "GPST"
+        )
+        return time + time_scale_integer_second_offset(timescale, "GPST")
+    assert False, f"Unexpected types: time is {type(time)}, timescale is {type(timescale)}"
 
 
 def select_ephemerides(df, query):
@@ -476,14 +483,29 @@ def select_ephemerides(df, query):
             eligible_ephemerides = df.fnav_or_inav == "fnav"
         if row["sv"][0] == "E" and row["signal"][1] != "5":
             eligible_ephemerides = df.fnav_or_inav == "inav"
-        match = query_time_wrt_ephemeris_reference_time[
+        delta_time = query_time_wrt_ephemeris_reference_time[
             eligible_ephemerides
             & (query_time_wrt_ephemeris_reference_time >= pd.Timedelta(seconds=0))
-        ].idxmin()
-        return match
+        ]
+        if len(delta_time) == 0:
+            return np.nan
+        match_index = delta_time.idxmin()
+        return match_index
 
     query["ephemeris_index"] = query.apply(find_ephemeris_index, args=(df,), axis=1)
+    # Some satellites might not have ephemerides. We create dummy ephemerides with NaN values for those.
+    sats_without_ephemerides = query[query.ephemeris_index.isna()].sv.unique()
+    # ephemerides = [df]
+    for sv in sats_without_ephemerides:
+        nan_ephemeris = df.iloc[[0]].copy()
+        nan_ephemeris[[nan_ephemeris.columns[i] for i, dtype in enumerate(nan_ephemeris.dtypes) if dtype in (float, int, np.float64)]] = np.nan
+        nan_ephemeris[[nan_ephemeris.columns[i] for i, dtype in enumerate(nan_ephemeris.dtypes) if dtype in (pd.Timedelta, pd.Timestamp)]] = pd.NaT
+        nan_ephemeris["sv"] = sv
+        df = pd.concat((df, nan_ephemeris))
+    df = df.reset_index(drop=True)
     df["ephemeris_index"] = df.index
+
+    query[query.ephemeris_index.isna()]["ephemeris_index"] = df.index[len(df)-1]
     # Copy ephemerides into query dataframe
     # We are doing it this way around because the same satellite might show up multiple times in the query dataframe,
     # e.g. with different query times
@@ -516,8 +538,8 @@ def compute_clock_offsets(df):
 def compute(rinex_nav_file_path, per_signal_query):
     rinex_nav_file_path = Path(rinex_nav_file_path)
     ephemerides = parse_rinex_nav_file(rinex_nav_file_path)
-    # Group delays and clock offsets can be signal-specific, so we need to match ephemerides to signals, not only to
-    # satellites
+    # Group delays and clock offsets can be signal-specific, so we need to match ephemerides to code signals,
+    # not only to satellites
     # Example: Galileo transmits E5a clock and group delay parameters in the F/NAV message, but parameters for other
     # signals in the I/NAV message
     per_signal_query = select_ephemerides(ephemerides, per_signal_query)
@@ -533,9 +555,7 @@ def compute(rinex_nav_file_path, per_signal_query):
         if orbit_type == "kepler":
             sub_df = kepler_orbit_position_and_velocity(sub_df)
         else:
-            assert (
-                False
-            ), f"Ephemeris evaluation not implemented or under development for constellation {sub_df['constellation'].iloc[0]}"
+            log.info(f"Ephemeris evaluation not implemented or under development for constellation {sub_df['constellation'].iloc[0]}, skipping")
         return sub_df
 
     per_sat_query = per_sat_query.groupby("orbit_type").apply(evaluate_orbit)
@@ -554,6 +574,8 @@ def compute(rinex_nav_file_path, per_signal_query):
     per_signal_query = per_signal_query.merge(
         per_sat_query, on=["sv", "query_time_isagpst"]
     )
+    columns_to_keep = ["clock_m",
+        "dclock_mps",] + columns_to_keep
     per_signal_query = compute_total_group_delays(per_signal_query)
 
     if "signal" in per_signal_query.columns:

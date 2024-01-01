@@ -98,13 +98,13 @@ def compute_unb3m_correction(
 
     assert (
         latitude_user_rad.shape == height_user_m.shape
-    ), ">> atmospheric_corrections.compute_unb3m_correction: input arguments should be arrays of the same shape"
+    ), "Input arguments should be arrays of the same shape"
     assert (
         latitude_user_rad.shape == day_of_year.shape
-    ), ">> atmospheric_corrections.compute_unb3m_correction: input arguments should be arrays of the same shape"
+    ), "Input arguments should be arrays of the same shape"
     assert (
         latitude_user_rad.shape == elevation_sat_rad.shape
-    ), ">> atmospheric_corrections.compute_unb3m_correction: input arguments should be arrays of the same shape"
+    ), "Input arguments should be arrays of the same shape"
 
     # Initialize UNB3m look-up table
     avg = np.array(
