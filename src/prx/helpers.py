@@ -230,7 +230,7 @@ def compute_sagnac_effect(sat_pos_m, rx_pos_m):
     """compute the sagnac effect (effect of the Earth rotation during signal propagation°
 
     Input:
-    - sat_pos_m: satellite ECEF position. np.ndarray of shape (3,)
+    - sat_pos_m: satellite ECEF position. np.ndarray of shape (n, 3)
     - rx_pos_m: satellite ECEF position. np.ndarray of shape (3,)
 
     Note:
@@ -239,28 +239,22 @@ def compute_sagnac_effect(sat_pos_m, rx_pos_m):
     Reference:
     RTKLIB v2.4.2 manual, eq E.3.8b, p 140
     """
-    sagnac_effect_m = (
-        constants.cEarthRotationRate_radps
-        / constants.cGpsIcdSpeedOfLight_mps
-        * (sat_pos_m[0] * rx_pos_m[1] - sat_pos_m[1] * rx_pos_m[0])
-    )
+    sagnac_effect_m = (constants.cGpsOmegaDotEarth_rps / constants.cGpsSpeedOfLight_mps) * (sat_pos_m[:,0] * rx_pos_m[1] - sat_pos_m[:,1] * rx_pos_m[0])
     return sagnac_effect_m
 
 
 def compute_relativistic_clock_effect(
-    sat_pos_m: np.array(
-        3,
-    ),
-    sat_vel_mps: np.array(
-        3,
-    ),
+    sat_pos_m: np.array,
+    sat_vel_mps: np.array
 ):
     """
     Reference:
     GNSS Data Processing, Vol. I: Fundamentals and Algorithms. Equation (5.19)
+
+    Expects both arrays to be of shape (rows, columns) (n, 3)
     """
     relativistic_clock_effect_m = (
-        -2 * np.dot(sat_pos_m, sat_vel_mps) / constants.cGpsIcdSpeedOfLight_mps
+        -2 * np.einsum('ij, ij->i', sat_pos_m, sat_vel_mps) / constants.cGpsSpeedOfLight_mps
     )
 
     return relativistic_clock_effect_m
@@ -271,9 +265,9 @@ def compute_satellite_elevation_and_azimuth(sat_pos_ecef, receiver_pos_ecef):
     Reference:
     GNSS Data Processing, Vol. I: Fundamentals and Algorithms. Equations (B.9),(B.13),(B.14)
     """
-    rho = (sat_pos_ecef - receiver_pos_ecef) / np.linalg.norm(
-        sat_pos_ecef - receiver_pos_ecef
-    )
+    sat_pos_wrt_rx_pps = sat_pos_ecef - receiver_pos_ecef
+    sat_pos_wrt_rx_pps_norm = np.linalg.norm(sat_pos_wrt_rx_pps, axis=1)
+    rho = sat_pos_wrt_rx_pps / sat_pos_wrt_rx_pps_norm[:, np.newaxis]
     [lat, lon, __] = ecef_2_geodetic(receiver_pos_ecef)
     unit_e = [-np.sin(lon), np.cos(lon), 0]
     unit_n = [-np.cos(lon) * np.sin(lat), -np.sin(lon) * np.sin(lat), np.cos(lat)]
