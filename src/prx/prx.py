@@ -118,6 +118,7 @@ def check_assumptions(rinex_3_obs_file, rinex_3_nav_file):
     ), "Handling of observation files using time scales other than GPST not implemented yet."
 
 
+
 def build_records(
     rinex_3_obs_file,
     rinex_3_ephemerides_file,
@@ -218,13 +219,13 @@ def build_records(
     flat_obs['sagnac_effect_m'] = helpers.compute_sagnac_effect(
         flat_obs[['x_m', 'y_m', 'z_m']].to_numpy(),
         receiver_ecef_position_m)
-    [latitude_user_rad, __, height_user_m] = helpers.ecef_2_geodetic(
+    [latitude_user_rad, longitude_user_rad, height_user_m] = helpers.ecef_2_geodetic(
         receiver_ecef_position_m
     )
-    day_of_year = np.array(
+    days_of_year = np.array(
         flat_obs["time_of_emission_in_satellite_time"].apply(lambda element: element.timetuple().tm_yday).to_numpy()
     )
-    elevation_sat_rad, __ = helpers.compute_satellite_elevation_and_azimuth(
+    elevation_sats_rad, azimuth_sats_rad = helpers.compute_satellite_elevation_and_azimuth(
         flat_obs[['x_m', 'y_m', 'z_m']].to_numpy(), receiver_ecef_position_m
     )
     (
@@ -234,9 +235,22 @@ def build_records(
         __,
         __,
     ) = atmo.compute_unb3m_correction(
-        latitude_user_rad*np.ones(day_of_year.shape), height_user_m*np.ones(day_of_year.shape), day_of_year, elevation_sat_rad
+        latitude_user_rad*np.ones(days_of_year.shape),
+        height_user_m*np.ones(days_of_year.shape),
+        days_of_year, elevation_sats_rad
     )
     flat_obs['tropo_delay_m'] = tropo_delay_m
+    nav_header = georinex.rinexheader(rinex_3_ephemerides_file)
+    flat_obs['iono_delay_klobuchar_m'] = atmo.compute_klobuchar_l1_correction(
+            tow_s,
+            nav_header["IONOSPHERIC CORR"]["GPSA"],
+            nav_header["IONOSPHERIC CORR"]["GPSB"],
+            elevation_sats_rad,
+            azimuth_sats_rad,
+            latitude_user_rad,
+            longitude_user_rad,
+        ) * constants.carrier_frequencies_hz()["G"]["L1"] ** 2 / carrier_frequency_hz ** 2
+
     pass
 
     def convert_to_per_obs(
@@ -251,7 +265,8 @@ def build_records(
         constellation = row["satellite"][0]
         prn = row["satellite"][1:]
 
-        # initialize empty lists, because it is better to create a new pd.DataFrame from lists, than adding rows to an existing pd.DataFrame
+        # Initialize empty lists, because creating a new pd.DataFrame from lists, is faster than
+        # concatenating rows to an existing pd.DataFrame
         observation_code = list()
         code_observation_m = list()
         doppler_observation_hz = list()
