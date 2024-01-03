@@ -88,7 +88,7 @@ def carrier_frequencies_hz():
     # NavIC/IRNSS
     cf["I"]["L5"] = 1176.45 * cHzPerMhz
     cf["I"]["S"] = 2492.028 * cHzPerMhz
-    return cf
+    return dict(cf)
 
 
 constellation_2_system_time_scale = {

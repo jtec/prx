@@ -190,12 +190,15 @@ def build_records(
         "time_of_reception_in_receiver_time"
     ] - tof_dtrx
     per_sat["time_scale"] = per_sat["satellite"].str[0].map(constants.constellation_2_system_time_scale)
+    per_sat["time_of_emission_weeksecond_system_time"] = per_sat.apply(lambda row:
+        helpers.timedelta_2_weeks_and_seconds(helpers.timestamp_2_timedelta(row.time_of_emission_in_satellite_time, row.time_scale))[1], axis=1
+    )
     per_sat["time_of_emission_isagpst"] = per_sat.apply(lambda row:
         rinex_evaluate.to_isagpst(row.time_of_reception_in_receiver_time - constants.cGpstUtcEpoch, row.time_scale), axis=1
     )
 
     flat_obs = flat_obs.merge(
-        per_sat[["time_of_reception_in_receiver_time", "satellite", "time_of_emission_in_satellite_time", "time_of_emission_isagpst"]],
+        per_sat[["time_of_reception_in_receiver_time", "satellite", "time_of_emission_in_satellite_time", "time_of_emission_isagpst", "time_of_emission_weeksecond_system_time"]],
         on=["time_of_reception_in_receiver_time", "satellite"],
     )
 
@@ -225,7 +228,7 @@ def build_records(
     days_of_year = np.array(
         flat_obs["time_of_emission_in_satellite_time"].apply(lambda element: element.timetuple().tm_yday).to_numpy()
     )
-    elevation_sats_rad, azimuth_sats_rad = helpers.compute_satellite_elevation_and_azimuth(
+    flat_obs['elevation_rad'], flat_obs['azimuth_rad'] = helpers.compute_satellite_elevation_and_azimuth(
         flat_obs[['x_m', 'y_m', 'z_m']].to_numpy(), receiver_ecef_position_m
     )
     (
@@ -237,19 +240,21 @@ def build_records(
     ) = atmo.compute_unb3m_correction(
         latitude_user_rad*np.ones(days_of_year.shape),
         height_user_m*np.ones(days_of_year.shape),
-        days_of_year, elevation_sats_rad
+        days_of_year, flat_obs['elevation_rad'].to_numpy(),
     )
     flat_obs['tropo_delay_m'] = tropo_delay_m
+    flat_obs.loc[flat_obs.satellite.str[0] != 'R', 'carrier_frequency_hz'] = flat_obs.apply(
+        lambda row: constants.carrier_frequencies_hz()[row.satellite[0]]["L" + row.observation_type[1]], axis=1)
     nav_header = georinex.rinexheader(rinex_3_ephemerides_file)
-    flat_obs['iono_delay_klobuchar_m'] = atmo.compute_klobuchar_l1_correction(
-            tow_s,
+    flat_obs.loc[flat_obs.satellite.str[0] == 'G', 'iono_delay_klobuchar_m'] = atmo.compute_klobuchar_l1_correction(
+            flat_obs[flat_obs.satellite.str[0] == 'G'].time_of_emission_weeksecond_system_time.to_numpy(),
             nav_header["IONOSPHERIC CORR"]["GPSA"],
             nav_header["IONOSPHERIC CORR"]["GPSB"],
-            elevation_sats_rad,
-            azimuth_sats_rad,
+            flat_obs[flat_obs.satellite.str[0] == 'G'].elevation_rad,
+            flat_obs[flat_obs.satellite.str[0] == 'G'].azimuth_rad,
             latitude_user_rad,
             longitude_user_rad,
-        ) * constants.carrier_frequencies_hz()["G"]["L1"] ** 2 / carrier_frequency_hz ** 2
+        ) * (constants.carrier_frequencies_hz()["G"]["L1"] ** 2 / flat_obs[flat_obs.satellite.str[0] == 'G'].carrier_frequency_hz**2)
 
     pass
 
