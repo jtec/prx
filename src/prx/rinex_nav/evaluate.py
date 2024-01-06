@@ -464,7 +464,9 @@ def to_isagpst(time, timescale):
             time_scale_integer_second_offset, "GPST"
         )
         return time + time_scale_integer_second_offset(timescale, "GPST")
-    assert False, f"Unexpected types: time is {type(time)}, timescale is {type(timescale)}"
+    assert (
+        False
+    ), f"Unexpected types: time is {type(time)}, timescale is {type(timescale)}"
 
 
 def select_ephemerides(df, query):
@@ -498,14 +500,26 @@ def select_ephemerides(df, query):
     # ephemerides = [df]
     for sv in sats_without_ephemerides:
         nan_ephemeris = df.iloc[[0]].copy()
-        nan_ephemeris[[nan_ephemeris.columns[i] for i, dtype in enumerate(nan_ephemeris.dtypes) if dtype in (float, int, np.float64)]] = np.nan
-        nan_ephemeris[[nan_ephemeris.columns[i] for i, dtype in enumerate(nan_ephemeris.dtypes) if dtype in (pd.Timedelta, pd.Timestamp)]] = pd.NaT
+        nan_ephemeris[
+            [
+                nan_ephemeris.columns[i]
+                for i, dtype in enumerate(nan_ephemeris.dtypes)
+                if dtype in (float, int, np.float64)
+            ]
+        ] = np.nan
+        nan_ephemeris[
+            [
+                nan_ephemeris.columns[i]
+                for i, dtype in enumerate(nan_ephemeris.dtypes)
+                if dtype in (pd.Timedelta, pd.Timestamp)
+            ]
+        ] = pd.NaT
         nan_ephemeris["sv"] = sv
         df = pd.concat((df, nan_ephemeris))
     df = df.reset_index(drop=True)
     df["ephemeris_index"] = df.index
 
-    query[query.ephemeris_index.isna()]["ephemeris_index"] = df.index[len(df)-1]
+    query[query.ephemeris_index.isna()]["ephemeris_index"] = df.index[len(df) - 1]
     # Copy ephemerides into query dataframe
     # We are doing it this way around because the same satellite might show up multiple times in the query dataframe,
     # e.g. with different query times
@@ -555,7 +569,9 @@ def compute(rinex_nav_file_path, per_signal_query):
         if orbit_type == "kepler":
             sub_df = kepler_orbit_position_and_velocity(sub_df)
         else:
-            log.info(f"Ephemeris evaluation not implemented or under development for constellation {sub_df['constellation'].iloc[0]}, skipping")
+            log.info(
+                f"Ephemeris evaluation not implemented or under development for constellation {sub_df['constellation'].iloc[0]}, skipping"
+            )
         return sub_df
 
     per_sat_query = per_sat_query.groupby("orbit_type").apply(evaluate_orbit)
@@ -574,8 +590,10 @@ def compute(rinex_nav_file_path, per_signal_query):
     per_signal_query = per_signal_query.merge(
         per_sat_query, on=["sv", "query_time_isagpst"]
     )
-    columns_to_keep = ["clock_m",
-        "dclock_mps",] + columns_to_keep
+    columns_to_keep = [
+        "clock_m",
+        "dclock_mps",
+    ] + columns_to_keep
     per_signal_query = compute_total_group_delays(per_signal_query)
 
     if "signal" in per_signal_query.columns:

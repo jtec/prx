@@ -40,7 +40,9 @@ def hash_of_file_content(file: Path, use_sampling: bool = False):
     if not use_sampling:
         sample_threshhold = math.inf
     t0 = pd.Timestamp.now()
-    hash_string = imohash.hashfile(file, hexdigest=True, sample_threshhold=sample_threshhold)
+    hash_string = imohash.hashfile(
+        file, hexdigest=True, sample_threshhold=sample_threshhold
+    )
     hash_time = pd.Timestamp.now() - t0
     if hash_time > pd.Timedelta(seconds=1):
         log.info(
@@ -125,7 +127,8 @@ def rinex_header_time_string_2_timestamp_ns(time_string: str) -> pd.Timestamp:
 
 def repair_with_gfzrnx(file):
     gfzrnx_binaries = glob.glob(
-        str(prx.helpers.prx_repository_root() / "tools/gfzrnx/**gfzrnx**"), recursive=True
+        str(prx.helpers.prx_repository_root() / "tools/gfzrnx/**gfzrnx**"),
+        recursive=True,
     )
     assert len(gfzrnx_binaries) > 0, "Could not find any gfzrnx binary"
     for gfzrnx_binary in gfzrnx_binaries:
@@ -239,14 +242,13 @@ def compute_sagnac_effect(sat_pos_m, rx_pos_m):
     Reference:
     RTKLIB v2.4.2 manual, eq E.3.8b, p 140
     """
-    sagnac_effect_m = (constants.cGpsOmegaDotEarth_rps / constants.cGpsSpeedOfLight_mps) * (sat_pos_m[:,0] * rx_pos_m[1] - sat_pos_m[:,1] * rx_pos_m[0])
+    sagnac_effect_m = (
+        constants.cGpsOmegaDotEarth_rps / constants.cGpsSpeedOfLight_mps
+    ) * (sat_pos_m[:, 0] * rx_pos_m[1] - sat_pos_m[:, 1] * rx_pos_m[0])
     return sagnac_effect_m
 
 
-def compute_relativistic_clock_effect(
-    sat_pos_m: np.array,
-    sat_vel_mps: np.array
-):
+def compute_relativistic_clock_effect(sat_pos_m: np.array, sat_vel_mps: np.array):
     """
     Reference:
     GNSS Data Processing, Vol. I: Fundamentals and Algorithms. Equation (5.19)
@@ -254,7 +256,9 @@ def compute_relativistic_clock_effect(
     Expects both arrays to be of shape (rows, columns) (n, 3)
     """
     relativistic_clock_effect_m = (
-        -2 * np.einsum('ij, ij->i', sat_pos_m, sat_vel_mps) / constants.cGpsSpeedOfLight_mps
+        -2
+        * np.einsum("ij, ij->i", sat_pos_m, sat_vel_mps)
+        / constants.cGpsSpeedOfLight_mps
     )
 
     return relativistic_clock_effect_m
