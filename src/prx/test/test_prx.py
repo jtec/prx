@@ -3,6 +3,8 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
+
+import pandas as pd
 import pytest
 
 from prx import helpers
@@ -81,3 +83,5 @@ def test_prx_function_call_with_csv_output(input_for_test):
         str(test_file).replace("crx.gz", constants.cPrxCsvFileExtension)
     )
     assert expected_prx_file.exists()
+    file_content = pd.read_csv(expected_prx_file)
+    pass
