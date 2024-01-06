@@ -15,4 +15,5 @@ __pycache__
 *.png
 *.pkl
 **/tmp_test*/*
-
+**.profile
+**.pstat
