@@ -69,7 +69,7 @@ def parse_sp3_file(file_path: Path):
         df.insert(0, "gpst_s", df.pop("gpst_s"))
         return df
 
-    file_content_hash = helpers.md5_of_file_content(file_path)
+    file_content_hash = helpers.hash_of_file_content(file_path)
     return cached_load(file_path, file_content_hash)
 
 

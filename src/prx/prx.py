@@ -75,7 +75,7 @@ def write_json_text_sequence_file(
 
 
 def write_csv_file(
-    prx_header: dict, prx_records: pd.DataFrame, file_name_without_extension: Path
+    prx_header: dict, flat_records: pd.DataFrame, file_name_without_extension: Path
 ):
     output_file = Path(
         f"{str(file_name_without_extension)}.{constants.cPrxCsvFileExtension}"
@@ -84,7 +84,18 @@ def write_csv_file(
     with open(output_file, "w", encoding="utf-8") as file:
         for key in prx_header.keys():
             file.write("# %s,%s\n" % (key, prx_header[key]))
+    # Re-arrange records to have one  line per code observation, with the associated carrier phase and
+    # Doppler observation, and auxiliary information such as satellite position, velocity, clock offset, etc.
     # write records
+    # Start with code observations, as they have TGDs, and merge in other observation types one by one
+    flat_records['frequency_id'] = flat_records.observation_type.str[1]
+    records = flat_records.loc[flat_records.observation_type.str.startswith("C")]
+    for obs_type in ['D', 'L', 'S']:
+        obs = flat_records.loc[flat_records.observation_type.str.startswith(obs_type)][['satellite', 'time_of_reception_in_receiver_time', 'observation_type', 'observation_value', 'frequency_id']]
+        obs[f"{obs_type}_obs"] = obs.observation_value
+        obs = obs.drop(columns=['observation_value', 'observation_type'])
+        records = records.merge(obs, on=['satellite', 'time_of_reception_in_receiver_time', 'frequency_id'], how='left')
+
     prx_records.to_csv(
         path_or_buf=output_file,
         index=False,
@@ -96,7 +107,7 @@ def write_csv_file(
 def build_header(input_files):
     prx_header = {}
     prx_header["input_files"] = [
-        {"name": file.name, "md5": helpers.md5_of_file_content(file)}
+        {"name": file.name, "md5": helpers.hash_of_file_content(file)}
         for file in input_files
     ]
     prx_header["carrier_frequencies_hz"] = constants.carrier_frequencies_hz()
@@ -118,11 +129,27 @@ def check_assumptions(rinex_3_obs_file, rinex_3_nav_file):
     ), "Handling of observation files using time scales other than GPST not implemented yet."
 
 
-
 def build_records(
     rinex_3_obs_file,
     rinex_3_ephemerides_file,
     receiver_ecef_position_m=np.full(shape=(3,), fill_value=np.nan),
+):
+    return _build_records_cached(
+        rinex_3_obs_file,
+        helpers.hash_of_file_content(rinex_3_obs_file),
+        rinex_3_ephemerides_file,
+        helpers.hash_of_file_content(rinex_3_ephemerides_file),
+        receiver_ecef_position_m,
+    )
+
+
+@memory.cache
+def _build_records_cached(
+    rinex_3_obs_file,
+    rinex_3_obs_file_hash,
+    rinex_3_ephemerides_file,
+    rinex_3_ephemerides_file_hash,
+    receiver_ecef_position_m,
 ):
     check_assumptions(rinex_3_obs_file, rinex_3_ephemerides_file)
     obs = helpers.parse_rinex_obs_file(rinex_3_obs_file)
@@ -215,21 +242,23 @@ def build_records(
         'signal': 'observation_type',
         'query_time_isagpst': 'time_of_emission_isagpst',
     })
-    flat_obs = flat_obs.merge(sat_states, on=["satellite", "observation_type", "time_of_emission_isagpst"])
-    flat_obs['relativistic_clock_effect_m'] = helpers.compute_relativistic_clock_effect(
-        flat_obs[['x_m', 'y_m', 'z_m']].to_numpy(),
-        flat_obs[['dx_mps', 'dy_mps', 'dz_mps']].to_numpy())
-    flat_obs['sagnac_effect_m'] = helpers.compute_sagnac_effect(
-        flat_obs[['x_m', 'y_m', 'z_m']].to_numpy(),
+    # We need Timestamps to compute tropo delays
+    sat_states = sat_states.merge(flat_obs[['satellite', 'time_of_emission_isagpst', 'time_of_reception_in_receiver_time']].drop_duplicates(), on=['satellite', 'time_of_emission_isagpst'], how='left')
+    # Compute anything else that is satellite-specific
+    sat_states['relativistic_clock_effect_m'] = helpers.compute_relativistic_clock_effect(
+        sat_states[['x_m', 'y_m', 'z_m']].to_numpy(),
+        sat_states[['dx_mps', 'dy_mps', 'dz_mps']].to_numpy())
+    sat_states['sagnac_effect_m'] = helpers.compute_sagnac_effect(
+        sat_states[['x_m', 'y_m', 'z_m']].to_numpy(),
         receiver_ecef_position_m)
     [latitude_user_rad, longitude_user_rad, height_user_m] = helpers.ecef_2_geodetic(
         receiver_ecef_position_m
     )
     days_of_year = np.array(
-        flat_obs["time_of_emission_in_satellite_time"].apply(lambda element: element.timetuple().tm_yday).to_numpy()
+        sat_states["time_of_reception_in_receiver_time"].apply(lambda element: element.timetuple().tm_yday).to_numpy()
     )
-    flat_obs['elevation_rad'], flat_obs['azimuth_rad'] = helpers.compute_satellite_elevation_and_azimuth(
-        flat_obs[['x_m', 'y_m', 'z_m']].to_numpy(), receiver_ecef_position_m
+    sat_states['elevation_rad'], sat_states['azimuth_rad'] = helpers.compute_satellite_elevation_and_azimuth(
+        sat_states[['x_m', 'y_m', 'z_m']].to_numpy(), receiver_ecef_position_m
     )
     (
         tropo_delay_m,
@@ -240,9 +269,25 @@ def build_records(
     ) = atmo.compute_unb3m_correction(
         latitude_user_rad*np.ones(days_of_year.shape),
         height_user_m*np.ones(days_of_year.shape),
-        days_of_year, flat_obs['elevation_rad'].to_numpy(),
+        days_of_year, sat_states.elevation_rad.to_numpy(),
     )
-    flat_obs['tropo_delay_m'] = tropo_delay_m
+    sat_states['tropo_delay_m'] = tropo_delay_m
+
+    # Merge in all sat states that are not signal-specific, i.e. can be copied into
+    # rows with Doppler and carrier phase observations
+    # TODO understand why dropping duplicates with
+    #  subset=['satellite', 'time_of_emission_isagpst']
+    #  leads to fewer rows here, looks like there are multiple position/velocity/clock values for
+    #  the same satellite and the same time of emission
+    sat_specific = (sat_states[sat_states.columns
+    .drop(['observation_type', 'group_delay_m', 'time_of_reception_in_receiver_time'])]
+                    .drop_duplicates(subset=['satellite', 'time_of_emission_isagpst']))
+    # Group delays are signal-specific, so we merge them in separately
+    code_specific = sat_states[["satellite", "observation_type", "time_of_emission_isagpst", 'group_delay_m']].drop_duplicates(subset=['satellite', 'observation_type', 'time_of_emission_isagpst'])
+    flat_obs = flat_obs.merge(sat_specific, on=["satellite", "time_of_emission_isagpst"], how='left')
+    flat_obs = flat_obs.merge(code_specific, on=["satellite", "observation_type", "time_of_emission_isagpst"], how='left')
+
+
     flat_obs.loc[flat_obs.satellite.str[0] != 'R', 'carrier_frequency_hz'] = flat_obs.apply(
         lambda row: constants.carrier_frequencies_hz()[row.satellite[0]]["L" + row.observation_type[1]], axis=1)
     nav_header = georinex.rinexheader(rinex_3_ephemerides_file)
@@ -256,159 +301,7 @@ def build_records(
             longitude_user_rad,
         ) * (constants.carrier_frequencies_hz()["G"]["L1"] ** 2 / flat_obs[flat_obs.satellite.str[0] == 'G'].carrier_frequency_hz**2)
 
-    pass
-
-    def convert_to_per_obs(
-        row,
-        ephemerides,
-        code_phase_columns,
-        receiver_ecef_position_m,
-        nav_header,
-        glonass_slot_dict,
-    ):  # , nav_header):
-        time_of_reception_in_receiver_time = row["time_of_reception_in_receiver_time"]
-        constellation = row["satellite"][0]
-        prn = row["satellite"][1:]
-
-        # Initialize empty lists, because creating a new pd.DataFrame from lists, is faster than
-        # concatenating rows to an existing pd.DataFrame
-        observation_code = list()
-        code_observation_m = list()
-        doppler_observation_hz = list()
-        carrier_observation_m = list()
-        lli = list()
-        cn0_dbhz = list()
-        satellite_position_m = list()
-        satellite_velocity_mps = list()
-        satellite_clock_bias_m = list()
-        satellite_clock_bias_drift_mps = list()
-        sagnac_effect_m = list()
-        relativistic_clock_effect_m = list()
-        group_delay_m = list()
-        iono_delay_m = list()
-        tropo_delay_m = list()
-        approximate_antenna_position_m = list()
-
-        for obs_code in code_phase_columns:
-            if not np.isnan(row[obs_code]):
-                observation_code.append(obs_code[1:])
-                if constellation == "R":
-                    # recover slot number from PRN and obs_header
-                    slot_number = glonass_slot_dict[int(prn)]
-                    carrier_frequency_hz = constants.carrier_frequencies_hz()["R"][
-                        "L" + obs_code[1]
-                    ][slot_number]
-                else:
-                    carrier_frequency_hz = constants.carrier_frequencies_hz()[
-                        constellation
-                    ]["L" + obs_code[1]]
-
-                code_observation_m.append(row["C" + observation_code[-1]])
-                doppler_observation_hz.append(row["D" + observation_code[-1]])
-                carrier_observation_m.append(
-                    row["L" + observation_code[-1]]
-                    * constants.cGpsIcdSpeedOfLight_mps
-                    / carrier_frequency_hz
-                )
-                # sometimes, lli is not present in georinex output. Add a NaN in this case.
-                try:
-                    lli.append(row["L" + observation_code[-1] + "lli"])
-                except:
-                    lli.append(np.nan)
-                cn0_dbhz.append(row["S" + observation_code[-1]])
-                satellite_position_m.append(row["satellite_position_m"])
-                satellite_velocity_mps.append(row["satellite_velocity_mps"])
-                satellite_clock_bias_m.append(row["satellite_clock_bias_m"])
-                satellite_clock_bias_drift_mps.append(
-                    row["satellite_clock_bias_drift_mps"]
-                )
-                sagnac_effect_m.append(row["sagnac_effect_m"])
-                relativistic_clock_effect_m.append(row["relativistic_clock_effect_m"])
-                group_delay_m.append(
-                    eph.compute_total_group_delay_rnx3(
-                        ephemerides,
-                        helpers.timestamp_2_timedelta(
-                            row["time_of_emission_in_satellite_time"],
-                            eph.constellation_2_system_time_scale[constellation],
-                        ),
-                        row["satellite"],
-                        obs_code,
-                    )
-                )
-                (
-                    elevation_sat_rad,
-                    azimuth_sat_rad,
-                ) = eph.compute_satellite_elevation_and_azimuth(
-                    row["satellite_position_m"], receiver_ecef_position_m
-                )
-                [lat_user_rad, lon_user_rad, __] = eph.ecef_2_geodetic(
-                    receiver_ecef_position_m
-                )
-                __, tow_s = helpers.timedelta_2_weeks_and_seconds(
-                    helpers.timestamp_2_timedelta(
-                        row["time_of_emission_in_satellite_time"],
-                        eph.constellation_2_system_time_scale[constellation],
-                    )
-                )
-                iono_delay_m.append(
-                    atmo.compute_klobuchar_l1_correction(
-                        tow_s,
-                        nav_header["IONOSPHERIC CORR"]["GPSA"],
-                        nav_header["IONOSPHERIC CORR"]["GPSB"],
-                        elevation_sat_rad,
-                        azimuth_sat_rad,
-                        lat_user_rad,
-                        lon_user_rad,
-                    )
-                    * constants.carrier_frequencies_hz()["G"]["L1"] ** 2
-                    / carrier_frequency_hz**2
-                )
-                tropo_delay_m.append(row["tropo_delay_m"])
-                approximate_antenna_position_m.append(receiver_ecef_position_m)
-        per_obs = pd.DataFrame(
-            data={
-                "time_of_reception_in_receiver_time": time_of_reception_in_receiver_time,
-                "constellation": constellation,
-                "prn": prn,
-                "observation_code": observation_code,
-                "code_observation_m": code_observation_m,
-                "doppler_observation_hz": doppler_observation_hz,
-                "carrier_observation_m": carrier_observation_m,
-                "lli": lli,
-                "cn0_dbhz": cn0_dbhz,
-                "satellite_position_m": satellite_position_m,
-                "satellite_velocity_mps": satellite_velocity_mps,
-                "satellite_clock_bias_m": satellite_clock_bias_m,
-                "satellite_clock_bias_drift_mps": satellite_clock_bias_drift_mps,
-                "sagnac_effect_m": sagnac_effect_m,
-                "relativistic_clock_effect_m": relativistic_clock_effect_m,
-                "group_delay_m": group_delay_m,
-                "iono_delay_m": iono_delay_m,
-                "tropo_delay_m": tropo_delay_m,
-                "approximate_antenna_position_m": approximate_antenna_position_m,
-            }
-        )
-        return per_obs
-
-    nav_header = georinex.rinexheader(rinex_3_ephemerides_file)
-    per_epoch_per_sat_per_obs = pd.DataFrame()
-    for index in range(per_sat.shape[0]):
-        per_epoch_per_sat_per_obs = pd.concat(
-            [
-                per_epoch_per_sat_per_obs,
-                convert_to_per_obs(
-                    per_sat.iloc[index],
-                    ephemerides,
-                    code_phase_columns,
-                    receiver_ecef_position_m,
-                    nav_header,
-                    glonass_slot_dict,
-                ),
-            ],
-            ignore_index=True,
-        )
-
-    return per_epoch_per_sat_per_obs
+    return flat_obs
 
 
 def process(observation_file_path: Path, output_format="jsonseq"):

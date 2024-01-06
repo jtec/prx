@@ -37,7 +37,7 @@ def parse_rinex_nav_file(rinex_file: Path):
         return df
 
     t0 = pd.Timestamp.now()
-    file_content_hash = helpers.md5_of_file_content(rinex_file)
+    file_content_hash = helpers.hash_of_file_content(rinex_file)
     hash_time = pd.Timestamp.now() - t0
     if hash_time > pd.Timedelta(seconds=1):
         log.info(

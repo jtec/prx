@@ -11,6 +11,7 @@ import subprocess
 import math
 import joblib
 import georinex
+import imohash
 
 
 memory = joblib.Memory(Path(__file__).parent.joinpath("afterburner"), verbose=0)
@@ -33,21 +34,20 @@ def prx_repository_root() -> Path:
     return Path(__file__).parents[2]
 
 
-# From https://stackoverflow.com/a/3431838
-def md5_of_file_content(file: Path):
+def hash_of_file_content(file: Path, use_sampling: bool = False):
     assert file.exists(), f"Looks like {file} does not exist."
+    sample_threshhold = imohash.imohash.SAMPLE_THRESHOLD
+    if not use_sampling:
+        sample_threshhold = math.inf
     t0 = pd.Timestamp.now()
-    hash_md5 = hashlib.md5()
-    with open(file, "rb") as f:
-        for chunk in iter(lambda: f.read(4096), b""):
-            hash_md5.update(chunk)
-    hash_string = hash_md5.hexdigest()
+    hash_string = imohash.hashfile(file, hexdigest=True, sample_threshhold=sample_threshhold)
     hash_time = pd.Timestamp.now() - t0
     if hash_time > pd.Timedelta(seconds=1):
         log.info(
             f"Hashing file content took {hash_time}, we might want want to think about partially hashing the"
             f" file, e.g. using https://github.com/kalafut/py-imohash"
         )
+
     return hash_string
 
 
@@ -312,7 +312,7 @@ def parse_rinex_obs_file(rinex_file: Path):
         return parsed
 
     t0 = pd.Timestamp.now()
-    file_content_hash = md5_of_file_content(rinex_file)
+    file_content_hash = hash_of_file_content(rinex_file)
     hash_time = pd.Timestamp.now() - t0
     if hash_time > pd.Timedelta(seconds=1):
         log.info(
