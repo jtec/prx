@@ -14,7 +14,7 @@ import georinex
 import imohash
 
 
-memory = joblib.Memory(Path(__file__).parent.joinpath("afterburner"), verbose=0)
+memory = joblib.Memory(Path(__file__).parent.joinpath("diskcache"), verbose=0)
 
 
 logging.basicConfig(

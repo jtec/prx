@@ -12,7 +12,7 @@ from prx import aux_file_discovery as aux
 from prx import constants, helpers, converters
 from prx.rinex_nav import evaluate as rinex_evaluate
 
-memory = joblib.Memory(Path(__file__).parent.joinpath("afterburner"), verbose=0)
+memory = joblib.Memory(Path(__file__).parent.joinpath("diskcache"), verbose=0)
 
 log = helpers.get_logger(__name__)
 
