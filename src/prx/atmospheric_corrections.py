@@ -1,7 +1,7 @@
 import numpy as np
 
 from prx.helpers import deg_2_rad
-from prx import constants
+import prx.constants as constants
 
 
 def compute_klobuchar_l1_correction(
