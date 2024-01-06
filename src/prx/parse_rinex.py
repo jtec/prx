@@ -9,7 +9,7 @@ import helpers
 
 log = helpers.get_logger(__name__)
 
-memory = joblib.Memory(Path(__file__).parent.joinpath("afterburner"), verbose=0)
+memory = joblib.Memory(Path(__file__).parent.joinpath("diskcache"), verbose=0)
 
 
 # Can speed up RINEX parsing by using parsing results previously obtained and saved to disk.

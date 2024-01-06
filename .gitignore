@@ -10,10 +10,9 @@ __pycache__
 /datasets/TLSE_2022001/TLSE00FRA_R_20220010000_01D_30S_MO.rnx
 /datasets/TLSE_2022001/TLSE00FRA_R_20220010000_01D_30S_GO.rnx
 /bin/act
-*/afterburner/*
+**/diskcache/**
 *.DS_Store
 *.png
 *.pkl
-**/diskcache/**
-**/tmp_test*/**
+**/tmp_test*/*
 
