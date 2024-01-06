@@ -48,7 +48,9 @@ def input_for_test():
 def test_prx_command_line_call_with_csv_output(input_for_test):
     test_file = input_for_test
     prx_path = helpers.prx_repository_root() / "src/prx/prx.py"
-    command = f"python {prx_path} --observation_file_path {test_file} --output_format csv"
+    command = (
+        f"python {prx_path} --observation_file_path {test_file} --output_format csv"
+    )
     result = subprocess.run(
         command, capture_output=True, shell=True, cwd=str(test_file.parent)
     )
@@ -66,5 +68,5 @@ def test_prx_function_call_with_csv_output(input_for_test):
         str(test_file).replace("crx.gz", constants.cPrxCsvFileExtension)
     )
     assert expected_prx_file.exists()
-    file_content = pd.read_csv(expected_prx_file, comment='#')
+    file_content = pd.read_csv(expected_prx_file, comment="#")
     assert not file_content.empty

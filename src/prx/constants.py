@@ -16,9 +16,11 @@ cNanoSecondsPerWeek = cSecondsPerWeek * cNanoSecondsPerSecond
 cMetersPerKilometer = 1e3
 cHzPerMhz = 1e6
 # WGS84 Geoid constants
-cWgs84EarthFlatteningFactor = 1/298.257223563
+cWgs84EarthFlatteningFactor = 1 / 298.257223563
 cWgs84EarthSemiMajorAxis_m = 6378137.0
-cWgs84EarthEccentricity = np.sqrt(2 * cWgs84EarthFlatteningFactor - cWgs84EarthFlatteningFactor**2 )
+cWgs84EarthEccentricity = np.sqrt(
+    2 * cWgs84EarthFlatteningFactor - cWgs84EarthFlatteningFactor**2
+)
 # GPS ICD constants
 cGpsPi = 3.1415926535898
 cGpsSpeedOfLight_mps = 2.99792458 * 1e8
