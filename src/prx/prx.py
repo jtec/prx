@@ -88,15 +88,25 @@ def write_csv_file(
     # Doppler observation, and auxiliary information such as satellite position, velocity, clock offset, etc.
     # write records
     # Start with code observations, as they have TGDs, and merge in other observation types one by one
-    flat_records['frequency_id'] = flat_records.observation_type.str[1]
+    flat_records['tracking_id'] = flat_records.observation_type.str[1:3]
     records = flat_records.loc[flat_records.observation_type.str.startswith("C")]
+    records[f"C_obs"] = records.observation_value
+    records = records.drop(columns=['observation_value', 'observation_type'])
+    type_2_unit = {'D': 'mps', 'L': 'm', 'S': 'dBHz', 'C': 'm'}
     for obs_type in ['D', 'L', 'S']:
-        obs = flat_records.loc[flat_records.observation_type.str.startswith(obs_type)][['satellite', 'time_of_reception_in_receiver_time', 'observation_type', 'observation_value', 'frequency_id']]
-        obs[f"{obs_type}_obs"] = obs.observation_value
-        obs = obs.drop(columns=['observation_value', 'observation_type'])
-        records = records.merge(obs, on=['satellite', 'time_of_reception_in_receiver_time', 'frequency_id'], how='left')
-
-    prx_records.to_csv(
+        obs = flat_records.loc[flat_records.observation_type.str.startswith(obs_type)][['satellite', 'time_of_reception_in_receiver_time', 'observation_value', 'tracking_id']]
+        obs[f"{obs_type}_obs_{type_2_unit[obs_type]}"] = obs.observation_value
+        obs = obs.drop(columns=['observation_value',])
+        records = records.merge(obs, on=['satellite', 'time_of_reception_in_receiver_time', 'tracking_id'], how='left')
+    records['constellation'] = records.satellite.str[0]
+    records['prn'] = records.satellite.str[1:]
+    records = records.rename(columns={'tracking_id': 'observation_code'})
+    records = records.drop(columns=['satellite',
+                                    'time_of_emission_in_satellite_time',
+                                    'time_of_emission_isagpst',
+                                    'time_of_emission_weeksecond_system_time',])
+    records = records.sort_values(by=['time_of_reception_in_receiver_time', 'constellation', 'prn', 'observation_code'])
+    records.to_csv(
         path_or_buf=output_file,
         index=False,
         mode="a",
@@ -107,10 +117,9 @@ def write_csv_file(
 def build_header(input_files):
     prx_header = {}
     prx_header["input_files"] = [
-        {"name": file.name, "md5": helpers.hash_of_file_content(file)}
+        {"name": file.name, "hash": helpers.hash_of_file_content(file, use_sampling=False)}
         for file in input_files
     ]
-    prx_header["carrier_frequencies_hz"] = constants.carrier_frequencies_hz()
     prx_header["prx_git_commit_id"] = git.Repo(
         search_parent_directories=True
     ).head.object.hexsha
@@ -119,7 +128,6 @@ def build_header(input_files):
 
 def check_assumptions(rinex_3_obs_file, rinex_3_nav_file):
     obs_header = georinex.rinexheader(rinex_3_obs_file)
-    nav_header = georinex.rinexheader(rinex_3_nav_file)
     if "RCV CLOCK OFFS APPL" in obs_header.keys():
         assert (
             obs_header["RCV CLOCK OFFS APPL"].strip() == "0"
@@ -291,15 +299,25 @@ def _build_records_cached(
     flat_obs.loc[flat_obs.satellite.str[0] != 'R', 'carrier_frequency_hz'] = flat_obs.apply(
         lambda row: constants.carrier_frequencies_hz()[row.satellite[0]]["L" + row.observation_type[1]], axis=1)
     nav_header = georinex.rinexheader(rinex_3_ephemerides_file)
-    flat_obs.loc[flat_obs.satellite.str[0] == 'G', 'iono_delay_klobuchar_m'] = atmo.compute_klobuchar_l1_correction(
-            flat_obs[flat_obs.satellite.str[0] == 'G'].time_of_emission_weeksecond_system_time.to_numpy(),
+    flat_obs.loc[flat_obs.observation_type.str.startswith('C'), 'code_iono_delay_klobuchar_m'] = - atmo.compute_klobuchar_l1_correction(
+            flat_obs[flat_obs.observation_type.str.startswith('C')].time_of_emission_weeksecond_system_time.to_numpy(),
             nav_header["IONOSPHERIC CORR"]["GPSA"],
             nav_header["IONOSPHERIC CORR"]["GPSB"],
-            flat_obs[flat_obs.satellite.str[0] == 'G'].elevation_rad,
-            flat_obs[flat_obs.satellite.str[0] == 'G'].azimuth_rad,
+            flat_obs[flat_obs.observation_type.str.startswith('C')].elevation_rad,
+            flat_obs[flat_obs.observation_type.str.startswith('C')].azimuth_rad,
             latitude_user_rad,
             longitude_user_rad,
-        ) * (constants.carrier_frequencies_hz()["G"]["L1"] ** 2 / flat_obs[flat_obs.satellite.str[0] == 'G'].carrier_frequency_hz**2)
+        ) * (constants.carrier_frequencies_hz()["G"]["L1"] ** 2 / flat_obs[flat_obs.observation_type.str.startswith('C')].carrier_frequency_hz**2)
+    flat_obs.loc[flat_obs.observation_type.str.startswith('L'), 'carrier_iono_delay_klobuchar_m'] = atmo.compute_klobuchar_l1_correction(
+        flat_obs[flat_obs.observation_type.str.startswith('L')].time_of_emission_weeksecond_system_time.to_numpy(),
+        nav_header["IONOSPHERIC CORR"]["GPSA"],
+        nav_header["IONOSPHERIC CORR"]["GPSB"],
+        flat_obs[flat_obs.observation_type.str.startswith('L')].elevation_rad,
+        flat_obs[flat_obs.observation_type.str.startswith('L')].azimuth_rad,
+        latitude_user_rad,
+        longitude_user_rad,
+    ) * (constants.carrier_frequencies_hz()["G"]["L1"] ** 2 / flat_obs[
+        flat_obs.observation_type.str.startswith('L')].carrier_frequency_hz ** 2)
 
     return flat_obs
 

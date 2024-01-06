@@ -45,35 +45,18 @@ def input_for_test():
     # shutil.rmtree(test_file.parent)
 
 
-def test_prx_command_line_call_with_jsonseq_output(input_for_test):
+def test_prx_command_line_call_with_csv_output(input_for_test):
     test_file = input_for_test
-    prx_path = helpers.prx_package_root().joinpath("minimumLovablePrototype").joinpath("prx.py")
-    command = f"python {prx_path} --observation_file_path {test_file}"
+    prx_path = helpers.prx_repository_root() / "src/prx/prx.py"
+    command = f"python {prx_path} --observation_file_path {test_file} --output_format csv"
     result = subprocess.run(
         command, capture_output=True, shell=True, cwd=str(test_file.parent)
     )
     expected_prx_file = Path(
-        str(test_file).replace("crx.gz", constants.cPrxJsonTextSequenceFileExtension)
+        str(test_file).replace("crx.gz", constants.cPrxCsvFileExtension)
     )
     assert result.returncode == 0
     assert expected_prx_file.exists()
-
-
-def test_prx_function_call_with_jsonseq_output(input_for_test):
-    test_file = input_for_test
-    prx.process(observation_file_path=test_file, output_format="jsonseq")
-    expected_prx_file = Path(
-        str(test_file).replace("crx.gz", constants.cPrxJsonTextSequenceFileExtension)
-    )
-    assert expected_prx_file.exists()
-    prx_content = {"records": []}
-    with open(expected_prx_file, "r") as f:
-        for line in f:
-            if not "header" in prx_content.keys():
-                prx_content["header"] = json.loads(line[1:])
-                continue
-            prx_content["records"].append(json.loads(line[1:]))
-    assert len(prx_content) == 1
 
 
 def test_prx_function_call_with_csv_output(input_for_test):
@@ -83,5 +66,5 @@ def test_prx_function_call_with_csv_output(input_for_test):
         str(test_file).replace("crx.gz", constants.cPrxCsvFileExtension)
     )
     assert expected_prx_file.exists()
-    file_content = pd.read_csv(expected_prx_file)
-    pass
+    file_content = pd.read_csv(expected_prx_file, comment='#')
+    assert not file_content.empty
