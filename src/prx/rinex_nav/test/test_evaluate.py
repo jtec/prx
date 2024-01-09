@@ -68,28 +68,68 @@ def generate_sat_query(sat_state_query_time_isagpst):
         [
             # Multiple satellites with ephemerides provided as Kepler orbits
             # Two Beidou GEO (from http://www.csno-tarc.cn/en/system/constellation)
-            {"sv": "C03", 'signal': 'C2I', "query_time_isagpst": sat_state_query_time_isagpst},
-            {"sv": "C05", 'signal': 'C2I', "query_time_isagpst": sat_state_query_time_isagpst},
+            {
+                "sv": "C03",
+                "signal": "C2I",
+                "query_time_isagpst": sat_state_query_time_isagpst,
+            },
+            {
+                "sv": "C05",
+                "signal": "C2I",
+                "query_time_isagpst": sat_state_query_time_isagpst,
+            },
             # One Beidou IGSO
-            {"sv": "C38", 'signal': 'C2I', "query_time_isagpst": sat_state_query_time_isagpst},
+            {
+                "sv": "C38",
+                "signal": "C2I",
+                "query_time_isagpst": sat_state_query_time_isagpst,
+            },
             # One Beidou MEO
-            {"sv": "C30", 'signal': 'C2I', "query_time_isagpst": sat_state_query_time_isagpst},
+            {
+                "sv": "C30",
+                "signal": "C2I",
+                "query_time_isagpst": sat_state_query_time_isagpst,
+            },
             # Two GPS
-            {"sv": "G15", 'signal': 'C1C', "query_time_isagpst": sat_state_query_time_isagpst},
-            {"sv": "G12", 'signal': 'C1C', "query_time_isagpst": sat_state_query_time_isagpst},
+            {
+                "sv": "G15",
+                "signal": "C1C",
+                "query_time_isagpst": sat_state_query_time_isagpst,
+            },
+            {
+                "sv": "G12",
+                "signal": "C1C",
+                "query_time_isagpst": sat_state_query_time_isagpst,
+            },
             # Query one GPS satellite at two different times to cover that case
             {
                 "sv": "G15",
-                'signal': 'C1C',
+                "signal": "C1C",
                 "query_time_isagpst": sat_state_query_time_isagpst
                 + pd.Timedelta(seconds=1),
             },
             # Two Galileo
-            {"sv": "E24", 'signal': 'C1C', "query_time_isagpst": sat_state_query_time_isagpst},
-            {"sv": "E30", 'signal': 'C1C', "query_time_isagpst": sat_state_query_time_isagpst},
+            {
+                "sv": "E24",
+                "signal": "C1C",
+                "query_time_isagpst": sat_state_query_time_isagpst,
+            },
+            {
+                "sv": "E30",
+                "signal": "C1C",
+                "query_time_isagpst": sat_state_query_time_isagpst,
+            },
             # Two QZSS
-            {"sv": "J02", 'signal': 'C1C', "query_time_isagpst": sat_state_query_time_isagpst},
-            {"sv": "J03", 'signal': 'C1C', "query_time_isagpst": sat_state_query_time_isagpst},
+            {
+                "sv": "J02",
+                "signal": "C1C",
+                "query_time_isagpst": sat_state_query_time_isagpst,
+            },
+            {
+                "sv": "J03",
+                "signal": "C1C",
+                "query_time_isagpst": sat_state_query_time_isagpst,
+            },
             # Multiple satellites with orbits that require propagation of an initial state
             # Two GLONASS satellites
             # {"sv": "R04", 'signal': 'C1C', "query_time_isagpst": sat_state_query_time_isagpst},
@@ -115,7 +155,9 @@ def test_compare_to_sp3(input_for_test):
         .drop(columns=["index", "signal", "group_delay_m"])
     )
 
-    sp3_sat_states = sp3_evaluate.compute(input_for_test["sp3_file"], query.copy().drop(columns=['signal']))
+    sp3_sat_states = sp3_evaluate.compute(
+        input_for_test["sp3_file"], query.copy().drop(columns=["signal"])
+    )
     sp3_sat_states = (
         sp3_sat_states.sort_values(by=["sv", "query_time_isagpst"])
         .sort_index(axis=1)
