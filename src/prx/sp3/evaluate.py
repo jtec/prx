@@ -147,7 +147,7 @@ def compute(sp3_file_path, query):
         return pd.concat((row.drop("sv"), sat_pv.squeeze()))
 
     query = query.apply(interpolate_sat_states, axis=1).reset_index()
-    return query.drop(columns=["gpst_s", "index"])
+    return query.drop(columns=["gpst_s", "index", "t0"])
 
 
 if __name__ == "main":

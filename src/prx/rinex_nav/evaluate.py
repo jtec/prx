@@ -1,15 +1,14 @@
-import json
 import math
 import pandas as pd
 import numpy as np
 from functools import lru_cache
-import georinex
 from pathlib import Path
 import joblib
 import scipy
-
+import georinex
 from prx import helpers
 from prx import constants
+
 
 memory = joblib.Memory(Path(__file__).parent.joinpath("diskcache"), verbose=0)
 log = helpers.get_logger(__name__)
@@ -22,15 +21,17 @@ consts = {
 
 
 def parse_rinex_nav_file(rinex_file: Path):
+
     @lru_cache
     @memory.cache
     def cached_parse(rinex_file: Path, file_hash: str):
         log.info(f"Parsing {rinex_file} ...")
+        helpers.repair_with_gfzrnx(rinex_file)
         ds = georinex.load(rinex_file)
         return ds
 
     @lru_cache
-    # @memory.cache
+    @memory.cache
     def cached_load(rinex_file: Path, file_hash: str):
         ds = cached_parse(rinex_file, file_hash)
         df = convert_nav_dataset_to_dataframe(ds)
@@ -335,8 +336,8 @@ def convert_nav_dataset_to_dataframe(nav_ds):
     """convert ephemerides from xarray.Dataset to pandas.DataFrame"""
     df = nav_ds.to_dataframe()
     # Drop ephemerides for which all parameters are NaN, as we cannot compute anything from those
-    df.dropna(how="all", inplace=True)
-    df.reset_index(inplace=True)
+    df = df.dropna(how="all")
+    df = df.reset_index()
     df["source"] = nav_ds.filename
     # georinex adds suffixes to satellite IDs if it sees multiple ephemerides (e.g. F/NAV, I/NAV) for the same
     # satellite and the same timestamp.
@@ -470,8 +471,6 @@ def to_isagpst(time, timescale):
 
 
 def select_ephemerides(df, query):
-    # Keep only ephemerides of the satellites of interest
-    # df = df[df["sv"].isin(query['satellite'])]
 
     def find_ephemeris_index(row, df):
         # For each query, find the ephemeris whose time of reference is closest, but before the query time
