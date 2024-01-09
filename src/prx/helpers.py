@@ -266,6 +266,8 @@ def compute_relativistic_clock_effect(sat_pos_m: np.array, sat_vel_mps: np.array
 
 def compute_satellite_elevation_and_azimuth(sat_pos_ecef, receiver_pos_ecef):
     """
+    sat_pos_ecef: np.array of shape (n, 3)
+    receiver_pos_ecef: np.array of shape (3,)
     Reference:
     GNSS Data Processing, Vol. I: Fundamentals and Algorithms. Equations (B.9),(B.13),(B.14)
     """
