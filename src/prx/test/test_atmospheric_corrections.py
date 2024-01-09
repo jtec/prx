@@ -1,14 +1,11 @@
 import numpy as np
-import pandas as pd
 
-import atmospheric_corrections as atmo
+from prx import atmospheric_corrections as atmo
 from pathlib import Path
 import shutil
 import pytest
-import helpers
-import converters
 import os
-import parse_rinex
+from prx import helpers, converters, parse_rinex
 
 
 @pytest.fixture
@@ -22,9 +19,7 @@ def rnx3_input_for_test():
 
     rnx3_nav_test_file = test_directory.joinpath("BRDC00IGS_R_20220010000_01D_MN.zip")
     shutil.copy(
-        helpers.prx_package_root().joinpath(
-            f"datasets/TLSE_2022001/{rnx3_nav_test_file.name}"
-        ),
+        helpers.prx_repository_root() / f"src/prx/test/datasets/TLSE_2022001/{rnx3_nav_test_file.name}",
         rnx3_nav_test_file,
     )
     assert rnx3_nav_test_file.exists()
@@ -46,7 +41,7 @@ def test_get_klobuchar_parameters_from_rinex3(rnx3_input_for_test):
     # Compute RNX3 satellite position
     # load RNX3 NAV file
     # nav_ds = eph.convert_rnx3_nav_file_to_dataset(path_to_rnx3_nav_file)
-    nav_ds = parse_rinex.load(path_to_rnx3_nav_file, use_caching=True)
+    nav_ds = parse_rinex.load(path_to_rnx3_nav_file)
 
     # recover klobuchar parameters
     gps_a = nav_ds.ionospheric_corr_GPS[0:4]
@@ -282,7 +277,7 @@ def test_unb3m_corrections():
     tol = 1e-3
 
     tropo_expected = np.genfromtxt(
-        helpers.prx_package_root().joinpath("tools/UNB3m_pack/tunb3m_.txt"),
+        helpers.prx_repository_root() / "tools/UNB3m_pack/tunb3m_.txt",
         skip_header=3,
     )
 

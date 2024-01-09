@@ -12,8 +12,7 @@ def test_rinex_header_time_string_2_timestamp_ns():
                 "  1980     1     6     0     0    0.0000000     GPS"
             ),
             "GPST",
-        ).delta
-        == 0
+        ) == pd.Timedelta(0)
     )
     assert (
         helpers.timestamp_2_timedelta(
@@ -21,23 +20,23 @@ def test_rinex_header_time_string_2_timestamp_ns():
                 "  1980     1     6     0     0    1.0000000     GPS"
             ),
             "GPST",
-        ).delta
-        == constants.cNanoSecondsPerSecond
+        )
+        == pd.Timedelta(constants.cNanoSecondsPerSecond, unit="ns")
     )
     timestamp = helpers.rinex_header_time_string_2_timestamp_ns(
         "  1980     1     6     0     0    1.0000001     GPS"
     )
     timedelta = helpers.timestamp_2_timedelta(timestamp, "GPST")
 
-    assert timedelta.delta == constants.cNanoSecondsPerSecond + 100
+    assert timedelta == pd.Timedelta(constants.cNanoSecondsPerSecond + 100, unit="ns")
     assert (
         helpers.timestamp_2_timedelta(
             helpers.rinex_header_time_string_2_timestamp_ns(
                 "  1980     1     7     0     0    0.0000000     GPS"
             ),
             "GPST",
-        ).delta
-        == constants.cSecondsPerDay * constants.cNanoSecondsPerSecond
+        )
+        == pd.Timedelta(constants.cSecondsPerDay * constants.cNanoSecondsPerSecond, unit="ns")
     )
 
 
@@ -106,7 +105,7 @@ def test_ecef_to_geodetic():
 def test_satellite_elevation_and_azimuth():
     tolerance = np.deg2rad(1e-3)
 
-    sat_pos_ecef = np.array([26600e3, 0.0, 0.0])
+    sat_pos_ecef = np.array([[26600e3, 0.0, 0.0]])
     rx_pos_ecef = np.array([6400e3, 0.0, 0.0])
     expected_el, expected_az = np.deg2rad(90), np.deg2rad(0)
     computed_el, computed_az = helpers.compute_satellite_elevation_and_azimuth(
@@ -115,7 +114,7 @@ def test_satellite_elevation_and_azimuth():
     assert np.abs(expected_el - computed_el) < tolerance
     assert np.abs(expected_az - computed_az) < tolerance
 
-    sat_pos_ecef = np.array([2.066169397996826e07, 0.0, 1.428355697996826e07])
+    sat_pos_ecef = np.array([[2.066169397996826e07, 0.0, 1.428355697996826e07]])
     rx_pos_ecef = np.array([6378137.0, 0.0, 0.0])
     expected_el, expected_az = np.deg2rad(45), np.deg2rad(0)
     computed_el, computed_az = helpers.compute_satellite_elevation_and_azimuth(
@@ -125,7 +124,7 @@ def test_satellite_elevation_and_azimuth():
     assert np.abs(expected_az - computed_az) < tolerance
 
     sat_pos_ecef = np.array(
-        [2.066169397996826e07, 7.141778489984130e06, 1.236992320105505e07]
+       [ [2.066169397996826e07, 7.141778489984130e06, 1.236992320105505e07]]
     )
     rx_pos_ecef = np.array([6378137.0, 0.0, 0.0])
     expected_el, expected_az = np.deg2rad(45), np.deg2rad(30)
@@ -138,11 +137,10 @@ def test_satellite_elevation_and_azimuth():
 
 def test_sagnac_effect():
     # load validation data
-    path_to_validation_file = helpers.prx_package_root().joinpath(
-        f"tools/validation_data/sagnac_effect.csv"
-    )
-    # read satellite position in header line 2
-    sat_pos = np.array((28400000, 0, 0))
+    path_to_validation_file = helpers.prx_repository_root() / f"tools/validation_data/sagnac_effect.csv"
+
+    # satellite position (from reference CSV header)
+    sat_pos = np.array([[28400000, 0, 0]])
 
     # read data
     data = np.loadtxt(
