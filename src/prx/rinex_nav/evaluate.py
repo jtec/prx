@@ -21,7 +21,6 @@ consts = {
 
 
 def parse_rinex_nav_file(rinex_file: Path):
-
     @lru_cache
     @memory.cache
     def cached_parse(rinex_file: Path, file_hash: str):
@@ -471,7 +470,6 @@ def to_isagpst(time, timescale):
 
 
 def select_ephemerides(df, query):
-
     def find_ephemeris_index(row, df):
         # For each query, find the ephemeris whose time of reference is closest, but before the query time
         query_time_wrt_ephemeris_reference_time = (
