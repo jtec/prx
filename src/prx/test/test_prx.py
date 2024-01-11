@@ -1,15 +1,13 @@
-import json
 import os
 from pathlib import Path
 import shutil
 import subprocess
-
 import pandas as pd
 import pytest
 
 from prx import helpers
 from prx import constants
-from prx import prx
+from prx import main
 
 
 # This function sets up a temporary directory, copies a rinex observations file into that directory
@@ -47,7 +45,7 @@ def input_for_test():
 
 def test_prx_command_line_call_with_csv_output(input_for_test):
     test_file = input_for_test
-    prx_path = helpers.prx_repository_root() / "src/prx/prx.py"
+    prx_path = helpers.prx_repository_root() / "src/prx/main.py"
     command = (
         f"python {prx_path} --observation_file_path {test_file} --output_format csv"
     )
@@ -63,7 +61,7 @@ def test_prx_command_line_call_with_csv_output(input_for_test):
 
 def test_prx_function_call_with_csv_output(input_for_test):
     test_file = input_for_test
-    prx.process(observation_file_path=test_file, output_format="csv")
+    main.process(observation_file_path=test_file, output_format="csv")
     expected_prx_file = Path(
         str(test_file).replace("crx.gz", constants.cPrxCsvFileExtension)
     )
