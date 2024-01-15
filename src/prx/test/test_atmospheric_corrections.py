@@ -19,7 +19,8 @@ def rnx3_input_for_test():
 
     rnx3_nav_test_file = test_directory.joinpath("BRDC00IGS_R_20220010000_01D_MN.zip")
     shutil.copy(
-        helpers.prx_repository_root() / f"src/prx/test/datasets/TLSE_2022001/{rnx3_nav_test_file.name}",
+        helpers.prx_repository_root()
+        / f"src/prx/test/datasets/TLSE_2022001/{rnx3_nav_test_file.name}",
         rnx3_nav_test_file,
     )
     assert rnx3_nav_test_file.exists()

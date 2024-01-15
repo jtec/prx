@@ -46,9 +46,15 @@ def input_for_test():
 def test_at_sample(input_for_test):
     sp3_file = input_for_test["test_file"]
     # Compute satellite states directly at a sample
-    query = pd.DataFrame([
-        {'query_time_isagpst': pd.Timestamp("2021-12-31T00:20:00.00000000") - constants.cGpstUtcEpoch,
-    'sv': 'G01'}])
+    query = pd.DataFrame(
+        [
+            {
+                "query_time_isagpst": pd.Timestamp("2021-12-31T00:20:00.00000000")
+                - constants.cGpstUtcEpoch,
+                "sv": "G01",
+            }
+        ]
+    )
     sat_states = compute(sp3_file, query)
     # We then expect the satellite state to be close to the sample
     # PG01  13744.907145 -20823.122313   8309.113118    469.979467
@@ -60,7 +66,12 @@ def test_at_sample(input_for_test):
     )
     assert np.allclose(
         sat_states[sat_states["sv"] == "G01"][["clock_m"]].to_numpy(),
-        np.array([(469.979467 / constants.cMicrosecondsPerSecond)*constants.cGpsSpeedOfLight_mps]),
+        np.array(
+            [
+                (469.979467 / constants.cMicrosecondsPerSecond)
+                * constants.cGpsSpeedOfLight_mps
+            ]
+        ),
         rtol=1e-5,
         atol=1e-3 / constants.cGpsSpeedOfLight_mps,
     )
@@ -69,9 +80,15 @@ def test_at_sample(input_for_test):
 def test_between_samples(input_for_test):
     sp3_file = input_for_test["test_file_one_sample_removed"]
     # Compute satellite states at a sample time that has been manually removed from the file
-    query = pd.DataFrame([
-        {'query_time_isagpst': pd.Timestamp("2021-12-31T00:30:00.00000000") - constants.cGpstUtcEpoch,
-    'sv': 'G01'}])
+    query = pd.DataFrame(
+        [
+            {
+                "query_time_isagpst": pd.Timestamp("2021-12-31T00:30:00.00000000")
+                - constants.cGpstUtcEpoch,
+                "sv": "G01",
+            }
+        ]
+    )
     sat_states = compute(sp3_file, query)
     # We then expect the interpolated satellite state to be close to the removed sample
     # PG01  13624.009028 -20092.399598  10082.111937    469.973744
@@ -82,7 +99,12 @@ def test_between_samples(input_for_test):
     )
     assert np.allclose(
         sat_states[sat_states["sv"] == "G01"][["clock_m"]].to_numpy(),
-        np.array([constants.cGpsSpeedOfLight_mps * (469.973744 / constants.cMicrosecondsPerSecond)]),
+        np.array(
+            [
+                constants.cGpsSpeedOfLight_mps
+                * (469.973744 / constants.cMicrosecondsPerSecond)
+            ]
+        ),
         rtol=1e-5,
         atol=1e-3 / constants.cGpsSpeedOfLight_mps,
     )

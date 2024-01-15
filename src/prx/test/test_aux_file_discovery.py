@@ -19,14 +19,13 @@ def set_up_test():
     test_nav_file = test_directory.joinpath("BRDC00IGS_R_20230010000_01D_MN.rnx.zip")
 
     shutil.copy(
-        helpers.prx_repository_root() /
-            f"src/prx/test/datasets/TLSE_2023001/{test_obs_file.name}"
-        ,
+        helpers.prx_repository_root()
+        / f"src/prx/test/datasets/TLSE_2023001/{test_obs_file.name}",
         test_obs_file,
     )
     shutil.copy(
-        helpers.prx_repository_root() /
-            f"src/prx/test/datasets/TLSE_2023001/{test_nav_file.name}",
+        helpers.prx_repository_root()
+        / f"src/prx/test/datasets/TLSE_2023001/{test_nav_file.name}",
         test_nav_file,
     )
 
@@ -50,7 +49,9 @@ def test_download_remote_ephemeris_files(set_up_test):
 
 def test_command_line_call(set_up_test):
     test_file = set_up_test["test_obs_file"]
-    aux_file_script_path = helpers.prx_repository_root() / "src/prx/aux_file_discovery.py"
+    aux_file_script_path = (
+        helpers.prx_repository_root() / "src/prx/aux_file_discovery.py"
+    )
 
     command = f"python {aux_file_script_path} --observation_file_path {test_file}"
     result = subprocess.run(
