@@ -6,37 +6,31 @@ import pandas as pd
 
 
 def test_rinex_header_time_string_2_timestamp_ns():
-    assert (
-        helpers.timestamp_2_timedelta(
-            helpers.rinex_header_time_string_2_timestamp_ns(
-                "  1980     1     6     0     0    0.0000000     GPS"
-            ),
-            "GPST",
-        ) == pd.Timedelta(0)
-    )
-    assert (
-        helpers.timestamp_2_timedelta(
-            helpers.rinex_header_time_string_2_timestamp_ns(
-                "  1980     1     6     0     0    1.0000000     GPS"
-            ),
-            "GPST",
-        )
-        == pd.Timedelta(constants.cNanoSecondsPerSecond, unit="ns")
-    )
+    assert helpers.timestamp_2_timedelta(
+        helpers.rinex_header_time_string_2_timestamp_ns(
+            "  1980     1     6     0     0    0.0000000     GPS"
+        ),
+        "GPST",
+    ) == pd.Timedelta(0)
+    assert helpers.timestamp_2_timedelta(
+        helpers.rinex_header_time_string_2_timestamp_ns(
+            "  1980     1     6     0     0    1.0000000     GPS"
+        ),
+        "GPST",
+    ) == pd.Timedelta(constants.cNanoSecondsPerSecond, unit="ns")
     timestamp = helpers.rinex_header_time_string_2_timestamp_ns(
         "  1980     1     6     0     0    1.0000001     GPS"
     )
     timedelta = helpers.timestamp_2_timedelta(timestamp, "GPST")
 
     assert timedelta == pd.Timedelta(constants.cNanoSecondsPerSecond + 100, unit="ns")
-    assert (
-        helpers.timestamp_2_timedelta(
-            helpers.rinex_header_time_string_2_timestamp_ns(
-                "  1980     1     7     0     0    0.0000000     GPS"
-            ),
-            "GPST",
-        )
-        == pd.Timedelta(constants.cSecondsPerDay * constants.cNanoSecondsPerSecond, unit="ns")
+    assert helpers.timestamp_2_timedelta(
+        helpers.rinex_header_time_string_2_timestamp_ns(
+            "  1980     1     7     0     0    0.0000000     GPS"
+        ),
+        "GPST",
+    ) == pd.Timedelta(
+        constants.cSecondsPerDay * constants.cNanoSecondsPerSecond, unit="ns"
     )
 
 
@@ -124,7 +118,7 @@ def test_satellite_elevation_and_azimuth():
     assert np.abs(expected_az - computed_az) < tolerance
 
     sat_pos_ecef = np.array(
-       [ [2.066169397996826e07, 7.141778489984130e06, 1.236992320105505e07]]
+        [[2.066169397996826e07, 7.141778489984130e06, 1.236992320105505e07]]
     )
     rx_pos_ecef = np.array([6378137.0, 0.0, 0.0])
     expected_el, expected_az = np.deg2rad(45), np.deg2rad(30)
@@ -137,7 +131,9 @@ def test_satellite_elevation_and_azimuth():
 
 def test_sagnac_effect():
     # load validation data
-    path_to_validation_file = helpers.prx_repository_root() / f"tools/validation_data/sagnac_effect.csv"
+    path_to_validation_file = (
+        helpers.prx_repository_root() / f"tools/validation_data/sagnac_effect.csv"
+    )
 
     # satellite position (from reference CSV header)
     sat_pos = np.array([[28400000, 0, 0]])

@@ -389,7 +389,7 @@ def _build_records_cached(
     nav_header = georinex.rinexheader(rinex_3_ephemerides_file)
     flat_obs.loc[
         flat_obs.observation_type.str.startswith("C"), "code_iono_delay_klobuchar_m"
-    ] = - atmo.compute_klobuchar_l1_correction(
+    ] = -atmo.compute_klobuchar_l1_correction(
         flat_obs[
             flat_obs.observation_type.str.startswith("C")
         ].time_of_emission_weeksecond_system_time.to_numpy(),
