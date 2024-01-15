@@ -90,7 +90,7 @@ def write_csv_file(
     # Start with code observations, as they have TGDs, and merge in other observation types one by one
     flat_records["tracking_id"] = flat_records.observation_type.str[1:3]
     records = flat_records.loc[flat_records.observation_type.str.startswith("C")]
-    records[f"C_obs"] = records.observation_value
+    records["C_obs"] = records.observation_value
     records = records.drop(columns=["observation_value", "observation_type"])
     type_2_unit = {"D": "mps", "L": "m", "S": "dBHz", "C": "m"}
     for obs_type in ["D", "L", "S"]:
