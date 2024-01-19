@@ -8,7 +8,7 @@ import git
 import joblib
 
 from prx import atmospheric_corrections as atmo
-from prx import aux_file_discovery as aux
+from prx.rinex_nav import nav_file_discovery
 from prx import constants, helpers, converters
 from prx.rinex_nav import evaluate as rinex_evaluate
 
@@ -180,7 +180,7 @@ def build_records(
     )
 
 
-@memory.cache
+#@memory.cache
 def _build_records_cached(
     rinex_3_obs_file,
     rinex_3_obs_file_hash,
@@ -232,8 +232,6 @@ def _build_records_cached(
         },
     )
 
-    # Compute time-of-emission in satellite time, i.e. including satellite system time offset, as
-    # we don't have satellite clock offset yet.
     log.info("Computing times of emission in satellite time")
     per_sat = flat_obs.pivot(
         index=["time_of_reception_in_receiver_time", "satellite"],
@@ -243,7 +241,17 @@ def _build_records_cached(
     # When calling georinex.load() with useindicators=True, there are additional ssi columns such as C1Cssi.
     # To exclude them, we check the length of the column name
     code_phase_columns = [c for c in per_sat.columns if c[0] == "C" and len(c) == 3]
-    # TODO Find better name for the following variable; it contains time-of-flight and receiver clock offset.
+    # TODO Find a more self-explanatory name for the following variable
+    #
+    #  The following term contains, for each satellite
+    #  - time-of-flight: around 70 ms for MEO orbits. This includes small
+    #  terms (up to tens of meters in units of distance, ten meters correspond to 34 nanoseconds)
+    #  such as satellite code bias and atmospheric delays
+    #  - receiver clock offset w.r.t. the satellite's constellation time (GPST, GST, BDT etc.)
+    #  - satellite clock offset w.r.t. its constellation time
+    # By subtracting it from the receiver time of reception, we get the time of emission in
+    # the satellite's constellation time frame, plus the satellite system time clock offset plus those small terms
+    # of a few tens of nanoseconds.
     tof_dtrx = pd.to_timedelta(
         per_sat[code_phase_columns]
         .mean(axis=1, skipna=True)
@@ -264,13 +272,10 @@ def _build_records_cached(
         )[1],
         axis=1,
     )
-    per_sat["time_of_emission_isagpst"] = per_sat.apply(
-        lambda row: rinex_evaluate.to_isagpst(
-            row.time_of_reception_in_receiver_time - constants.cGpstUtcEpoch,
-            row.time_scale,
-        ),
-        axis=1,
-    )
+    per_sat["time_of_emission_isagpst"] = rinex_evaluate.to_isagpst(
+            per_sat.time_of_reception_in_receiver_time - constants.cGpstUtcEpoch,
+            per_sat.time_scale,
+        )
 
     flat_obs = flat_obs.merge(
         per_sat[
@@ -433,7 +438,7 @@ def process(observation_file_path: Path, output_format="jsonseq"):
     )
     rinex_3_obs_file = converters.anything_to_rinex_3(observation_file_path)
     prx_file = str(rinex_3_obs_file).replace(".rnx", "")
-    aux_files = aux.discover_or_download_auxiliary_files(rinex_3_obs_file)
+    aux_files = nav_file_discovery.discover_or_download_auxiliary_files(rinex_3_obs_file)
     write_prx_file(
         build_header([rinex_3_obs_file, aux_files["broadcast_ephemerides"]]),
         build_records(rinex_3_obs_file, aux_files["broadcast_ephemerides"]),
