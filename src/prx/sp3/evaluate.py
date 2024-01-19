@@ -91,7 +91,7 @@ def plot_lagrange_interpolation(
     plt.show()
 
 
-def interpolate(df, query_time_gpst_s):
+def interpolate(df, query_time_gpst_s, plot_interpolation=False):
     n_samples_each_side = 4
     assert df["sv"].unique().size == 1, "This function expects one satellite at a time"
     closest_sample_index = np.argmin(np.abs(df["gpst_s"] - query_time_gpst_s))
@@ -116,13 +116,12 @@ def interpolate(df, query_time_gpst_s):
         interpolated[col] = (
             Polynomial(poly.coef[::-1])(query_time_gpst_s - times[0]) + samples[0]
         )
-        """
-        plot_lagrange_interpolation(poly,
-                                    times - times[0],
-                                    samples - samples[0],
-                                    query_time_gpst -times[0],
-                                    interpolated[col] - samples[0], f"{col} {df['sv'].unique()}")
-        """
+        if plot_interpolation:
+            plot_lagrange_interpolation(poly,
+                                        times - times[0],
+                                        samples - samples[0],
+                                        query_time_gpst_s -times[0],
+                                        interpolated[col] - samples[0], f"{col} {df['sv'].unique()}")
         first_derivative = Polynomial(poly.coef[::-1]).deriv(1)(
             query_time_gpst_s - times[0]
         )

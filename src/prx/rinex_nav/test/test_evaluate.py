@@ -3,14 +3,31 @@ import pandas as pd
 from pathlib import Path
 from prx.sp3 import evaluate as sp3_evaluate
 from prx.rinex_nav import evaluate as rinex_nav_evaluate
-from prx import converters
+from prx import constants, converters, helpers
 from prx import constants
 from prx.helpers import timestamp_2_timedelta, week_and_seconds_2_timedelta
 import shutil
 import pytest
 import os
 import itertools
+from dotmap import DotMap
 
+# The following thresholds are the achieved maximum difference between broadcast and
+# MGEX precise orbit and clock solutions seen in this test.
+# TODO It would be desirable to have an independent reference for expected broadcast values.
+# Reasons for differences between SP3 and RINEX:
+# - The regular broadcast ephemeris error
+# - Different Satellite Reference Points (Center of Mass, iono-free phase center etc.)
+# - Using integer-second-aligned GPST (i.e. system time integer-second aligned to GPST) as query time,
+#   whereas SP3 uses GPST, so we will see the satellite displacement within time offset between
+#   system time and GPST. The offset is typically tens of nanoseconds though, so this should not account
+#   for more than millimeter-level, much smaller than the ephemeris error.
+expected_max_differences_broadcast_vs_precise = {
+    "diff_xyz_l2_m": 11.9,
+    "diff_dxyz_l2_mps": 1.8e-4,
+    "clock_m": 26,  # TODO Broadcast clock error should be much smaller than this.
+    "dclock_mps": 1.2e-4,
+}
 
 @pytest.fixture
 def input_for_test():
@@ -184,27 +201,73 @@ def test_compare_to_sp3(input_for_test):
         diff[["dx_mps", "dy_mps", "dz_mps"]].to_numpy(), axis=1
     )
 
-    # The following thresholds are the achieved maximum difference between broadcast and
-    # MGEX precise orbit and clock solutions seen in this test.
-    # TODO It would be desirable to have an independent reference for expected broadcast values.
-    # Reasons for differences between SP3 and RINEX:
-    # - The regular broadcast ephemeris error
-    # - Different Satellite Reference Points (Center of Mass, iono-free phase center etc.)
-    # - Using integer-second-aligned GPST (i.e. system time integer-second aligned to GPST) as query time,
-    #   whereas SP3 uses GPST, so we will see the satellite displacement within time offset between
-    #   system time and GPST. The offset is typically tens of nanoseconds though, so this should not account
-    #   for more than millimeter-level, much smaller than the ephemeris error.
-    expected_max_differences = {
-        "diff_xyz_l2_m": 11.9,
-        "diff_dxyz_l2_mps": 1.8e-4,
-        "clock_m": 26,  # TODO Broadcast clock error should be much smaller than this.
-        "dclock_mps": 1.2e-4,
-    }
     print("\n" + diff.to_string())
-    for column, expected_max_difference in expected_max_differences.items():
+    for column, expected_max_difference in expected_max_differences_broadcast_vs_precise.items():
         assert (
             diff[column].max() < expected_max_difference
         ), f"Expected maximum difference {expected_max_difference} for column {column}, but got {diff[column].max()}"
+
+
+@pytest.fixture
+def set_up_test_2023():
+    test_directory = Path(f"./tmp_test_directory_{__name__}").resolve()
+    if test_directory.exists():
+        # Make sure the expected files has not been generated before and is still on disk due to e.g. a previous
+        # test run having crashed:
+        shutil.rmtree(test_directory)
+    os.makedirs(test_directory)
+    test_files = DotMap()
+    test_files.nav_file = test_directory.joinpath("BRDC00IGS_R_20230010000_01D_MN.rnx.zip")
+    test_files.sp3_file = test_directory.joinpath("GFZ0MGXRAP_20230010000_01D_05M_ORB.SP3")
+
+    for key, test_file in test_files.items():
+        shutil.copy(
+            helpers.prx_repository_root()
+            / f"src/prx/test/datasets/TLSE_2023001/{test_file.name}",
+            test_file,
+        )
+        assert test_file.exists()
+
+    yield dict(test_files)
+    shutil.rmtree(test_directory)
+
+
+def test_2023_beidou_c27(set_up_test_2023):
+    rinex_nav_file = converters.compressed_to_uncompressed(
+        set_up_test_2023["nav_file"]
+    )
+    query = pd.DataFrame(
+        [
+            # Multiple satellites with ephemerides provided as Kepler orbits
+            # Two Beidou GEO (from http://www.csno-tarc.cn/en/system/constellation)
+            {
+                "sv": "C27",
+                "signal": "C1X",
+                "query_time_isagpst": pd.Timestamp("2023-01-01T01:00:00.000000000") - constants.cGpstUtcEpoch,
+            },
+        ]
+    )
+
+    rinex_sat_states = rinex_nav_evaluate.compute(rinex_nav_file, query.copy())
+    assert len(rinex_sat_states) == 1, "Was expecting only one, row, make sure to sort before comparing to sp3 with more than one row"
+    rinex_sat_states = rinex_sat_states.reset_index().drop(columns=["index", "signal", "group_delay_m"]).sort_index(axis='columns')
+    rinex_sat_states.to_csv("jan.csv")
+    sp3_sat_states = sp3_evaluate.compute(
+        set_up_test_2023["sp3_file"], query.copy()).drop(columns=["signal"]).sort_index(axis='columns')
+    assert sp3_sat_states.columns.equals(rinex_sat_states.columns)
+    diff = rinex_sat_states.drop(columns="sv") - sp3_sat_states.drop(columns="sv")
+    diff = pd.concat((rinex_sat_states["sv"], diff), axis=1)
+    diff["diff_xyz_l2_m"] = np.linalg.norm(
+        diff[["x_m", "y_m", "z_m"]].to_numpy(), axis=1
+    )
+    diff["diff_dxyz_l2_mps"] = np.linalg.norm(
+        diff[["dx_mps", "dy_mps", "dz_mps"]].to_numpy(), axis=1
+    )
+    for column, expected_max_difference in expected_max_differences_broadcast_vs_precise.items():
+        assert (
+            diff[column].max() < expected_max_difference
+        ), f"Expected maximum difference {expected_max_difference} for column {column}, but got {diff[column].max()}"
+
 
 
 def test_group_delays(input_for_test):
