@@ -117,11 +117,14 @@ def interpolate(df, query_time_gpst_s, plot_interpolation=False):
             Polynomial(poly.coef[::-1])(query_time_gpst_s - times[0]) + samples[0]
         )
         if plot_interpolation:
-            plot_lagrange_interpolation(poly,
-                                        times - times[0],
-                                        samples - samples[0],
-                                        query_time_gpst_s -times[0],
-                                        interpolated[col] - samples[0], f"{col} {df['sv'].unique()}")
+            plot_lagrange_interpolation(
+                poly,
+                times - times[0],
+                samples - samples[0],
+                query_time_gpst_s - times[0],
+                interpolated[col] - samples[0],
+                f"{col} {df['sv'].unique()}",
+            )
         first_derivative = Polynomial(poly.coef[::-1]).deriv(1)(
             query_time_gpst_s - times[0]
         )

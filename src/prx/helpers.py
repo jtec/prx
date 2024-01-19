@@ -272,14 +272,27 @@ def compute_satellite_elevation_and_azimuth(sat_pos_ecef, receiver_pos_ecef):
     GNSS Data Processing, Vol. I: Fundamentals and Algorithms. Equations (B.9),(B.13),(B.14)
     """
     sat_pos_wrt_rx_pos_ecef = sat_pos_ecef - receiver_pos_ecef
-    sat_pos_wrt_rx_pos_norm = np.linalg.norm(sat_pos_wrt_rx_pos_ecef, axis=1)[:, np.newaxis]
+    sat_pos_wrt_rx_pos_norm = np.linalg.norm(sat_pos_wrt_rx_pos_ecef, axis=1)[
+        :, np.newaxis
+    ]
     unit_vector_rx_satellite_ecef = sat_pos_wrt_rx_pos_ecef / sat_pos_wrt_rx_pos_norm
     [receiver_lat_rad, receiver_lon_rad, __] = ecef_2_geodetic(receiver_pos_ecef)
     unit_e_ecef = [-np.sin(receiver_lon_rad), np.cos(receiver_lon_rad), 0]
-    unit_n_ecef = [-np.cos(receiver_lon_rad) * np.sin(receiver_lat_rad), -np.sin(receiver_lon_rad) * np.sin(receiver_lat_rad), np.cos(receiver_lat_rad)]
-    unit_u_ecef = [np.cos(receiver_lon_rad) * np.cos(receiver_lat_rad), np.sin(receiver_lon_rad) * np.cos(receiver_lat_rad), np.sin(receiver_lat_rad)]
+    unit_n_ecef = [
+        -np.cos(receiver_lon_rad) * np.sin(receiver_lat_rad),
+        -np.sin(receiver_lon_rad) * np.sin(receiver_lat_rad),
+        np.cos(receiver_lat_rad),
+    ]
+    unit_u_ecef = [
+        np.cos(receiver_lon_rad) * np.cos(receiver_lat_rad),
+        np.sin(receiver_lon_rad) * np.cos(receiver_lat_rad),
+        np.sin(receiver_lat_rad),
+    ]
     elevation_rad = np.arcsin(np.dot(unit_vector_rx_satellite_ecef, unit_u_ecef))
-    azimuth_rad = np.arctan2(np.dot(unit_vector_rx_satellite_ecef, unit_e_ecef), np.dot(unit_vector_rx_satellite_ecef, unit_n_ecef))
+    azimuth_rad = np.arctan2(
+        np.dot(unit_vector_rx_satellite_ecef, unit_e_ecef),
+        np.dot(unit_vector_rx_satellite_ecef, unit_n_ecef),
+    )
     elevation_deg = np.rad2deg(elevation_rad)
 
     up = receiver_pos_ecef / np.linalg.norm(receiver_pos_ecef)

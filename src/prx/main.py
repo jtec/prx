@@ -84,6 +84,9 @@ def write_csv_file(
     with open(output_file, "w", encoding="utf-8") as file:
         for key in prx_header.keys():
             file.write("# %s,%s\n" % (key, prx_header[key]))
+    flat_records["elevation_deg"] = np.rad2deg(flat_records.elevation_rad.to_numpy())
+    flat_records["azimuth_deg"] = np.rad2deg(flat_records.azimuth_rad.to_numpy())
+    flat_records = flat_records.drop(columns=["elevation_rad", "azimuth_rad"])
     # Re-arrange records to have one  line per code observation, with the associated carrier phase and
     # Doppler observation, and auxiliary information such as satellite position, velocity, clock offset, etc.
     # write records
@@ -180,7 +183,7 @@ def build_records(
     )
 
 
-#@memory.cache
+# @memory.cache
 def _build_records_cached(
     rinex_3_obs_file,
     rinex_3_obs_file_hash,
@@ -238,6 +241,12 @@ def _build_records_cached(
         columns=["observation_type"],
         values="observation_value",
     ).reset_index()
+    per_sat["time_scale"] = (
+        per_sat["satellite"].str[0].map(constants.constellation_2_system_time_scale)
+    )
+    per_sat["system_time_scale_epoch"] = per_sat["time_scale"].map(
+        constants.system_time_scale_2_rinex_utc_epoch
+    )
     # When calling georinex.load() with useindicators=True, there are additional ssi columns such as C1Cssi.
     # To exclude them, we check the length of the column name
     code_phase_columns = [c for c in per_sat.columns if c[0] == "C" and len(c) == 3]
@@ -259,23 +268,20 @@ def _build_records_cached(
         unit="s",
     )
     per_sat["time_of_emission_in_satellite_time"] = (
-        per_sat["time_of_reception_in_receiver_time"] - tof_dtrx
-    )
-    per_sat["time_scale"] = (
-        per_sat["satellite"].str[0].map(constants.constellation_2_system_time_scale)
+        per_sat["time_of_reception_in_receiver_time"]
+        - per_sat.system_time_scale_epoch
+        - tof_dtrx
     )
     per_sat["time_of_emission_weeksecond_system_time"] = per_sat.apply(
         lambda row: helpers.timedelta_2_weeks_and_seconds(
-            helpers.timestamp_2_timedelta(
-                row.time_of_emission_in_satellite_time, row.time_scale
-            )
+            row.time_of_emission_in_satellite_time
         )[1],
         axis=1,
     )
     per_sat["time_of_emission_isagpst"] = rinex_evaluate.to_isagpst(
-            per_sat.time_of_reception_in_receiver_time - constants.cGpstUtcEpoch,
-            per_sat.time_scale,
-        )
+        per_sat.time_of_emission_in_satellite_time,
+        per_sat.time_scale,
+    )
 
     flat_obs = flat_obs.merge(
         per_sat[
@@ -438,7 +444,9 @@ def process(observation_file_path: Path, output_format="jsonseq"):
     )
     rinex_3_obs_file = converters.anything_to_rinex_3(observation_file_path)
     prx_file = str(rinex_3_obs_file).replace(".rnx", "")
-    aux_files = nav_file_discovery.discover_or_download_auxiliary_files(rinex_3_obs_file)
+    aux_files = nav_file_discovery.discover_or_download_auxiliary_files(
+        rinex_3_obs_file
+    )
     write_prx_file(
         build_header([rinex_3_obs_file, aux_files["broadcast_ephemerides"]]),
         build_records(rinex_3_obs_file, aux_files["broadcast_ephemerides"]),

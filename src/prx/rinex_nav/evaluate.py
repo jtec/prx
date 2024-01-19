@@ -460,10 +460,10 @@ def to_isagpst(time, timescale):
     if isinstance(time, pd.Timedelta) and isinstance(timescale, str):
         return time + time_scale_integer_second_offset(timescale, "GPST")
     if isinstance(time, pd.Series) and isinstance(timescale, pd.Series):
-        integer_second_offsets = timescale.groupby(timescale).apply(
-            time_scale_integer_second_offset, "GPST"
+        integer_second_offsets = timescale.apply(
+            lambda element: time_scale_integer_second_offset(element, "GPST")
         )
-        return time + time_scale_integer_second_offset(timescale, "GPST")
+        return time + integer_second_offsets
     assert (
         False
     ), f"Unexpected types: time is {type(time)}, timescale is {type(timescale)}"

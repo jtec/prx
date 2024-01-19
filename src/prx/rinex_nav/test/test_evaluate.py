@@ -29,6 +29,7 @@ expected_max_differences_broadcast_vs_precise = {
     "dclock_mps": 1.2e-4,
 }
 
+
 @pytest.fixture
 def input_for_test():
     test_directory = (
@@ -202,7 +203,10 @@ def test_compare_to_sp3(input_for_test):
     )
 
     print("\n" + diff.to_string())
-    for column, expected_max_difference in expected_max_differences_broadcast_vs_precise.items():
+    for (
+        column,
+        expected_max_difference,
+    ) in expected_max_differences_broadcast_vs_precise.items():
         assert (
             diff[column].max() < expected_max_difference
         ), f"Expected maximum difference {expected_max_difference} for column {column}, but got {diff[column].max()}"
@@ -217,8 +221,12 @@ def set_up_test_2023():
         shutil.rmtree(test_directory)
     os.makedirs(test_directory)
     test_files = DotMap()
-    test_files.nav_file = test_directory.joinpath("BRDC00IGS_R_20230010000_01D_MN.rnx.zip")
-    test_files.sp3_file = test_directory.joinpath("GFZ0MGXRAP_20230010000_01D_05M_ORB.SP3")
+    test_files.nav_file = test_directory.joinpath(
+        "BRDC00IGS_R_20230010000_01D_MN.rnx.zip"
+    )
+    test_files.sp3_file = test_directory.joinpath(
+        "GFZ0MGXRAP_20230010000_01D_05M_ORB.SP3"
+    )
 
     for key, test_file in test_files.items():
         shutil.copy(
@@ -233,9 +241,7 @@ def set_up_test_2023():
 
 
 def test_2023_beidou_c27(set_up_test_2023):
-    rinex_nav_file = converters.compressed_to_uncompressed(
-        set_up_test_2023["nav_file"]
-    )
+    rinex_nav_file = converters.compressed_to_uncompressed(set_up_test_2023["nav_file"])
     query = pd.DataFrame(
         [
             # Multiple satellites with ephemerides provided as Kepler orbits
@@ -243,17 +249,27 @@ def test_2023_beidou_c27(set_up_test_2023):
             {
                 "sv": "C27",
                 "signal": "C1X",
-                "query_time_isagpst": pd.Timestamp("2023-01-01T01:00:00.000000000") - constants.cGpstUtcEpoch,
+                "query_time_isagpst": pd.Timestamp("2023-01-01T01:00:00.000000000")
+                - constants.cGpstUtcEpoch,
             },
         ]
     )
 
     rinex_sat_states = rinex_nav_evaluate.compute(rinex_nav_file, query.copy())
-    assert len(rinex_sat_states) == 1, "Was expecting only one, row, make sure to sort before comparing to sp3 with more than one row"
-    rinex_sat_states = rinex_sat_states.reset_index().drop(columns=["index", "signal", "group_delay_m"]).sort_index(axis='columns')
+    assert (
+        len(rinex_sat_states) == 1
+    ), "Was expecting only one, row, make sure to sort before comparing to sp3 with more than one row"
+    rinex_sat_states = (
+        rinex_sat_states.reset_index()
+        .drop(columns=["index", "signal", "group_delay_m"])
+        .sort_index(axis="columns")
+    )
     rinex_sat_states.to_csv("jan.csv")
-    sp3_sat_states = sp3_evaluate.compute(
-        set_up_test_2023["sp3_file"], query.copy()).drop(columns=["signal"]).sort_index(axis='columns')
+    sp3_sat_states = (
+        sp3_evaluate.compute(set_up_test_2023["sp3_file"], query.copy())
+        .drop(columns=["signal"])
+        .sort_index(axis="columns")
+    )
     assert sp3_sat_states.columns.equals(rinex_sat_states.columns)
     diff = rinex_sat_states.drop(columns="sv") - sp3_sat_states.drop(columns="sv")
     diff = pd.concat((rinex_sat_states["sv"], diff), axis=1)
@@ -263,11 +279,13 @@ def test_2023_beidou_c27(set_up_test_2023):
     diff["diff_dxyz_l2_mps"] = np.linalg.norm(
         diff[["dx_mps", "dy_mps", "dz_mps"]].to_numpy(), axis=1
     )
-    for column, expected_max_difference in expected_max_differences_broadcast_vs_precise.items():
+    for (
+        column,
+        expected_max_difference,
+    ) in expected_max_differences_broadcast_vs_precise.items():
         assert (
             diff[column].max() < expected_max_difference
         ), f"Expected maximum difference {expected_max_difference} for column {column}, but got {diff[column].max()}"
-
 
 
 def test_group_delays(input_for_test):
