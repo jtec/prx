@@ -3,7 +3,7 @@ from pathlib import Path
 import shutil
 import pytest
 import subprocess
-from prx import aux_file_discovery as aux
+from prx.rinex_nav import nav_file_discovery as aux
 from prx import helpers
 
 
@@ -50,7 +50,7 @@ def test_download_remote_ephemeris_files(set_up_test):
 def test_command_line_call(set_up_test):
     test_file = set_up_test["test_obs_file"]
     aux_file_script_path = (
-        helpers.prx_repository_root() / "src/prx/aux_file_discovery.py"
+        helpers.prx_repository_root() / "src/prx/rinex_nav/nav_file_discovery.py"
     )
 
     command = f"python {aux_file_script_path} --observation_file_path {test_file}"
