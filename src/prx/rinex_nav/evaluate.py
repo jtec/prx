@@ -55,57 +55,6 @@ def time_scale_integer_second_offset(time_scale_a, time_scale_b):
     return offset
 
 
-def glonass_xdot(x, a):
-    p = x[0:3]
-    v = x[3:6]
-    mu = 398600.44 * 1e9
-    a_e = 6378136.0
-    J_2 = 1082625.7 * 1e-9
-    omega = 0.7292115 * 1e-5
-    xdot = x * float("nan")
-    xdot[["X", "Y", "Z"]] = x[["dX", "dY", "dZ"]]
-    r = np.linalg.norm(p)
-    c1 = (-mu / p[0] ** 3) - (3 / 2) * J_2**2 * (mu * (a_e**2 / r**5)) * (
-        1 - 5 * (p[2] / r) ** 2
-    )
-    vdot[0] = c1 * p[0] + omega**2 * p[0] + 2 * omega * v[1] + a[0]
-    vdot[1] = c1 * p[1] + math.pow(omega, 2) * p[1] - 2 * omega * v[0] + a[1]
-    vdot[2] = c1 * p[2] + a[2]
-    return np.concatenate((pdot, vdot))
-
-
-def compute_propagated_position_and_velocity(df):
-    toes = df["ephemeris_reference_time_isagpst"]
-    pv = df[["X", "Y", "Z", "dX", "dY", "dZ"]]
-    a = df[["dX2", "dY2", "dZ2"]]
-    # p = df[["X", "Y", "Z"]].values.flatten()
-    # v = df[["dX", "dY", "dZ"]].values.flatten()
-    # x = np.concatenate((p, v))
-    # a = df[["dX2", "dY2", "dZ2"]].values.flatten()
-    ts = df["query_time_wrt_ephemeris_reference_time_s"] * 0
-    t_ends = df["query_time_wrt_ephemeris_reference_time_s"]
-
-    while True:
-        # We integrate in fixed steps until the last step, which is the time between the next-to-last integrated state
-        # and the query time.
-        fixed_integration_time_step = 60
-        time_steps = t_ends - ts
-        time_steps[
-            time_steps > fixed_integration_time_step
-        ] = fixed_integration_time_step
-        time_steps[time_steps < 0] = 0
-        if np.all(time_steps == 0):
-            break
-        k1 = glonass_xdot(pv, a)
-        k2 = glonass_xdot(pv + k1 * time_steps / 2, a)
-        k3 = glonass_xdot(pv + k2 * time_steps / 2, a)
-        k4 = glonass_xdot(pv + k3 * time_steps, a)
-        pv = pv + time_steps / 6 * (k1 + 2 * k2 + 2 * k3 + k4)
-        ts = ts + time_steps
-
-    return x[0:3], x[3:6]
-
-
 def eccentric_anomaly(M, e, tol=1e-5, max_iter=10):
     E = M.copy()
     for iterations in range(0, max_iter):
