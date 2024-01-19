@@ -11,6 +11,7 @@ imohash = "*"
 georinex = {editable = true, ref = "d131cc54a3e483d0b5759edbf612c73a6bdcd14e", git = "git+https://github.com/jtec/georinex.git"}
 flake8 = "*"
 dotmap = "*"
+pytest = "*"
 
 [requires]
 python_version = "3.10"
