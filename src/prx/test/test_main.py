@@ -66,5 +66,9 @@ def test_prx_function_call_with_csv_output(input_for_test):
         str(test_file).replace("crx.gz", constants.cPrxCsvFileExtension)
     )
     assert expected_prx_file.exists()
-    file_content = pd.read_csv(expected_prx_file, comment="#")
-    assert not file_content.empty
+    df = pd.read_csv(expected_prx_file, comment="#")
+    assert not df.empty
+    # Elevation sanity check
+    assert (
+        df[(df.prn == 14) & (df.constellation == "C")].elevation_deg - 34.86
+    ).abs().max() < 0.3
