@@ -21,6 +21,9 @@ jobs:
       - name: Run pipenv
         run:
           pipenv install --dev
+      - name: Set up PYTHONPATH
+        run: |
+          echo "PYTHONPATH=/home/runner/work/prx/prx/src" >> $GITHUB_ENV
       - name: Test with pytest
         run: |
          pipenv run pip freeze
