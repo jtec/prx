@@ -12,6 +12,8 @@ georinex = {editable = true, ref = "d131cc54a3e483d0b5759edbf612c73a6bdcd14e", g
 flake8 = "*"
 dotmap = "*"
 pytest = "*"
+gitpython = "*"
+scipy = "*"
 
 [requires]
 python_version = "3.10"
