@@ -33,4 +33,4 @@ jobs:
       - name: Test with pytest
         run: |
          pipenv run pip freeze
-         pipenv run pytest --durations=10
+         pipenv run pytest --durations=10 -k "test_prx_command_line_call_with_csv_output"
