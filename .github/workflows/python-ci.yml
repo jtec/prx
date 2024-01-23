@@ -32,5 +32,7 @@ jobs:
          pipenv run flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
       - name: Test with pytest
         run: |
-         pipenv run pip freeze
-         pipenv run pytest --durations=10 -k "test_prx_command_line_call_with_csv_output"
+         pipenv shell
+         echo "PYTHONPATH=/home/runner/work/prx/prx/src" >> $GITHUB_ENV
+         pip freeze
+         pytest --durations=10 -k "test_prx_command_line_call_with_csv_output"
