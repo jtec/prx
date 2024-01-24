@@ -21,16 +21,13 @@ jobs:
       - name: Run pipenv
         run:
           pipenv install --dev
-      - name: Set up PYTHONPATH
+      - name: Test with pytest
         run: |
-          echo "PYTHONPATH=/home/runner/work/prx/prx/src" >> $GITHUB_ENV
+         echo "$PWD"
+         pipenv run pytest --durations=10 -k "test_prx_command_line_call_with_csv_output"
       - name: Lint with flake8
         run: |
          # stop the build if there are Python syntax errors or undefined names
          pipenv run flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
          # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
          pipenv run flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
-      - name: Test with pytest
-        run: |
-         echo "$PWD"
-         pipenv run pytest --durations=10 -k "test_prx_command_line_call_with_csv_output"
