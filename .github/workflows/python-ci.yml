@@ -25,6 +25,7 @@ jobs:
         run: |
           # append /home/runner/work/prx/prx/src to PYTHONPATH 
           echo "PYTHONPATH=$PYTHONPATH:/home/runner/work/prx/prx/src" >> $GITHUB_ENV
+          echo $GITHUB_ENV
       - name: Lint with flake8
         run: |
          # stop the build if there are Python syntax errors or undefined names
@@ -35,4 +36,6 @@ jobs:
         run: |
          echo "$PWD"
          ls
+         echo "PYTHONPATH=$PYTHONPATH:/home/runner/work/prx/prx/src" >> $GITHUB_ENV
+         echo $GITHUB_ENV
          pipenv run pytest --durations=10 -k "test_prx_command_line_call_with_csv_output"
