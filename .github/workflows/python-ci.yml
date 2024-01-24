@@ -23,7 +23,8 @@ jobs:
           pipenv install --dev
       - name: Set up PYTHONPATH
         run: |
-          echo "PYTHONPATH=/home/runner/work/prx/prx/src" >> $GITHUB_ENV
+          # append /home/runner/work/prx/prx/src to PYTHONPATH 
+          echo "PYTHONPATH=$PYTHONPATH:/home/runner/work/prx/prx/src" >> $GITHUB_ENV
       - name: Lint with flake8
         run: |
          # stop the build if there are Python syntax errors or undefined names
