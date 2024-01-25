@@ -45,6 +45,13 @@ We use https://google.github.io/styleguide/pyguide.html as our python style guid
 We write on Confluence:
 https://prxproject.atlassian.net/wiki/spaces/PD/pages/262145/What+does+prx+do
 
+## Known bugs
+### ModuleNotFoundError
+In case you run in a `ModuleNotFoundError` during execution of `prx`, it is probably linked to an issue with the `PYTHONPATH` environment variable. One quick way to solve this is to create a file named `.env` in the `prx` root folder, with a single line:
+> PYTHONPATH=src
+
+When running `pipenv shell`, this will automatically load the `.env` file and add the `prx/src` folder to `PYTHONPATH`.
+
 ## Acronyms
 See the [Rinex 3.05 spec](https://files.igs.org/pub/data/format/rinex305.pdf), page 5, for a list of most acronyms used in the code. Those not covered by the RINEX spec are listed below.
 
