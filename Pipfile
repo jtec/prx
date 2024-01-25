@@ -4,13 +4,17 @@ verify_ssl = true
 name = "pypi"
 
 [packages]
-numpy = ">=1.25.0"
-pandas = ">=1.5.3"
-pytest = ">=6.2.5"
-georinex = ">=1.16.1"
-gnss-lib-py = "==0.1.8"
-gitpython = ">=3.1.31"
-joblib = ">=1.3.1"
+pandas = ">=2.1.1"
+numpy = ">=1.26.0"
+joblib = ">=1.3.2"
+imohash = "*"
+georinex = {editable = true, ref = "d131cc54a3e483d0b5759edbf612c73a6bdcd14e", git = "git+https://github.com/jtec/georinex.git"}
+flake8 = "*"
+dotmap = "*"
+pytest = "*"
+gitpython = "*"
+scipy = "*"
+matplotlib = "*"
 
 [requires]
 python_version = "3.10"
