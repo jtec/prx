@@ -12,7 +12,7 @@ pandas = "^2.2.0"
 numpy = "^1.26.3"
 joblib = "^1.3.2"
 imohash = "^1.0.5"
-georinex = "^1.16.2"
+georinex = { git = "https://github.com/jtec/georinex.git", branch = "parse_blank_nav_message_fields" }
 flake8 = "^7.0.0"
 dotmap = "^1.3.30"
 pytest = "^8.0.0"
