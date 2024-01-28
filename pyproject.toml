@@ -1,0 +1,26 @@
+[tool.poetry]
+name = "prx"
+version = "0.0.1"
+description = "Making GNSS positioning a bit more accessible"
+authors = ["Jan Bolting <janbolting@gmail.com>", "Paul Thevenon <paul.thevenon@gmail.com>"]
+license = "MIT"
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.10"
+pandas = "^2.2.0"
+numpy = "^1.26.3"
+joblib = "^1.3.2"
+imohash = "^1.0.5"
+georinex = "^1.16.2"
+flake8 = "^7.0.0"
+dotmap = "^1.3.30"
+pytest = "^8.0.0"
+gitpython = "^3.1.41"
+scipy = "^1.12.0"
+matplotlib = "^3.8.2"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
