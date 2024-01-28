@@ -20,7 +20,7 @@ Run `poetry shell` to activate the virtual environment in a terminal.
 ### Using the poetry virtual environment in PyCharm
 Run `poetry env info -p` to find the path of the virtual environment, which we'll call `<venv-path>`
 Under `File` -> `Settings` -> `Project` -> `Python Interpreter` add `<venv-path>` as python interpreter.
-If you run into problems, try `<venv-path>/bin/python`.
+If you run into problems, try `<venv-path>/bin/python` on Linux or `<venv-path>\Scripts\python.exe` on Windows.
 
 ### Add packages to poetry
 Let's say you wrote some code that uses `import new_package`. To have `new package` added (what you otherwise
