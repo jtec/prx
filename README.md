@@ -3,38 +3,40 @@
 Making GNSS positioning a bit more accessible.
 
 ## How we manage python version and dependencies
-We use `pipenv` to make sure every developer and user of prx runs the same python version
-and the same set of dependencies such as `numpy` and `pandas`.
-The environment parameters are defined by the `Pipfile` and `Pipfile.lock` files 
-in the repository. 
+We use `poetry` to make sure every developer and user of prx runs the same python version
+and the same set of dependencies such as `numpy` and `pandas`. Poetry reads `pyproject.toml`, 
+resolves dependencies and writes the result to `poetry.lock`, which is the file used when running
+`poetry install`.
 
-To install pipenv, if necessary, run `pip install --user pipenv`
+To install poetry see https://python-poetry.org/docs/#installation
 
 To create the virtual environment, run
-`pipenv install` in the `prx` repository root. This has to be run every time an update to the `Pipfile` and `Pipfile.lock`
-files is done (for example, after a `git fetch`)
+`poetry install` in the `prx` repository root. This has to be run every time an update to the `pyproject.toml` and `poetry.lock`
+files is done (for example, after a `git pull`)
 
-### Jumping to the pipenv virtual environment
-Run `pipenv shell` to activate the virtual environment in a terminal.
+### Jumping into the virtual environment
+Run `poetry shell` to activate the virtual environment in a terminal.
 
-### Using the pipenv virtual environment in PyCharm
-Run `pipenv --venv` to find the path of the virtual environment, which we'll call `<venv-path>`
+### Using the poetry virtual environment in PyCharm
+Run `poetry env info -p` to find the path of the virtual environment, which we'll call `<venv-path>`
 Under `File` -> `Settings` -> `Project` -> `Python Interpreter` add `<venv-path>` as python interpreter.
 If you run into problems, try `<venv-path>/bin/python`.
 
-### Add packages to pipenv
-Let's say you wrote some code that uses `import new_package`. To have `new package` added to the pipenv (what you otherwise
+### Add packages to poetry
+Let's say you wrote some code that uses `import new_package`. To have `new package` added (what you otherwise
  would use `pip` or some other package manager for), run
 
-`pipenv install new_package`
+`poetry add new_package`
 
-The package information will be added to the `Pipenv` and `Pipenv.lock` files. Simply commit 
-those changes along with the new code that relies on the new package.
+Poetry will resolve dependencies - i.e. figure out which is the latest version of `new_package` that is compatible with 
+our virtual environment - and add it to `pyproject.toml` and `poetry.lock`.
 
 ## Testing
+After `poetry shell`
 
 Run `pytest` in the `prx` repository root to run all tests.
 Run `pytest -x` to stop after the first test that fails.
+Run `pytest -k "my_test"` to run a specific test
 Run `pytest ---durations=10` to run all tests and have pytest list the 10 longest running tests.
 
 ## Coding style
@@ -44,13 +46,6 @@ We use https://google.github.io/styleguide/pyguide.html as our python style guid
 
 We write on Confluence:
 https://prxproject.atlassian.net/wiki/spaces/PD/pages/262145/What+does+prx+do
-
-## Known bugs
-### ModuleNotFoundError
-In case you run in a `ModuleNotFoundError` during execution of `prx`, it is probably linked to an issue with the `PYTHONPATH` environment variable. One quick way to solve this is to create a file named `.env` in the `prx` root folder, with a single line:
-> PYTHONPATH=src
-
-When running `pipenv shell`, this will automatically load the `.env` file and add the `prx/src` folder to `PYTHONPATH`.
 
 ## Acronyms
 See the [Rinex 3.05 spec](https://files.igs.org/pub/data/format/rinex305.pdf), page 5, for a list of most acronyms used in the code. Those not covered by the RINEX spec are listed below.
