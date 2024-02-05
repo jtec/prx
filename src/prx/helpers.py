@@ -343,3 +343,7 @@ def parse_rinex_obs_file(rinex_file: Path):
             f"Hashing file content took {hash_time}, we might want to partially hash the file"
         )
     return cached_load(rinex_file, file_content_hash)
+
+
+def is_sorted(iterable):
+    return all(iterable[i] <= iterable[i+1] for i in range(len(iterable) - 1))

@@ -156,3 +156,12 @@ def test_sagnac_effect():
     # millimeter accuracy should be sufficient
     tolerance = 1e-3
     assert np.max(np.abs(sagnac_effect_computed - sagnac_effect_reference)) < tolerance
+
+
+def test_is_sorted():
+    assert helpers.is_sorted([1, 2, 3, 4, 5])
+    assert not helpers.is_sorted([1, 2, 3, 5, 4])
+    assert not helpers.is_sorted([5, 4, 3, 2, 1])
+    assert helpers.is_sorted([1, 1, 1, 1, 1])
+    assert helpers.is_sorted([1])
+    assert helpers.is_sorted([])
