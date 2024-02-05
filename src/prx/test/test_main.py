@@ -68,7 +68,30 @@ def test_prx_function_call_with_csv_output(input_for_test):
     assert expected_prx_file.exists()
     df = pd.read_csv(expected_prx_file, comment="#")
     assert not df.empty
+    assert helpers.is_sorted(df.time_of_reception_in_receiver_time)
     # Elevation sanity check
     assert (
         df[(df.prn == 14) & (df.constellation == "C")].elevation_deg - 34.86
     ).abs().max() < 0.3
+
+
+def test_spp_lsq(input_for_test):
+    test_file = input_for_test
+    main.process(observation_file_path=test_file, output_format="csv")
+    expected_prx_file = Path(
+        str(test_file).replace("crx.gz", constants.cPrxCsvFileExtension)
+    )
+    assert expected_prx_file.exists()
+    df = pd.read_csv(expected_prx_file, comment="#")
+    assert not df.empty
+    df.group_delay_m = df.group_delay_m.fillna(0)
+    df = df[df.C_obs.notna() & df.x_m.notna()]
+    df_first_epoch = df[df.time_of_reception_in_receiver_time == df.time_of_reception_in_receiver_time.min()]
+    df_first_epoch['C_obs_corrected'] = (df_first_epoch.C_obs
+                                         - df_first_epoch.clock_m
+                                         - df_first_epoch.relativistic_clock_effect_m
+                                         - df_first_epoch.sagnac_effect_m
+                                         - df_first_epoch.code_iono_delay_klobuchar_m
+                                         - df_first_epoch.tropo_delay_m
+                                         - df_first_epoch.group_delay_m)
+    pass

@@ -183,7 +183,7 @@ def build_records(
     )
 
 
-# @memory.cache
+@memory.cache
 def _build_records_cached(
     rinex_3_obs_file,
     rinex_3_obs_file_hash,
