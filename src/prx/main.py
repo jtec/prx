@@ -158,7 +158,7 @@ def build_header(input_files):
     return prx_header
 
 
-def check_assumptions(rinex_3_obs_file, rinex_3_nav_file):
+def check_assumptions(rinex_3_obs_file,):
     obs_header = georinex.rinexheader(rinex_3_obs_file)
     if "RCV CLOCK OFFS APPL" in obs_header.keys():
         assert (
@@ -171,14 +171,14 @@ def check_assumptions(rinex_3_obs_file, rinex_3_nav_file):
 
 def build_records(
     rinex_3_obs_file,
-    rinex_3_ephemerides_file,
+    rinex_3_ephemerides_files,
     receiver_ecef_position_m=np.full(shape=(3,), fill_value=np.nan),
 ):
     return _build_records_cached(
         rinex_3_obs_file,
         helpers.hash_of_file_content(rinex_3_obs_file),
-        rinex_3_ephemerides_file,
-        helpers.hash_of_file_content(rinex_3_ephemerides_file),
+        rinex_3_ephemerides_files,
+        [helpers.hash_of_file_content(file) for file in rinex_3_ephemerides_files],
         receiver_ecef_position_m,
     )
 
@@ -187,11 +187,11 @@ def build_records(
 def _build_records_cached(
     rinex_3_obs_file,
     rinex_3_obs_file_hash,
-    rinex_3_ephemerides_file,
+    rinex_3_ephemerides_files,
     rinex_3_ephemerides_file_hash,
     receiver_ecef_position_m,
 ):
-    check_assumptions(rinex_3_obs_file, rinex_3_ephemerides_file)
+    check_assumptions(rinex_3_obs_file)
     obs = helpers.parse_rinex_obs_file(rinex_3_obs_file)
 
     # if receiver_ecef_position_m has not been initialized, get it from the RNX OBS header
@@ -302,10 +302,27 @@ def _build_records_cached(
         ["observation_type", "satellite", "time_of_emission_isagpst"]
     ]
 
-    sat_states = rinex_evaluate.compute(
-        rinex_3_ephemerides_file,
-        query,
+    # sat_states = pd.concat(
+    #     [rinex_evaluate.compute(file,query,) for file in rinex_3_ephemerides_files]
+    # )
+
+    sat_states1 = rinex_evaluate.compute(
+        rinex_3_ephemerides_files[0],
+        query.loc[
+            (query.query_time_isagpst >= rinex_evaluate.to_isagpst(pd.Timestamp(year=2021, month=12, day=31) - constants.cGpstUtcEpoch,"GPST")) &
+            (query.query_time_isagpst < rinex_evaluate.to_isagpst(pd.Timestamp(year=2022, month=1, day=1) - constants.cGpstUtcEpoch,"GPST"))
+        ],
     )
+    sat_states2 = rinex_evaluate.compute(
+        rinex_3_ephemerides_files[1],
+        query.loc[
+            (query.query_time_isagpst >= rinex_evaluate.to_isagpst(
+                pd.Timestamp(year=2022, month=1, day=1) - constants.cGpstUtcEpoch, "GPST")) &
+            (query.query_time_isagpst < rinex_evaluate.to_isagpst(
+                pd.Timestamp(year=2022, month=1, day=2) - constants.cGpstUtcEpoch, "GPST"))
+        ],
+    )
+
     sat_states = sat_states.rename(
         columns={
             "sv": "satellite",
@@ -447,8 +464,10 @@ def process(observation_file_path: Path, output_format="jsonseq"):
     aux_files = nav_file_discovery.discover_or_download_auxiliary_files(
         rinex_3_obs_file
     )
+    input_file_list = [rinex_3_obs_file]
+    input_file_list.extend(aux_files["broadcast_ephemerides"])
     write_prx_file(
-        build_header([rinex_3_obs_file, aux_files["broadcast_ephemerides"]]),
+        build_header(input_file_list),
         build_records(rinex_3_obs_file, aux_files["broadcast_ephemerides"]),
         prx_file,
         output_format,
