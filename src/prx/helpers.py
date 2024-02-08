@@ -139,7 +139,6 @@ def repair_with_gfzrnx(file):
             return file
     assert False, f"gdzrnx file repair run failed: {result}"
 
-
 def deg_2_rad(angle_deg):
     return angle_deg * np.pi / 180
 
