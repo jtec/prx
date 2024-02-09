@@ -302,27 +302,24 @@ def _build_records_cached(
         ["observation_type", "satellite", "time_of_emission_isagpst"]
     ]
 
-    # sat_states = pd.concat(
-    #     [rinex_evaluate.compute(file,query,) for file in rinex_3_ephemerides_files]
-    # )
-
-    sat_states1 = rinex_evaluate.compute(
-        rinex_3_ephemerides_files[0],
-        query.loc[
-            (query.query_time_isagpst >= rinex_evaluate.to_isagpst(pd.Timestamp(year=2021, month=12, day=31) - constants.cGpstUtcEpoch,"GPST")) &
-            (query.query_time_isagpst < rinex_evaluate.to_isagpst(pd.Timestamp(year=2022, month=1, day=1) - constants.cGpstUtcEpoch,"GPST"))
-        ],
-    )
-    sat_states2 = rinex_evaluate.compute(
-        rinex_3_ephemerides_files[1],
-        query.loc[
-            (query.query_time_isagpst >= rinex_evaluate.to_isagpst(
-                pd.Timestamp(year=2022, month=1, day=1) - constants.cGpstUtcEpoch, "GPST")) &
-            (query.query_time_isagpst < rinex_evaluate.to_isagpst(
-                pd.Timestamp(year=2022, month=1, day=2) - constants.cGpstUtcEpoch, "GPST"))
-        ],
-    )
-
+    sat_states_per_day = []
+    for file in rinex_3_ephemerides_files:
+        # get year and doy from NAV filename
+        year = int(file.name[12:16])
+        doy = int(file.name[16:19])
+        log.info(f"Computing satellite states for {year}-{doy:03d}")
+        sat_states_per_day.append(
+            rinex_evaluate.compute(
+                file,
+                query.loc[
+                    (query.query_time_isagpst >= rinex_evaluate.to_isagpst(
+                        pd.Timestamp(year=year, month=1, day=1) + pd.Timedelta(days=doy-1) - constants.cGpstUtcEpoch, "GPST")) &
+                    (query.query_time_isagpst < rinex_evaluate.to_isagpst(
+                        pd.Timestamp(year=year, month=1, day=1) + pd.Timedelta(days=doy) - constants.cGpstUtcEpoch, "GPST"))
+                    ],
+            )
+        )
+    sat_states = pd.concat(sat_states_per_day)
     sat_states = sat_states.rename(
         columns={
             "sv": "satellite",
@@ -414,6 +411,8 @@ def _build_records_cached(
         ],
         axis=1,
     )
+
+    # TODO take care of several klobuchar iono model parameters from several NAV files
     nav_header = georinex.rinexheader(rinex_3_ephemerides_file)
     flat_obs.loc[
         flat_obs.observation_type.str.startswith("C"), "code_iono_delay_klobuchar_m"
