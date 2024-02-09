@@ -54,7 +54,8 @@ def input_for_test_with_first_epoch_at_midnight():
         shutil.rmtree(test_directory)
     os.makedirs(test_directory)
 
-    filepath_to_mixed_obs_file = "TLSE00FRA_R_20220010000_01H_30S_MO.rnx.gz"
+    # filepath_to_mixed_obs_file = "TLSE00FRA_R_20220010000_01H_30S_MO.rnx.gz"
+    filepath_to_mixed_obs_file = "TLSE00FRA_R_20220010000_01H_30S_GO.rnx"
     test_mixed_obs_file = test_directory.joinpath(filepath_to_mixed_obs_file)
     shutil.copy(
         Path(__file__).parent/f"datasets/TLSE_2022001/{filepath_to_mixed_obs_file}",
@@ -62,20 +63,20 @@ def input_for_test_with_first_epoch_at_midnight():
     )
     assert test_mixed_obs_file.exists()
 
-    # # nav data from same day
-    # copy_data_file_to_test_directory("datasets/TLSE_2022001/BRDC00IGS_R_20220010000_01D_MN.rnx.zip",
-    #                                  test_directory,)
+    # nav data from same day
     shutil.copy(
-        Path(__file__).parent / f"datasets/TLSE_2022001/BRDC00IGS_R_20220010000_01D_MN.zip",
-        test_directory.joinpath("BRDC00IGS_R_20220010000_01D_MN.zip"),
+        # Path(__file__).parent / f"datasets/TLSE_2022001/BRDC00IGS_R_20220010000_01D_MN.zip",
+        # test_directory.joinpath("BRDC00IGS_R_20220010000_01D_MN.zip"),
+        Path(__file__).parent / f"datasets/TLSE_2022001/BRDC00IGS_R_20213652330_25H_GN.rnx",
+        test_directory.joinpath("BRDC00IGS_R_20213652330_25H_GN.rnx"),
     )
     assert test_mixed_obs_file.exists()
-    # # nav data from previous day
-    # copy_data_file_to_test_directory("datasets/TLSE_2022001/BRDC00IGS_R_20213650000_01D_MN.rnx.gz",
-    #                                  test_directory, )
+    # nav data from previous day
     shutil.copy(
-        Path(__file__).parent / f"datasets/TLSE_2022001/BRDC00WRD_R_20213650000_01D_MN.rnx",
-        test_directory.joinpath("BRDC00WRD_R_20213650000_01D_MN.rnx"),
+        # Path(__file__).parent / f"datasets/TLSE_2022001/BRDC00WRD_R_20213650000_01D_MN.zip",
+        # test_directory.joinpath("BRDC00WRD_R_20213650000_01D_MN.zip"),
+        Path(__file__).parent / f"datasets/TLSE_2022001/BRDC00WRD_R_20213650000_01D_GN.rnx",
+        test_directory.joinpath("BRDC00WRD_R_20213650000_01D_GN.rnx"),
     )
 
     yield {"mixed_obs_file": test_mixed_obs_file,}
