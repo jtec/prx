@@ -91,8 +91,14 @@ def discover_or_download_auxiliary_files(observation_file_path=Path()):
     log.info(f"Finding auxiliary files for {observation_file_path} ...")
     rinex_3_obs_file = converters.anything_to_rinex_3(observation_file_path)
     header = georinex.rinexheader(rinex_3_obs_file)
+    # Subtract 200 ms from the first obs epoch in receiver time
+    # This accounts for
+    #   - signal travel time to GEO satellite (~120 ms)
+    #   + max sat clock offset (37 ms)
+    #   + 43 ms for receiver clock offset + margin
     ephs = discover_or_download_ephemerides(
-        helpers.rinex_header_time_string_2_timestamp_ns(header["TIME OF FIRST OBS"]),
+        helpers.rinex_header_time_string_2_timestamp_ns(header["TIME OF FIRST OBS"])
+        - pd.Timedelta(200, unit="milliseconds"),
         helpers.rinex_header_time_string_2_timestamp_ns(header["TIME OF LAST OBS"]),
         rinex_3_obs_file.parent,
         list(header["fields"].keys()),
