@@ -413,7 +413,11 @@ def _build_records_cached(
     )
 
     # TODO take care of several klobuchar iono model parameters from several NAV files
-    nav_header = georinex.rinexheader(rinex_3_ephemerides_file)
+    # create a dictionary containing the headers of the different NAV files.
+    # The keys are the "YYYYDDD" (year and day of year) and are located at
+    # [12:19] of the file name using RINEX naming convention
+    nav_header_dict = {file.name[12:19]: georinex.rinexheader(file) for file in rinex_3_ephemerides_files}
+
     flat_obs.loc[
         flat_obs.observation_type.str.startswith("C"), "code_iono_delay_klobuchar_m"
     ] = -atmo.compute_klobuchar_l1_correction(
