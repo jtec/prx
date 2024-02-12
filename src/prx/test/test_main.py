@@ -65,18 +65,14 @@ def input_for_test_with_first_epoch_at_midnight():
 
     # nav data from same day
     shutil.copy(
-        # Path(__file__).parent / f"datasets/TLSE_2022001/BRDC00IGS_R_20220010000_01D_MN.zip",
-        # test_directory.joinpath("BRDC00IGS_R_20220010000_01D_MN.zip"),
-        Path(__file__).parent / f"datasets/TLSE_2022001/BRDC00IGS_R_20213652330_25H_GN.rnx",
-        test_directory.joinpath("BRDC00IGS_R_20213652330_25H_GN.rnx"),
+        Path(__file__).parent / f"datasets/TLSE_2022001/BRDC00IGS_R_20220010000_01D_MN.zip",
+        test_directory.joinpath("BRDC00IGS_R_20220010000_01D_MN.zip"),
     )
     assert test_mixed_obs_file.exists()
     # nav data from previous day
     shutil.copy(
-        # Path(__file__).parent / f"datasets/TLSE_2022001/BRDC00WRD_R_20213650000_01D_MN.zip",
-        # test_directory.joinpath("BRDC00WRD_R_20213650000_01D_MN.zip"),
-        Path(__file__).parent / f"datasets/TLSE_2022001/BRDC00WRD_R_20213650000_01D_GN.rnx",
-        test_directory.joinpath("BRDC00WRD_R_20213650000_01D_GN.rnx"),
+        Path(__file__).parent / f"datasets/TLSE_2022001/BRDC00WRD_R_20213650000_01D_MN.zip",
+        test_directory.joinpath("BRDC00WRD_R_20213650000_01D_MN.zip"),
     )
 
     yield {"mixed_obs_file": test_mixed_obs_file,}
