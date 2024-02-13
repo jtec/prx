@@ -1,3 +1,5 @@
+import logging
+
 import numpy as np
 import pytest
 from prx import helpers
@@ -9,6 +11,8 @@ import shutil
 import os
 import glob
 import subprocess
+
+log = logging.getLogger(__name__)
 
 @pytest.fixture
 def input_for_test():
@@ -209,13 +213,16 @@ def test_gfzrnx_execution(input_for_test):
         command = [str(path_folder_gfzrnx.joinpath(gfzrnx_binary)),
                    "-finp",str(file_obs),
                    "-fout",str(file_obs.parent.joinpath("gfzrnx_out.rnx")),
-                   "-chk","-kv",
                    ]
         # execute command
-        result = subprocess.run(
-            command,
-            capture_output=True,
-            shell=True,
-        )
+        try:
+            result = subprocess.run(
+                command,
+                capture_output=True,
+            )
+            if result.returncode == 0:
+                log.info(f"Ran gfzrnx file repair on {file_obs.name} with {gfzrnx_binary}")
+        except:
+            pass
     # check existence of gfzrnx output
     assert(file_obs.parent.joinpath("gfzrnx_out.rnx").exists())

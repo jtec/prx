@@ -1,7 +1,6 @@
 import hashlib
 from pathlib import Path
 import logging
-from prx import helpers
 from prx import constants
 import numpy as np
 import pandas as pd
@@ -125,7 +124,7 @@ def rinex_header_time_string_2_timestamp_ns(time_string: str) -> pd.Timestamp:
 
 
 def repair_with_gfzrnx(file):
-    path_folder_gfzrnx = helpers.prx_repository_root().joinpath("tools", "gfzrnx")
+    path_folder_gfzrnx = prx_repository_root().joinpath("tools", "gfzrnx")
     gfzrnx_binaries = glob.glob(
         "**gfzrnx**",
         root_dir=path_folder_gfzrnx
