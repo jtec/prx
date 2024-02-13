@@ -55,24 +55,30 @@ def input_for_test_with_first_epoch_at_midnight():
     os.makedirs(test_directory)
 
     # filepath_to_mixed_obs_file = "TLSE00FRA_R_20220010000_01H_30S_MO.rnx.gz"
-    filepath_to_mixed_obs_file = "TLSE00FRA_R_20220010000_01H_30S_GO.rnx"
+    # filepath_to_mixed_obs_file = "TLSE00FRA_R_20220010000_01H_30S_GO.zip"
+    # test_mixed_obs_file = test_directory.joinpath(filepath_to_mixed_obs_file)
+    # shutil.copy(
+    #     Path(__file__).parent/f"datasets/TLSE_2022001/{filepath_to_mixed_obs_file}",
+    #     test_mixed_obs_file,
+    # )
+    filepath_to_mixed_obs_file = "TLSE00FRA_R_20230010000_01D_30S_MO.crx.gz"
     test_mixed_obs_file = test_directory.joinpath(filepath_to_mixed_obs_file)
     shutil.copy(
-        Path(__file__).parent/f"datasets/TLSE_2022001/{filepath_to_mixed_obs_file}",
+        Path(__file__).parent / f"datasets/TLSE_2023001/{filepath_to_mixed_obs_file}",
         test_mixed_obs_file,
     )
     assert test_mixed_obs_file.exists()
 
     # nav data from same day
     shutil.copy(
-        Path(__file__).parent / f"datasets/TLSE_2022001/BRDC00IGS_R_20220010000_01D_MN.zip",
-        test_directory.joinpath("BRDC00IGS_R_20220010000_01D_MN.zip"),
+        Path(__file__).parent / f"datasets/TLSE_2023001/BRDC00IGS_R_20230010000_01D_MN.rnx.zip",
+        test_directory.joinpath("BRDC00IGS_R_20230010000_01D_MN.rnx.zip"),
     )
     assert test_mixed_obs_file.exists()
     # nav data from previous day
     shutil.copy(
-        Path(__file__).parent / f"datasets/TLSE_2022001/BRDC00WRD_R_20213650000_01D_MN.zip",
-        test_directory.joinpath("BRDC00WRD_R_20213650000_01D_MN.zip"),
+        Path(__file__).parent / f"datasets/TLSE_2023001/BRDC00IGS_R_20223650000_01D_MN.rnx.gz",
+        test_directory.joinpath("BRDC00IGS_R_20223650000_01D_MN.rnx.gz"),
     )
 
     yield {"mixed_obs_file": test_mixed_obs_file,}
