@@ -61,7 +61,7 @@ def input_for_test_with_first_epoch_at_midnight():
     #     Path(__file__).parent/f"datasets/TLSE_2022001/{filepath_to_mixed_obs_file}",
     #     test_mixed_obs_file,
     # )
-    filepath_to_mixed_obs_file = "TLSE00FRA_R_20230010000_01D_30S_MO.crx.gz"
+    filepath_to_mixed_obs_file = "TLSE00FRA_R_20230010000_30M_30S_GO.crx.gz"
     test_mixed_obs_file = test_directory.joinpath(filepath_to_mixed_obs_file)
     shutil.copy(
         Path(__file__).parent / f"datasets/TLSE_2023001/{filepath_to_mixed_obs_file}",
