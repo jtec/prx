@@ -2,6 +2,8 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
+
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -94,4 +96,11 @@ def test_spp_lsq(input_for_test):
                                          - df_first_epoch.code_iono_delay_klobuchar_m
                                          - df_first_epoch.tropo_delay_m
                                          - df_first_epoch.group_delay_m)
+    x_linearization = np.array([0, 0, 0, 0]).reshape(-1, 1)
+    rx_sat_vectors = df_first_epoch[['x_m', 'y_m', 'z_m']].to_numpy() - x_linearization[:3].T
+    row_sums = np.linalg.norm(rx_sat_vectors, axis=1)
+    unit_vectors = (rx_sat_vectors.T / row_sums).T
+    TODO make clock offset constellation-specific
+    H = np.hstack((-unit_vectors, np.ones((len(unit_vectors), 1))))
+    x_lsq = np.linalg.lstsq(H, df_first_epoch.C_obs_corrected, rcond='warn')
     pass
