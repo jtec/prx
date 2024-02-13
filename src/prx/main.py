@@ -418,40 +418,70 @@ def _build_records_cached(
     # [12:19] of the file name using RINEX naming convention
     nav_header_dict = {file.name[12:19]: georinex.rinexheader(file) for file in rinex_3_ephemerides_files}
 
-    flat_obs.loc[
-        flat_obs.observation_type.str.startswith("C"), "code_iono_delay_klobuchar_m"
-    ] = -atmo.compute_klobuchar_l1_correction(
-        flat_obs[
-            flat_obs.observation_type.str.startswith("C")
-        ].time_of_emission_weeksecond_system_time.to_numpy(),
-        nav_header["IONOSPHERIC CORR"]["GPSA"],
-        nav_header["IONOSPHERIC CORR"]["GPSB"],
-        flat_obs[flat_obs.observation_type.str.startswith("C")].elevation_rad,
-        flat_obs[flat_obs.observation_type.str.startswith("C")].azimuth_rad,
-        latitude_user_rad,
-        longitude_user_rad,
-    ) * (
-        constants.carrier_frequencies_hz()["G"]["L1"] ** 2
-        / flat_obs[flat_obs.observation_type.str.startswith("C")].carrier_frequency_hz
-        ** 2
-    )
-    flat_obs.loc[
-        flat_obs.observation_type.str.startswith("L"), "carrier_iono_delay_klobuchar_m"
-    ] = atmo.compute_klobuchar_l1_correction(
-        flat_obs[
-            flat_obs.observation_type.str.startswith("L")
-        ].time_of_emission_weeksecond_system_time.to_numpy(),
-        nav_header["IONOSPHERIC CORR"]["GPSA"],
-        nav_header["IONOSPHERIC CORR"]["GPSB"],
-        flat_obs[flat_obs.observation_type.str.startswith("L")].elevation_rad,
-        flat_obs[flat_obs.observation_type.str.startswith("L")].azimuth_rad,
-        latitude_user_rad,
-        longitude_user_rad,
-    ) * (
-        constants.carrier_frequencies_hz()["G"]["L1"] ** 2
-        / flat_obs[flat_obs.observation_type.str.startswith("L")].carrier_frequency_hz
-        ** 2
-    )
+    for file in rinex_3_ephemerides_files:
+        # get year and doy from NAV filename
+        year = int(file.name[12:16])
+        doy = int(file.name[16:19])
+        log.info(f"Computing iono delay for {year}-{doy:03d}")
+
+        # Selection criteria: time of emission belonging to the day of the current NAV file
+        mask = (flat_obs.time_of_emission_isagpst >= rinex_evaluate.to_isagpst(
+            pd.Timestamp(year=year, month=1, day=1) + pd.Timedelta(days=doy - 1) - constants.cGpstUtcEpoch,"GPST")
+                ) &\
+               (flat_obs.time_of_emission_isagpst < rinex_evaluate.to_isagpst(
+                   pd.Timestamp(year=year, month=1, day=1) + pd.Timedelta(days=doy) - constants.cGpstUtcEpoch, "GPST"))
+
+        flat_obs.loc[
+            mask,
+            "code_iono_delay_klobuchar_m",
+        ] = -atmo.compute_klobuchar_l1_correction(
+            flat_obs.loc[mask].time_of_emission_weeksecond_system_time.to_numpy(),
+            nav_header_dict[f"{year:03d}"+f"{doy:03d}"]["IONOSPHERIC CORR"]["GPSA"],
+            nav_header_dict[f"{year:03d}"+f"{doy:03d}"]["IONOSPHERIC CORR"]["GPSB"],
+            flat_obs.loc[mask].elevation_rad,
+            flat_obs.loc[mask].azimuth_rad,
+            latitude_user_rad,
+            longitude_user_rad,
+        ) * (
+            constants.carrier_frequencies_hz()["G"]["L1"] ** 2
+            / flat_obs.loc[mask].carrier_frequency_hz
+            ** 2
+        )
+
+    # flat_obs.loc[
+    #     flat_obs.observation_type.str.startswith("C"), "code_iono_delay_klobuchar_m"
+    # ] = -atmo.compute_klobuchar_l1_correction(
+    #     flat_obs[
+    #         flat_obs.observation_type.str.startswith("C")
+    #     ].time_of_emission_weeksecond_system_time.to_numpy(),
+    #     nav_header["IONOSPHERIC CORR"]["GPSA"],
+    #     nav_header["IONOSPHERIC CORR"]["GPSB"],
+    #     flat_obs[flat_obs.observation_type.str.startswith("C")].elevation_rad,
+    #     flat_obs[flat_obs.observation_type.str.startswith("C")].azimuth_rad,
+    #     latitude_user_rad,
+    #     longitude_user_rad,
+    # ) * (
+    #     constants.carrier_frequencies_hz()["G"]["L1"] ** 2
+    #     / flat_obs[flat_obs.observation_type.str.startswith("C")].carrier_frequency_hz
+    #     ** 2
+    # )
+    # flat_obs.loc[
+    #     flat_obs.observation_type.str.startswith("L"), "carrier_iono_delay_klobuchar_m"
+    # ] = atmo.compute_klobuchar_l1_correction(
+    #     flat_obs[
+    #         flat_obs.observation_type.str.startswith("L")
+    #     ].time_of_emission_weeksecond_system_time.to_numpy(),
+    #     nav_header["IONOSPHERIC CORR"]["GPSA"],
+    #     nav_header["IONOSPHERIC CORR"]["GPSB"],
+    #     flat_obs[flat_obs.observation_type.str.startswith("L")].elevation_rad,
+    #     flat_obs[flat_obs.observation_type.str.startswith("L")].azimuth_rad,
+    #     latitude_user_rad,
+    #     longitude_user_rad,
+    # ) * (
+    #     constants.carrier_frequencies_hz()["G"]["L1"] ** 2
+    #     / flat_obs[flat_obs.observation_type.str.startswith("L")].carrier_frequency_hz
+    #     ** 2
+    # )
 
     return flat_obs
 
