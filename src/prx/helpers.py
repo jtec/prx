@@ -1,9 +1,8 @@
 import hashlib
 from pathlib import Path
 import logging
-
-import prx.helpers
-from . import constants
+from prx import helpers
+from prx import constants
 import numpy as np
 import pandas as pd
 import glob
@@ -126,18 +125,28 @@ def rinex_header_time_string_2_timestamp_ns(time_string: str) -> pd.Timestamp:
 
 
 def repair_with_gfzrnx(file):
+    path_folder_gfzrnx = helpers.prx_repository_root().joinpath("tools", "gfzrnx")
     gfzrnx_binaries = glob.glob(
-        str(prx.helpers.prx_repository_root() / "tools/gfzrnx/**gfzrnx**"),
-        recursive=True,
+        "**gfzrnx**",
+        root_dir=path_folder_gfzrnx
     )
     assert len(gfzrnx_binaries) > 0, "Could not find any gfzrnx binary"
     for gfzrnx_binary in gfzrnx_binaries:
-        command = f" {gfzrnx_binary} -finp {file} -fout {file}  -chk -kv -f"
-        result = subprocess.run(command, capture_output=True, shell=True)
+        command = [str(path_folder_gfzrnx.joinpath(gfzrnx_binary)),
+                   "-finp", str(file),
+                   "-fout", str(file.parent.joinpath("gfzrnx_out.rnx")),
+                   "-chk", "-kv",
+                   "-f",
+                   ]
+        result = subprocess.run(
+            command,
+            capture_output=True,
+            shell=True,
+        )
         if result.returncode == 0:
             log.info(f"Ran gfzrnx file repair on {file}")
             return file
-    assert False, f"gdzrnx file repair run failed: {result}"
+    assert False, f"gfzrnx file repair run failed: {result}"
 
 
 def deg_2_rad(angle_deg):
