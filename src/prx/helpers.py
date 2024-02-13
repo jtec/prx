@@ -133,18 +133,21 @@ def repair_with_gfzrnx(file):
     for gfzrnx_binary in gfzrnx_binaries:
         command = [str(path_folder_gfzrnx.joinpath(gfzrnx_binary)),
                    "-finp", str(file),
-                   "-fout", str(file.parent.joinpath("gfzrnx_out.rnx")),
+                   "-fout", str(file),
                    "-chk", "-kv",
                    "-f",
                    ]
-        result = subprocess.run(
-            command,
-            capture_output=True,
-            shell=True,
-        )
-        if result.returncode == 0:
-            log.info(f"Ran gfzrnx file repair on {file}")
-            return file
+        try:
+            result = subprocess.run(
+                command,
+                capture_output=True,
+                shell=True,
+            )
+            if result.returncode == 0:
+                log.info(f"Ran gfzrnx file repair on {file}")
+                return file
+        except:
+            pass
     assert False, f"gfzrnx file repair run failed: {result}"
 
 
