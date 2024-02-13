@@ -32,10 +32,10 @@ def input_for_test():
     assert test_file["obs"].exists()
 
     # Also provide ephemerides so the test does not have to download them:
-    ephemerides_file = "BRDC00IGS_R_20220010000_01D_MN.zip"
+    ephemerides_file = "BRDC00IGS_R_20230010000_01D_MN.rnx.zip"
     test_file["nav"] = test_directory.joinpath(ephemerides_file)
     shutil.copy(
-        Path(__file__).parent / f"datasets/TLSE_2022001/{ephemerides_file}",
+        Path(__file__).parent / f"datasets/TLSE_2023001/{ephemerides_file}",
         test_file["nav"].parent.joinpath(ephemerides_file),
     )
     assert test_file["nav"].parent.joinpath(ephemerides_file).exists()
@@ -197,7 +197,7 @@ def test_sagnac_effect():
     assert np.max(np.abs(sagnac_effect_computed - sagnac_effect_reference)) < tolerance
 
 
-def test_gfzrnx_execution(input_for_test):
+def test_gfzrnx_execution_on_obs_file(input_for_test):
     # convert test file to RX3 format
     file_obs = converters.anything_to_rinex_3(input_for_test["obs"])
     # list all gfzrnx binaries contained in the folder "prx/tools/gfzrnx/"
@@ -226,3 +226,34 @@ def test_gfzrnx_execution(input_for_test):
             pass
     # check existence of gfzrnx output
     assert(file_obs.parent.joinpath("gfzrnx_out.rnx").exists())
+
+
+def test_gfzrnx_execution_on_nav_file(input_for_test):
+    # convert test file to RX3 format
+    file_nav = converters.anything_to_rinex_3(input_for_test["nav"])
+    # list all gfzrnx binaries contained in the folder "prx/tools/gfzrnx/"
+    path_folder_gfzrnx = helpers.prx_repository_root().joinpath("tools","gfzrnx")
+    gfzrnx_binaries = glob.glob(
+        "**gfzrnx**",
+        root_dir=path_folder_gfzrnx
+    )
+    assert len(gfzrnx_binaries) > 0, "Could not find any gfzrnx binary"
+
+    for gfzrnx_binary in gfzrnx_binaries:
+        # build command string
+        command = [str(path_folder_gfzrnx.joinpath(gfzrnx_binary)),
+                   "-finp",str(file_nav),
+                   "-fout",str(file_nav.parent.joinpath("gfzrnx_out.rnx")),
+                   ]
+        # execute command
+        try:
+            result = subprocess.run(
+                command,
+                capture_output=True,
+            )
+            if result.returncode == 0:
+                log.info(f"Ran gfzrnx file repair on {file_nav.name} with {gfzrnx_binary}")
+        except:
+            pass
+    # check existence of gfzrnx output
+    assert(file_nav.parent.joinpath("gfzrnx_out.rnx").exists())
