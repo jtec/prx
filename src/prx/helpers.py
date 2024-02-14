@@ -145,10 +145,13 @@ def repair_with_gfzrnx(file):
             )
             if result.returncode == 0:
                 log.info(f"Ran gfzrnx file repair on {file}")
-                return file
-        except:
+            else:
+                log.info(f"gfzrnx file repair run failed: {result}")
+        except OSError:
             pass
-    assert False, f"gfzrnx file repair run failed: {result}"
+        else:
+            pass
+    return file
 
 
 def deg_2_rad(angle_deg):
