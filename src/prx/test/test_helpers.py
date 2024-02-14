@@ -222,7 +222,11 @@ def test_gfzrnx_execution_on_obs_file(input_for_test):
             )
             if result.returncode == 0:
                 log.info(f"Ran gfzrnx file repair on {file_obs.name} with {gfzrnx_binary}")
-        except:
+            else:
+                log.info(f"gfzrnx file repair run failed: {result}")
+        except OSError:
+            pass
+        else:
             pass
     # check existence of gfzrnx output
     assert(file_obs.parent.joinpath("gfzrnx_out.rnx").exists())
@@ -253,7 +257,11 @@ def test_gfzrnx_execution_on_nav_file(input_for_test):
             )
             if result.returncode == 0:
                 log.info(f"Ran gfzrnx file repair on {file_nav.name} with {gfzrnx_binary}")
-        except:
+            else:
+                log.info(f"gfzrnx file repair run failed: {result}")
+        except OSError:
+            pass
+        else:
             pass
     # check existence of gfzrnx output
     assert(file_nav.parent.joinpath("gfzrnx_out.rnx").exists())
