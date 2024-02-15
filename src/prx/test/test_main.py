@@ -1,3 +1,4 @@
+
 import os
 from pathlib import Path
 import shutil
@@ -17,6 +18,8 @@ from prx import main
 # even  if the test crashes.
 @pytest.fixture
 def input_for_test():
+    
+
     test_directory = Path(f"./tmp_test_directory_{__name__}").resolve()
     if test_directory.exists():
         # Make sure the expected file has not been generated before and is still on disk due to e.g. a previous
@@ -70,5 +73,5 @@ def test_prx_function_call_with_csv_output(input_for_test):
     assert not df.empty
     # Elevation sanity check
     assert (
-        df[(df.prn == 14) & (df.constellation == "C")].elevation_deg - 34.86
+        df[(df.prn == 14) & (df.constellation == "C")].sat_elevation_deg - 34.86
     ).abs().max() < 0.3

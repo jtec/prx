@@ -293,11 +293,11 @@ def compute_satellite_elevation_and_azimuth(sat_pos_ecef, receiver_pos_ecef):
         np.dot(unit_vector_rx_satellite_ecef, unit_e_ecef),
         np.dot(unit_vector_rx_satellite_ecef, unit_n_ecef),
     )
-    elevation_deg = np.rad2deg(elevation_rad)
+    sat_elevation_deg = np.rad2deg(elevation_rad)
 
     up = receiver_pos_ecef / np.linalg.norm(receiver_pos_ecef)
     angle_up_los_deg = np.rad2deg(np.arccos(np.dot(unit_vector_rx_satellite_ecef, up)))
-    elevation_deg_2 = 90 - angle_up_los_deg
+    sat_elevation_deg_2 = 90 - angle_up_los_deg
     return elevation_rad, azimuth_rad
 
 

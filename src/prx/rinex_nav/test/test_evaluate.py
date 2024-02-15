@@ -25,8 +25,8 @@ from dotmap import DotMap
 expected_max_differences_broadcast_vs_precise = {
     "diff_xyz_l2_m": 11.9,
     "diff_dxyz_l2_mps": 1.8e-4,
-    "clock_m": 26,  # TODO Broadcast clock error should be much smaller than this.
-    "dclock_mps": 1.2e-4,
+    "sat_clock_offset_m": 26,  # TODO Broadcast clock error should be much smaller than this.
+    "sat_clock_drift_mps": 1.2e-4,
 }
 
 
@@ -73,7 +73,7 @@ def test_compare_rnx3_gps_sat_pos_with_magnitude(input_for_test):
 
     # MAGNITUDE position
     sv_pos_magnitude = np.array([13053451.235, -12567273.060, 19015357.126])
-    sv_pos_prx = rinex_sat_states[["x_m", "y_m", "z_m"]][
+    sv_pos_prx = rinex_sat_states[["sat_pos_x_m", "sat_pos_y_m", "sat_pos_z_m"]][
         rinex_sat_states.sv == "G01"
     ].to_numpy()
 
@@ -170,7 +170,7 @@ def test_compare_to_sp3(input_for_test):
         rinex_sat_states.sort_values(by=["sv", "query_time_isagpst"])
         .sort_index(axis=1)
         .reset_index()
-        .drop(columns=["index", "signal", "group_delay_m"])
+        .drop(columns=["index", "signal", "sat_instrumental_delay_m"])
     )
 
     sp3_sat_states = sp3_evaluate.compute(
@@ -196,10 +196,10 @@ def test_compare_to_sp3(input_for_test):
     diff = rinex_sat_states.drop(columns="sv") - sp3_sat_states.drop(columns="sv")
     diff = pd.concat((rinex_sat_states["sv"], diff), axis=1)
     diff["diff_xyz_l2_m"] = np.linalg.norm(
-        diff[["x_m", "y_m", "z_m"]].to_numpy(), axis=1
+        diff[["sat_pos_x_m", "sat_pos_y_m", "sat_pos_z_m"]].to_numpy(), axis=1
     )
     diff["diff_dxyz_l2_mps"] = np.linalg.norm(
-        diff[["dx_mps", "dy_mps", "dz_mps"]].to_numpy(), axis=1
+        diff[["sat_vel_x_mps", "sat_vel_y_mps", "sat_vel_z_mps"]].to_numpy(), axis=1
     )
 
     print("\n" + diff.to_string())
@@ -261,7 +261,7 @@ def test_2023_beidou_c27(set_up_test_2023):
     ), "Was expecting only one, row, make sure to sort before comparing to sp3 with more than one row"
     rinex_sat_states = (
         rinex_sat_states.reset_index()
-        .drop(columns=["index", "signal", "group_delay_m"])
+        .drop(columns=["index", "signal", "sat_instrumental_delay_m"])
         .sort_index(axis="columns")
     )
     rinex_sat_states.to_csv("jan.csv")
@@ -274,10 +274,10 @@ def test_2023_beidou_c27(set_up_test_2023):
     diff = rinex_sat_states.drop(columns="sv") - sp3_sat_states.drop(columns="sv")
     diff = pd.concat((rinex_sat_states["sv"], diff), axis=1)
     diff["diff_xyz_l2_m"] = np.linalg.norm(
-        diff[["x_m", "y_m", "z_m"]].to_numpy(), axis=1
+        diff[["sat_pos_x_m", "sat_pos_y_m", "sat_pos_z_m"]].to_numpy(), axis=1
     )
     diff["diff_dxyz_l2_mps"] = np.linalg.norm(
-        diff[["dx_mps", "dy_mps", "dz_mps"]].to_numpy(), axis=1
+        diff[["sat_vel_x_mps", "sat_vel_y_mps", "sat_vel_z_mps"]].to_numpy(), axis=1
     )
     for (
         column,
@@ -314,7 +314,7 @@ def test_group_delays(input_for_test):
     )
     rinex_sat_states = rinex_nav_evaluate.compute(rinex_nav_file, query)
     # Check that group delays are computed for all signals
-    assert not rinex_sat_states["group_delay_m"].isna().any()
+    assert not rinex_sat_states["sat_instrumental_delay_m"].isna().any()
 
 
 def max_abs_diff_smaller_than(a, b, threshold):
@@ -381,19 +381,19 @@ def test_gps_group_delay(input_for_test):
             .equals(pd.Series(times))
         )
     assert max_abs_diff_smaller_than(
-        tgds[tgds.signal == "C1C"]["group_delay_m"],
+        tgds[tgds.signal == "C1C"]["sat_instrumental_delay_m"],
         constants.cGpsSpeedOfLight_mps
         * pd.Series([-1.769512891770e-08, -1.769512891770e-08, -1.769512891769e-08]),
         1e-6,
     )
     assert max_abs_diff_smaller_than(
-        tgds[tgds.signal == "C1P"]["group_delay_m"],
+        tgds[tgds.signal == "C1P"]["sat_instrumental_delay_m"],
         constants.cGpsSpeedOfLight_mps
         * pd.Series([-1.769512891770e-08, -1.769512891770e-08, -1.769512891769e-08]),
         1e-6,
     )
     assert max_abs_diff_smaller_than(
-        tgds[tgds.signal == "C2P"]["group_delay_m"],
+        tgds[tgds.signal == "C2P"]["sat_instrumental_delay_m"],
         constants.cGpsSpeedOfLight_mps
         * pd.Series([-1.769512891770e-08, -1.769512891770e-08, -1.769512891769e-08])
         * (
@@ -403,7 +403,7 @@ def test_gps_group_delay(input_for_test):
         ** 2,
         1e-6,
     )
-    assert np.all(np.isnan(tgds[tgds.signal == "C5X"]["group_delay_m"].to_numpy()))
+    assert np.all(np.isnan(tgds[tgds.signal == "C5X"]["sat_instrumental_delay_m"].to_numpy()))
 
 
 def test_gal_group_delay(input_for_test):
@@ -457,12 +457,12 @@ def test_gal_group_delay(input_for_test):
         )
     tgds = rinex_nav_evaluate.compute(rinex_3_navigation_file, query)
     assert max_abs_diff_smaller_than(
-        tgds[tgds.signal == "C1C"]["group_delay_m"],
+        tgds[tgds.signal == "C1C"]["sat_instrumental_delay_m"],
         4.889443516730e-09 * constants.cGpsSpeedOfLight_mps,
         1e-6,
     )
     assert max_abs_diff_smaller_than(
-        tgds[tgds.signal == "C5X"]["group_delay_m"],
+        tgds[tgds.signal == "C5X"]["sat_instrumental_delay_m"],
         4.423782229424e-09
         * (
             constants.carrier_frequencies_hz()["E"]["L1"]
@@ -473,7 +473,7 @@ def test_gal_group_delay(input_for_test):
         1e-6,
     )
     assert max_abs_diff_smaller_than(
-        tgds[tgds.signal == "C7X"]["group_delay_m"],
+        tgds[tgds.signal == "C7X"]["sat_instrumental_delay_m"],
         4.889443516730e-09
         * (
             constants.carrier_frequencies_hz()["E"]["L1"]
@@ -483,7 +483,7 @@ def test_gal_group_delay(input_for_test):
         * constants.cGpsSpeedOfLight_mps,
         1e-6,
     )
-    assert np.all(np.isnan(tgds[tgds.signal == "C6B"]["group_delay_m"].to_numpy()))
+    assert np.all(np.isnan(tgds[tgds.signal == "C6B"]["sat_instrumental_delay_m"].to_numpy()))
 
 
 def test_bds_group_delay(input_for_test):
@@ -544,14 +544,14 @@ def test_bds_group_delay(input_for_test):
     tgd_c6i_s_expected = 0 * constants.cGpsSpeedOfLight_mps
 
     assert max_abs_diff_smaller_than(
-        tgds[tgds.signal == "C2I"].group_delay_m, tgd_c2i_s_expected, 1e-6
+        tgds[tgds.signal == "C2I"].sat_instrumental_delay_m, tgd_c2i_s_expected, 1e-6
     )
     assert max_abs_diff_smaller_than(
-        tgds[tgds.signal == "C7I"].group_delay_m, tgd_c7i_s_expected, 1e-6
+        tgds[tgds.signal == "C7I"].sat_instrumental_delay_m, tgd_c7i_s_expected, 1e-6
     )
     assert max_abs_diff_smaller_than(
-        tgds[tgds.signal == "C6I"].group_delay_m, tgd_c6i_s_expected, 1e-6
+        tgds[tgds.signal == "C6I"].sat_instrumental_delay_m, tgd_c6i_s_expected, 1e-6
     )
-    assert np.all(np.isnan(tgds[tgds.signal == "C1D"]["group_delay_m"].to_numpy()))
-    assert np.all(np.isnan(tgds[tgds.signal == "C1P"]["group_delay_m"].to_numpy()))
-    assert np.all(np.isnan(tgds[tgds.signal == "C5X"]["group_delay_m"].to_numpy()))
+    assert np.all(np.isnan(tgds[tgds.signal == "C1D"]["sat_instrumental_delay_m"].to_numpy()))
+    assert np.all(np.isnan(tgds[tgds.signal == "C1P"]["sat_instrumental_delay_m"].to_numpy()))
+    assert np.all(np.isnan(tgds[tgds.signal == "C5X"]["sat_instrumental_delay_m"].to_numpy()))

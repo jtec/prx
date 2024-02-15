@@ -41,10 +41,10 @@ def parse_sp3_file(file_path: Path):
             helpers.timedelta_2_seconds
         )
         df.drop(columns=["time"], inplace=True)
-        df["clock_m"] = (
+        df["sat_clock_offset_m"] = (
             constants.cGpsSpeedOfLight_mps * df["clock"]
         ) / constants.cMicrosecondsPerSecond
-        df["dclock_mps"] = (
+        df["sat_clock_drift_mps"] = (
             constants.cGpsSpeedOfLight_mps * df["dclock"]
         ) / constants.cMicrosecondsPerSecond
         for axis in ["x", "y", "z"]:
@@ -53,14 +53,14 @@ def parse_sp3_file(file_path: Path):
             )
         # Give some columns more pithy names
         df.rename(
-            columns={"position_x": "x_m", "position_y": "y_m", "position_z": "z_m"},
+            columns={"position_x": "sat_pos_x_m", "position_y": "sat_pos_y_m", "position_z": "sat_pos_z_m"},
             inplace=True,
         )
         df.rename(
             columns={
-                "velocity_x": "dx_mps",
-                "velocity_y": "dy_mps",
-                "velocity_z": "dz_mps",
+                "velocity_x": "sat_vel_x_mps",
+                "velocity_y": "sat_vel_y_mps",
+                "velocity_z": "sat_vel_z_mps",
             },
             inplace=True,
         )
@@ -103,7 +103,7 @@ def interpolate(df, query_time_gpst_s, plot_interpolation=False):
     assert end_index < len(
         df.index
     ), f"We need at least {n_samples_each_side} after the sample closest to the query time to interpolate"
-    columns_to_interpolate = ["x_m", "y_m", "z_m", "clock_m"]
+    columns_to_interpolate = ["sat_pos_x_m", "sat_pos_y_m", "sat_pos_z_m", "sat_clock_offset_m"]
     interpolated = df[closest_sample_index : closest_sample_index + 1]
     interpolated["gpst_s"] = query_time_gpst_s
     for col in columns_to_interpolate:
@@ -128,10 +128,10 @@ def interpolate(df, query_time_gpst_s, plot_interpolation=False):
         first_derivative = Polynomial(poly.coef[::-1]).deriv(1)(
             query_time_gpst_s - times[0]
         )
-        if col in ["x_m", "y_m", "z_m"]:
+        if col in ["sat_pos_x_m", "sat_pos_y_m", "sat_pos_z_m"]:
             interpolated[f"d{col}ps"] = first_derivative
-        elif col == "clock_m":
-            interpolated["dclock_mps"] = first_derivative
+        elif col == "sat_clock_offset_m":
+            interpolated["sat_clock_drift_mps"] = first_derivative
 
     return interpolated
 
