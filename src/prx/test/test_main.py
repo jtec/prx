@@ -75,3 +75,48 @@ def test_prx_function_call_with_csv_output(input_for_test):
     assert (
         df[(df.prn == 14) & (df.constellation == "C")].sat_elevation_deg - 34.86
     ).abs().max() < 0.3
+
+
+
+
+
+
+
+def prx_csv_to_pandas(filepath: str):
+    """
+    # Read a PRX_CSV file and convert it to pandas DataFrame
+    """
+    data_prx = pd.read_csv(
+        filepath,
+        comment="#",
+
+        parse_dates=["time_of_reception_in_receiver_time"],
+    )
+    return data_prx
+
+def test_csv_format():
+    # Path to the generated prx csv file
+    csv_file = (
+        helpers.prx_repository_root()
+        .joinpath("tools/validation_data/TLSE00FRA_R_20230010100_10S_01S_MO.csv")
+    )
+    # Read the generated CSV file and convert it to pandas DataFrame
+    data_prx = prx_csv_to_pandas(csv_file)
+
+    # List of expected field names after renaming
+    fields_expected = ['sat_clock_offset_m', 'sat_clock_drift_mps', 'sat_pos_x_m','sat_vel_x_mps',
+    'sat_instrumental_delay_m','iono_delay_m','sat_elevation_deg','sat_azim_deg','rnx_obs_identifier','C_obs_m']
+
+    # Check if the renamed fields are present in the DataFrame columns
+    for field in fields_expected:
+        assert field in data_prx.columns
+
+    # Check values of the first observation for a few fields (not involving prx computations)
+    assert data_prx.iloc[0].time_of_reception_in_receiver_time == pd.Timestamp("2023-01-01 01:00:00")
+    assert data_prx.iloc[0].constellation == "C"
+    assert data_prx.iloc[0].prn == 5
+    assert data_prx.iloc[0].observation_code == "2I"
+    assert data_prx.iloc[0].code_observation_m == 39902331.27300
+    assert data_prx.iloc[0].doppler_observation_hz == -19.17200
+    assert data_prx.iloc[0].carrier_observation_m == 39902329.09610697
+    assert data_prx.iloc[0].cn0_dbhz == 35.60000
