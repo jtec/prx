@@ -88,19 +88,43 @@ def test_spp_lsq(input_for_test):
     assert not df.empty
     df.group_delay_m = df.group_delay_m.fillna(0)
     df = df[df.C_obs.notna() & df.x_m.notna()]
-    df_first_epoch = df[df.time_of_reception_in_receiver_time == df.time_of_reception_in_receiver_time.min()]
-    df_first_epoch['C_obs_corrected'] = (df_first_epoch.C_obs
-                                         - df_first_epoch.clock_m
-                                         - df_first_epoch.relativistic_clock_effect_m
-                                         - df_first_epoch.sagnac_effect_m
-                                         - df_first_epoch.code_iono_delay_klobuchar_m
-                                         - df_first_epoch.tropo_delay_m
-                                         - df_first_epoch.group_delay_m)
-    x_linearization = np.array([0, 0, 0, 0]).reshape(-1, 1)
-    rx_sat_vectors = df_first_epoch[['x_m', 'y_m', 'z_m']].to_numpy() - x_linearization[:3].T
-    row_sums = np.linalg.norm(rx_sat_vectors, axis=1)
-    unit_vectors = (rx_sat_vectors.T / row_sums).T
-    TODO make clock offset constellation-specific
-    H = np.hstack((-unit_vectors, np.ones((len(unit_vectors), 1))))
-    x_lsq = np.linalg.lstsq(H, df_first_epoch.C_obs_corrected, rcond='warn')
-    pass
+    df_first_epoch = df[
+        df.time_of_reception_in_receiver_time
+        == df.time_of_reception_in_receiver_time.min()
+    ]
+    df_first_epoch["C_obs_corrected"] = (
+        df_first_epoch.C_obs
+        - df_first_epoch.clock_m
+        - df_first_epoch.relativistic_clock_effect_m
+        - df_first_epoch.sagnac_effect_m
+        - df_first_epoch.code_iono_delay_klobuchar_m
+        - df_first_epoch.tropo_delay_m
+        - df_first_epoch.group_delay_m
+    )
+    x_linearization = np.zeros((3 + len(df_first_epoch.constellation.unique()), 1))
+    solution_increment_sos = np.inf
+    n_iterations = 0
+    while solution_increment_sos > 1e-6:
+        rx_sat_vectors = (
+            df_first_epoch[["x_m", "y_m", "z_m"]].to_numpy() - x_linearization[:3].T
+        )
+        row_sums = np.linalg.norm(rx_sat_vectors, axis=1)
+        unit_vectors = (rx_sat_vectors.T / row_sums).T
+        # One clock offset per constellation
+        H_clock = np.zeros(
+            (
+                len(df_first_epoch.C_obs_corrected),
+                len(df_first_epoch.constellation.unique()),
+            )
+        )
+        for i, constellation in enumerate(df_first_epoch.constellation.unique()):
+            H_clock[df_first_epoch.constellation == constellation, i] = 1
+        H = np.hstack((-unit_vectors, H_clock))
+        x_lsq, residuals, _, _ = np.linalg.lstsq(
+            H, df_first_epoch.C_obs_corrected, rcond="warn"
+        )
+        x_lsq = x_lsq.reshape(-1, 1)
+        solution_increment_sos = np.linalg.norm(x_lsq)
+        x_linearization += x_lsq
+        n_iterations += 1
+        assert n_iterations < 10
