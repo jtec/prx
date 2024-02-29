@@ -94,36 +94,104 @@ def test_spp_lsq(input_for_test):
     ]
     df_first_epoch["C_obs_corrected"] = (
         df_first_epoch.C_obs
-        - df_first_epoch.clock_m
-        - df_first_epoch.relativistic_clock_effect_m
+        + df_first_epoch.clock_m
+        + df_first_epoch.relativistic_clock_effect_m
         - df_first_epoch.sagnac_effect_m
         - df_first_epoch.code_iono_delay_klobuchar_m
         - df_first_epoch.tropo_delay_m
         - df_first_epoch.group_delay_m
     )
+    # determine the constellation selection matrix of each obs
+    H_clock = np.zeros(
+        (
+            len(df_first_epoch.C_obs_corrected),
+            len(df_first_epoch.constellation.unique()),
+        )
+    )
+    for i, constellation in enumerate(df_first_epoch.constellation.unique()):
+        H_clock[df_first_epoch.constellation == constellation, i] = 1
+    # initial linearization point
     x_linearization = np.zeros((3 + len(df_first_epoch.constellation.unique()), 1))
     solution_increment_sos = np.inf
     n_iterations = 0
     while solution_increment_sos > 1e-6:
+        # compute predicted pseudo-range as geometric distance + clock bias, predicted at x_linearization
+        C_obs_predicted = (
+                np.linalg.norm(
+                    x_linearization[0:3].T - df_first_epoch[["x_m", "y_m", "z_m"]].to_numpy(),
+                    axis=1
+                ) # geometric distance
+                + np.squeeze(H_clock @ x_linearization[3:]) # rx to constellation clock bias
+        )
+        # compute jacobian matrix
         rx_sat_vectors = (
             df_first_epoch[["x_m", "y_m", "z_m"]].to_numpy() - x_linearization[:3].T
         )
         row_sums = np.linalg.norm(rx_sat_vectors, axis=1)
         unit_vectors = (rx_sat_vectors.T / row_sums).T
         # One clock offset per constellation
-        H_clock = np.zeros(
-            (
-                len(df_first_epoch.C_obs_corrected),
-                len(df_first_epoch.constellation.unique()),
-            )
-        )
-        for i, constellation in enumerate(df_first_epoch.constellation.unique()):
-            H_clock[df_first_epoch.constellation == constellation, i] = 1
         H = np.hstack((-unit_vectors, H_clock))
         x_lsq, residuals, _, _ = np.linalg.lstsq(
-            H, df_first_epoch.C_obs_corrected, rcond="warn"
+            H,
+            df_first_epoch.C_obs_corrected - C_obs_predicted,
+            rcond="warn"
         )
         x_lsq = x_lsq.reshape(-1, 1)
+        solution_increment_sos = np.linalg.norm(x_lsq)
+        x_linearization += x_lsq
+        n_iterations += 1
+        assert n_iterations < 10
+
+
+def test_spp_lsq_single_epoch_gps_1c(input_for_test):
+    test_file = input_for_test
+    main.process(observation_file_path=test_file, output_format="csv")
+    expected_prx_file = Path(
+        str(test_file).replace("crx.gz", constants.cPrxCsvFileExtension)
+    )
+    assert expected_prx_file.exists()
+    df = pd.read_csv(expected_prx_file, comment="#")
+    assert not df.empty
+    df.group_delay_m = df.group_delay_m.fillna(0)
+    df = df[df.C_obs.notna() & df.x_m.notna()]
+    df_first_epoch = df[
+        df.time_of_reception_in_receiver_time
+        == df.time_of_reception_in_receiver_time.min()
+    ]
+    df_gps_1c = df_first_epoch[(df_first_epoch.constellation == "G") & (df_first_epoch["observation_code"] == "1C") ]
+    df_gps_1c["C_obs_corrected"] = (
+        df_gps_1c.C_obs
+        + df_gps_1c.clock_m
+        + df_gps_1c.relativistic_clock_effect_m
+        - df_gps_1c.sagnac_effect_m
+        - df_gps_1c.code_iono_delay_klobuchar_m
+        - df_gps_1c.tropo_delay_m
+        - df_gps_1c.group_delay_m
+    )
+    # retrieve user position from rnx obs header
+    import prx.converters
+    rinex_3_obs_file = prx.converters.anything_to_rinex_3(input_for_test)
+    import georinex
+    obs_header = georinex.rinexheader(rinex_3_obs_file)
+    receiver_ecef_position_m = np.fromstring(obs_header["APPROX POSITION XYZ"], sep=" ")
+
+    # define initial linearization as receiver position and clk bias = 0
+    x_linearization = np.append(receiver_ecef_position_m,0)
+    solution_increment_sos = np.inf
+    n_iterations = 0
+    while solution_increment_sos > 1e-6:
+        # compute predicted pseudo-range as geometric distance + clock bias, predicted at x_linearization
+        C_obs_predicted = np.linalg.norm(x_linearization[0:3] - df_gps_1c[["x_m", "y_m", "z_m"]].to_numpy(), axis=1) + x_linearization[3]
+        rx_sat_vectors = (
+            df_gps_1c[["x_m", "y_m", "z_m"]].to_numpy() - x_linearization[:3].T
+        )
+        row_sums = np.linalg.norm(rx_sat_vectors, axis=1)
+        unit_vectors = (rx_sat_vectors.T / row_sums).T
+        H_clock = np.ones((len(df_gps_1c.C_obs_corrected), 1,))
+        H = np.hstack((-unit_vectors, H_clock))
+        x_lsq, residuals, _, _ = np.linalg.lstsq(
+            H, df_gps_1c.C_obs_corrected.to_numpy() - C_obs_predicted, rcond="warn"
+        )
         solution_increment_sos = np.linalg.norm(x_lsq)
         x_linearization += x_lsq
         n_iterations += 1
