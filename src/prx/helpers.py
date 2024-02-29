@@ -346,4 +346,4 @@ def parse_rinex_obs_file(rinex_file: Path):
 
 
 def is_sorted(iterable):
-    return all(iterable[i] <= iterable[i+1] for i in range(len(iterable) - 1))
+    return all(iterable[i] <= iterable[i + 1] for i in range(len(iterable) - 1))
