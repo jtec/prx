@@ -137,7 +137,6 @@ def repair_with_gfzrnx(file):
     result = subprocess.run(
         command,
         capture_output=True,
-        shell=True,
     )
     if result.returncode == 0:
         log.info(f"Ran gfzrnx file repair on {file}")
