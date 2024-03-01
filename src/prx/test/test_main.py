@@ -140,7 +140,7 @@ def test_spp_lsq(input_for_test):
         solution_increment_sos = np.linalg.norm(x_lsq)
         x_linearization += x_lsq
         n_iterations += 1
-        assert n_iterations < 10
+    assert n_iterations < 10
 
 
 def test_spp_lsq_single_epoch_gps_1c(input_for_test):
@@ -195,4 +195,4 @@ def test_spp_lsq_single_epoch_gps_1c(input_for_test):
         solution_increment_sos = np.linalg.norm(x_lsq)
         x_linearization += x_lsq
         n_iterations += 1
-        assert n_iterations < 10
+    assert n_iterations < 10
