@@ -42,11 +42,6 @@ Run `pytest ---durations=10` to run all tests and have pytest list the 10 longes
 ## Coding style
 We use https://google.github.io/styleguide/pyguide.html as our python style guide.
 
-## Documentation
-
-We write on Confluence:
-https://prxproject.atlassian.net/wiki/spaces/PD/pages/262145/What+does+prx+do
-
 ## Acronyms
 See the [Rinex 3.05 spec](https://files.igs.org/pub/data/format/rinex305.pdf), page 5, for a list of most acronyms used in the code. Those not covered by the RINEX spec are listed below.
 
