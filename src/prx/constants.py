@@ -127,3 +127,9 @@ system_time_scale_2_rinex_utc_epoch = {
     "QZSST": cGpstUtcEpoch,
     "IRNSST": cGpstUtcEpoch,
 }
+
+gfzrnx_binary = {
+    "Windows": "gfzrnx_217_win64.exe",
+    "Linux": "gfzrnx_217_lx64",
+    "Darwin": "gfzrnx_217_osx_intl64",
+}
