@@ -13,6 +13,7 @@ import subprocess
 
 log = logging.getLogger(__name__)
 
+
 @pytest.fixture
 def input_for_test():
     test_directory = Path(f"./tmp_test_directory_{__name__}").resolve()
@@ -220,48 +221,58 @@ def test_gfzrnx_execution_on_obs_file(input_for_test):
     file_obs = converters.anything_to_rinex_3(input_for_test["obs"])
     # list all gfzrnx binaries contained in the folder "prx/tools/gfzrnx/"
     path_folder_gfzrnx = helpers.prx_repository_root().joinpath("tools", "gfzrnx")
-    path_binary = path_folder_gfzrnx.joinpath(constants.gfzrnx_binary[
-                                                  platform.system()
-                                              ])
+    path_binary = path_folder_gfzrnx.joinpath(
+        constants.gfzrnx_binary[platform.system()]
+    )
     # assert len(gfzrnx_binaries) > 0, "Could not find any gfzrnx binary"
-    command = [str(path_binary),
-               "-finp", str(file_obs),
-               "-fout", str(file_obs.parent.joinpath("gfzrnx_out.rnx")),
-               ]
+    command = [
+        str(path_binary),
+        "-finp",
+        str(file_obs),
+        "-fout",
+        str(file_obs.parent.joinpath("gfzrnx_out.rnx")),
+    ]
     result = subprocess.run(
         command,
         capture_output=True,
     )
     if result.returncode == 0:
-        log.info(f"Ran gfzrnx file repair on {file_obs.name} with {constants.gfzrnx_binary[platform.system()]}")
+        log.info(
+            f"Ran gfzrnx file repair on {file_obs.name} with {constants.gfzrnx_binary[platform.system()]}"
+        )
     else:
         log.info(f"gfzrnx file repair run failed: {result}")
 
-    assert (file_obs.parent.joinpath("gfzrnx_out.rnx").exists())
+    assert file_obs.parent.joinpath("gfzrnx_out.rnx").exists()
 
 
 def test_gfzrnx_execution_on_nav_file(input_for_test):
     """Check execution of gfzrnx on a RNX NAV file and check"""
     file_nav = converters.anything_to_rinex_3(input_for_test["nav"])
     path_folder_gfzrnx = helpers.prx_repository_root().joinpath("tools", "gfzrnx")
-    path_binary = path_folder_gfzrnx.joinpath(constants.gfzrnx_binary[
-                                                  platform.system()
-                                              ])
+    path_binary = path_folder_gfzrnx.joinpath(
+        constants.gfzrnx_binary[platform.system()]
+    )
     # assert len(gfzrnx_binaries) > 0, "Could not find any gfzrnx binary"
-    command = [str(path_binary),
-               "-finp", str(file_nav),
-               "-fout", str(file_nav.parent.joinpath("gfzrnx_out.rnx")),
-               ]
+    command = [
+        str(path_binary),
+        "-finp",
+        str(file_nav),
+        "-fout",
+        str(file_nav.parent.joinpath("gfzrnx_out.rnx")),
+    ]
     result = subprocess.run(
         command,
         capture_output=True,
     )
     if result.returncode == 0:
-        log.info(f"Ran gfzrnx file repair on {file_nav.name} with {constants.gfzrnx_binary[platform.system()]}")
+        log.info(
+            f"Ran gfzrnx file repair on {file_nav.name} with {constants.gfzrnx_binary[platform.system()]}"
+        )
     else:
         log.info(f"gfzrnx file repair run failed: {result}")
 
-    assert(file_nav.parent.joinpath("gfzrnx_out.rnx").exists())
+    assert file_nav.parent.joinpath("gfzrnx_out.rnx").exists()
 
 
 def test_gfzrnx_function_call(input_for_test):
