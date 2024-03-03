@@ -82,8 +82,7 @@ def write_csv_file(
     )
     # write header
     with open(output_file, "w", encoding="utf-8") as file:
-        for key in prx_header.keys():
-            file.write("# %s,%s\n" % (key, prx_header[key]))
+        file.write(f"# {json.dumps(prx_header)}\n")
     flat_records["elevation_deg"] = np.rad2deg(flat_records.elevation_rad.to_numpy())
     flat_records["azimuth_deg"] = np.rad2deg(flat_records.azimuth_rad.to_numpy())
     flat_records = flat_records.drop(columns=["elevation_rad", "azimuth_rad"])
@@ -148,7 +147,7 @@ def build_header(input_files):
     prx_header["input_files"] = [
         {
             "name": file.name,
-            "hash": helpers.hash_of_file_content(file, use_sampling=False),
+            "murmur3_hash": helpers.hash_of_file_content(file, use_sampling=False),
         }
         for file in input_files
     ]
