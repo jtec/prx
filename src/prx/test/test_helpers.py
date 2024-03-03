@@ -263,6 +263,7 @@ def test_gfzrnx_execution_on_nav_file(input_for_test):
 
     assert(file_nav.parent.joinpath("gfzrnx_out.rnx").exists())
 
+
 def test_gfzrnx_function_call(input_for_test):
     """Check function call of gfzrnx on a RNX OBS file and check"""
     file_nav = converters.anything_to_rinex_3(input_for_test["nav"])
