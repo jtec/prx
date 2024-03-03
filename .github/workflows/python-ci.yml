@@ -35,7 +35,7 @@ jobs:
          poetry run flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
       - name: Test with pytest
         run: |
-         poetry run pytest --durations=10
+         poetry run pytest pytest -n auto --dist=loadfile --durations=10
   windows-ci:
     runs-on: windows-latest
     strategy:
@@ -62,7 +62,7 @@ jobs:
           poetry install
       - name: Test with pytest
         run: |
-          poetry run pytest --durations=10
+          poetry run pytest pytest -n auto --dist=loadfile --durations=10
   macos-ci:
     runs-on: macos-latest
     strategy:
@@ -89,4 +89,4 @@ jobs:
           poetry install
       - name: Test with pytest
         run: |
-          poetry run pytest --durations=10
+          poetry run pytest pytest -n auto --dist=loadfile --durations=10
