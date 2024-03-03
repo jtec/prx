@@ -1,3 +1,4 @@
+import json
 import os
 from pathlib import Path
 import shutil
@@ -77,6 +78,12 @@ def test_prx_function_call_with_csv_output(input_for_test):
     ).abs().max() < 0.3
 
 
+def parse_prx_file_header(prx_file: Path):
+    with open(prx_file, "r") as f:
+        header = json.loads(f.readline().replace("# ", ""))
+    return header
+
+
 def test_spp_lsq(input_for_test):
     test_file = input_for_test
     main.process(observation_file_path=test_file, output_format="csv")
@@ -84,6 +91,7 @@ def test_spp_lsq(input_for_test):
         str(test_file).replace("crx.gz", constants.cPrxCsvFileExtension)
     )
     assert expected_prx_file.exists()
+    header = parse_prx_file_header(expected_prx_file)
     df = pd.read_csv(expected_prx_file, comment="#")
     assert not df.empty
     df.group_delay_m = df.group_delay_m.fillna(0)
