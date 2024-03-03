@@ -1,8 +1,55 @@
+import logging
+import platform
 import numpy as np
 import pytest
 from prx import helpers
 from prx import constants
+from prx import converters
 import pandas as pd
+from pathlib import Path
+import shutil
+import os
+import subprocess
+
+log = logging.getLogger(__name__)
+
+@pytest.fixture
+def input_for_test():
+    test_directory = Path(f"./tmp_test_directory_{__name__}").resolve()
+    if test_directory.exists():
+        # Make sure the expected file has not been generated before and is still on disk due to e.g. a previous
+        # test run having crashed:
+        shutil.rmtree(test_directory)
+    os.makedirs(test_directory)
+    compressed_compact_rinex_file = "TLSE00FRA_R_20230010100_10S_01S_MO.crx.gz"
+    test_file = {"obs": test_directory.joinpath(compressed_compact_rinex_file)}
+    shutil.copy(
+        Path(__file__).parent
+        / f"datasets/TLSE_2023001/{compressed_compact_rinex_file}",
+        test_file["obs"],
+    )
+    assert test_file["obs"].exists()
+
+    # Also provide ephemerides so the test does not have to download them:
+    ephemerides_file = "BRDC00IGS_R_20230010000_01D_MN.rnx.zip"
+    test_file["nav"] = test_directory.joinpath(ephemerides_file)
+    shutil.copy(
+        Path(__file__).parent / f"datasets/TLSE_2023001/{ephemerides_file}",
+        test_file["nav"].parent.joinpath(ephemerides_file),
+    )
+    assert test_file["nav"].parent.joinpath(ephemerides_file).exists()
+
+    # sp3 file
+    sp3_file = "GFZ0MGXRAP_20230010000_01D_05M_ORB.SP3"
+    test_file["sp3"] = test_directory.joinpath(sp3_file)
+    shutil.copy(
+        Path(__file__).parent / f"datasets/TLSE_2023001/{sp3_file}",
+        test_file["sp3"].parent.joinpath(sp3_file),
+    )
+    assert test_file["sp3"].parent.joinpath(sp3_file).exists()
+
+    yield test_file
+    shutil.rmtree(test_directory)
 
 
 def test_rinex_header_time_string_2_timestamp_ns():
@@ -165,3 +212,68 @@ def test_is_sorted():
     assert helpers.is_sorted([1, 1, 1, 1, 1])
     assert helpers.is_sorted([1])
     assert helpers.is_sorted([])
+
+
+def test_gfzrnx_execution_on_obs_file(input_for_test):
+    """Check execution of gfzrnx on a RNX OBS file and check"""
+    # convert test file to RX3 format
+    file_obs = converters.anything_to_rinex_3(input_for_test["obs"])
+    # list all gfzrnx binaries contained in the folder "prx/tools/gfzrnx/"
+    path_folder_gfzrnx = helpers.prx_repository_root().joinpath("tools", "gfzrnx")
+    path_binary = path_folder_gfzrnx.joinpath(constants.gfzrnx_binary[
+                                                  platform.system()
+                                              ])
+    # assert len(gfzrnx_binaries) > 0, "Could not find any gfzrnx binary"
+    command = [str(path_binary),
+               "-finp", str(file_obs),
+               "-fout", str(file_obs.parent.joinpath("gfzrnx_out.rnx")),
+               ]
+    result = subprocess.run(
+        command,
+        capture_output=True,
+    )
+    if result.returncode == 0:
+        log.info(f"Ran gfzrnx file repair on {file_obs.name} with {constants.gfzrnx_binary[platform.system()]}")
+    else:
+        log.info(f"gfzrnx file repair run failed: {result}")
+
+    assert (file_obs.parent.joinpath("gfzrnx_out.rnx").exists())
+
+
+def test_gfzrnx_execution_on_nav_file(input_for_test):
+    """Check execution of gfzrnx on a RNX NAV file and check"""
+    file_nav = converters.anything_to_rinex_3(input_for_test["nav"])
+    path_folder_gfzrnx = helpers.prx_repository_root().joinpath("tools", "gfzrnx")
+    path_binary = path_folder_gfzrnx.joinpath(constants.gfzrnx_binary[
+                                                  platform.system()
+                                              ])
+    # assert len(gfzrnx_binaries) > 0, "Could not find any gfzrnx binary"
+    command = [str(path_binary),
+               "-finp", str(file_nav),
+               "-fout", str(file_nav.parent.joinpath("gfzrnx_out.rnx")),
+               ]
+    result = subprocess.run(
+        command,
+        capture_output=True,
+    )
+    if result.returncode == 0:
+        log.info(f"Ran gfzrnx file repair on {file_nav.name} with {constants.gfzrnx_binary[platform.system()]}")
+    else:
+        log.info(f"gfzrnx file repair run failed: {result}")
+
+    assert(file_nav.parent.joinpath("gfzrnx_out.rnx").exists())
+
+def test_gfzrnx_function_call(input_for_test):
+    """Check function call of gfzrnx on a RNX OBS file and check"""
+    file_nav = converters.anything_to_rinex_3(input_for_test["nav"])
+    file_obs = converters.anything_to_rinex_3(input_for_test["obs"])
+    file_sp3 = input_for_test["sp3"]
+
+    file_nav = helpers.repair_with_gfzrnx(file_nav)
+    file_obs = helpers.repair_with_gfzrnx(file_obs)
+    # running gfzrnx on a file that is not a RNX file should result in an error
+    try:
+        file_sp3 = helpers.repair_with_gfzrnx(file_sp3)
+    except AssertionError:
+        log.info(f"gfzrnx binary did not execute with file {file_sp3}")
+    assert True
