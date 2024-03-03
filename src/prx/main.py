@@ -142,19 +142,23 @@ def write_csv_file(
     log.info(f"Generated CSV prx file: {file}")
 
 
-def build_header(input_files):
-    prx_header = {}
-    prx_header["input_files"] = [
+def build_metadata(input_files):
+    prx_metadata = {}
+    obs_header = georinex.rinexheader(input_files["obs_file"])
+    prx_metadata["approximate_receiver_ecef_position_m"] = (
+        np.fromstring(obs_header["APPROX POSITION XYZ"], sep=" ")
+    ).tolist()
+    prx_metadata["input_files"] = [
         {
             "name": file.name,
             "murmur3_hash": helpers.hash_of_file_content(file, use_sampling=False),
         }
-        for file in input_files
+        for _, file in input_files.items()
     ]
-    prx_header["prx_git_commit_id"] = git.Repo(
+    prx_metadata["prx_git_commit_id"] = git.Repo(
         search_parent_directories=True
     ).head.object.hexsha
-    return prx_header
+    return prx_metadata
 
 
 def check_assumptions(rinex_3_obs_file, rinex_3_nav_file):
@@ -171,14 +175,14 @@ def check_assumptions(rinex_3_obs_file, rinex_3_nav_file):
 def build_records(
     rinex_3_obs_file,
     rinex_3_ephemerides_file,
-    receiver_ecef_position_m=np.full(shape=(3,), fill_value=np.nan),
+    approximate_receiver_ecef_position_m,
 ):
     return _build_records_cached(
         rinex_3_obs_file,
         helpers.hash_of_file_content(rinex_3_obs_file),
         rinex_3_ephemerides_file,
         helpers.hash_of_file_content(rinex_3_ephemerides_file),
-        receiver_ecef_position_m,
+        approximate_receiver_ecef_position_m,
     )
 
 
@@ -188,18 +192,12 @@ def _build_records_cached(
     rinex_3_obs_file_hash,
     rinex_3_ephemerides_file,
     rinex_3_ephemerides_file_hash,
-    receiver_ecef_position_m,
+    approximate_receiver_ecef_position_m,
 ):
     check_assumptions(rinex_3_obs_file, rinex_3_ephemerides_file)
     obs = helpers.parse_rinex_obs_file(rinex_3_obs_file)
 
-    # if receiver_ecef_position_m has not been initialized, get it from the RNX OBS header
     obs_header = georinex.rinexheader(rinex_3_obs_file)
-    if np.isnan(receiver_ecef_position_m).any():
-        receiver_ecef_position_m = np.fromstring(
-            obs_header["APPROX POSITION XYZ"], sep=" "
-        )
-
     if "GLONASS SLOT / FRQ #" in obs_header.keys():
         glonass_slot_dict = helpers.build_glonass_slot_dictionary(
             obs_header["GLONASS SLOT / FRQ #"]
@@ -332,10 +330,11 @@ def _build_records_cached(
         sat_states[["dx_mps", "dy_mps", "dz_mps"]].to_numpy(),
     )
     sat_states["sagnac_effect_m"] = helpers.compute_sagnac_effect(
-        sat_states[["x_m", "y_m", "z_m"]].to_numpy(), receiver_ecef_position_m
+        sat_states[["x_m", "y_m", "z_m"]].to_numpy(),
+        approximate_receiver_ecef_position_m,
     )
     [latitude_user_rad, longitude_user_rad, height_user_m] = helpers.ecef_2_geodetic(
-        receiver_ecef_position_m
+        approximate_receiver_ecef_position_m
     )
     days_of_year = np.array(
         sat_states["time_of_reception_in_receiver_time"]
@@ -346,7 +345,8 @@ def _build_records_cached(
         sat_states["elevation_rad"],
         sat_states["azimuth_rad"],
     ) = helpers.compute_satellite_elevation_and_azimuth(
-        sat_states[["x_m", "y_m", "z_m"]].to_numpy(), receiver_ecef_position_m
+        sat_states[["x_m", "y_m", "z_m"]].to_numpy(),
+        approximate_receiver_ecef_position_m,
     )
     (
         tropo_delay_m,
@@ -446,9 +446,17 @@ def process(observation_file_path: Path, output_format="jsonseq"):
     aux_files = nav_file_discovery.discover_or_download_auxiliary_files(
         rinex_3_obs_file
     )
+    metadata = build_metadata(
+        {"obs_file": rinex_3_obs_file, "nav_file": aux_files["broadcast_ephemerides"]}
+    )
+    records = build_records(
+        rinex_3_obs_file,
+        aux_files["broadcast_ephemerides"],
+        metadata["approximate_receiver_ecef_position_m"],
+    )
     write_prx_file(
-        build_header([rinex_3_obs_file, aux_files["broadcast_ephemerides"]]),
-        build_records(rinex_3_obs_file, aux_files["broadcast_ephemerides"]),
+        metadata,
+        records,
         prx_file,
         output_format,
     )
