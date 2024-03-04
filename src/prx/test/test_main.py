@@ -102,7 +102,7 @@ def test_spp_lsq(input_for_test):
     ]
     for constellations_to_use in [("G", "E", "C"), ("G",), ("E",), ("C",)]:
         obs = df_first_epoch[df.constellation.isin(constellations_to_use)]
-        x_lsq = spp_lsq(obs)
+        x_lsq = spp_pos_lsq(obs)
         assert (
             np.max(
                 np.abs(
