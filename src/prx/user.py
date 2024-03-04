@@ -15,7 +15,7 @@ def parse_prx_csv_file(prx_file: Path):
     return pd.read_csv(prx_file, comment="#"), parse_prx_csv_file_metadata(prx_file)
 
 
-def spp_pt_lsq(df):
+def spp_pt_lsq(df, dx_convergence_l2=1e-6, max_iterations=10):
     df["C_obs_corrected"] = (
         df.C_obs
         + df.clock_m
@@ -36,9 +36,9 @@ def spp_pt_lsq(df):
         H_clock[df.constellation == constellation, i] = 1
     # initial linearization point
     x_linearization = np.zeros((3 + len(df.constellation.unique()), 1))
-    solution_increment_sos = np.inf
+    solution_increment_l2 = np.inf
     n_iterations = 0
-    while solution_increment_sos > 1e-6:
+    while solution_increment_l2 > dx_convergence_l2:
         # compute predicted pseudo-range as geometric distance + clock bias, predicted at x_linearization
         C_obs_predicted = np.linalg.norm(
             x_linearization[0:3].T - df[["x_m", "y_m", "z_m"]].to_numpy(), axis=1
@@ -55,8 +55,10 @@ def spp_pt_lsq(df):
             H, df.C_obs_corrected - C_obs_predicted, rcond="warn"
         )
         x_lsq = x_lsq.reshape(-1, 1)
-        solution_increment_sos = np.linalg.norm(x_lsq)
+        solution_increment_l2 = np.linalg.norm(x_lsq)
         x_linearization += x_lsq
         n_iterations += 1
-    assert n_iterations < 10
+        assert (
+            n_iterations <= max_iterations
+        ), "LSQ did not converge in allowed number of iterations"
     return x_linearization
