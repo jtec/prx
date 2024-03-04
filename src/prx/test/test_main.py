@@ -11,7 +11,7 @@ import pytest
 from prx import helpers
 from prx import constants
 from prx import main
-from prx.user import parse_prx_csv_file, spp_pos_lsq
+from prx.user import parse_prx_csv_file, spp_pt_lsq
 
 
 # This function sets up a temporary directory, copies a rinex observations file into that directory
@@ -102,7 +102,7 @@ def test_spp_lsq(input_for_test):
     ]
     for constellations_to_use in [("G", "E", "C"), ("G",), ("E",), ("C",)]:
         obs = df_first_epoch[df.constellation.isin(constellations_to_use)]
-        x_lsq = spp_pos_lsq(obs)
+        x_lsq = spp_pt_lsq(obs)
         assert (
             np.max(
                 np.abs(
