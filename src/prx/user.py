@@ -15,7 +15,7 @@ def parse_prx_csv_file(prx_file: Path):
     return pd.read_csv(prx_file, comment="#"), parse_prx_csv_file_metadata(prx_file)
 
 
-def spp_pos_lsq(df):
+def spp_pt_lsq(df):
     df["C_obs_corrected"] = (
         df.C_obs
         + df.clock_m
