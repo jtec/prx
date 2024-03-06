@@ -125,15 +125,19 @@ def rinex_header_time_string_2_timestamp_ns(time_string: str) -> pd.Timestamp:
 
 def repair_with_gfzrnx(file):
     path_folder_gfzrnx = prx_repository_root().joinpath("tools", "gfzrnx")
-    path_binary = path_folder_gfzrnx.joinpath(constants.gfzrnx_binary[
-        platform.system()
-                                              ])
-    command = [str(path_binary),
-               "-finp", str(file),
-               "-fout", str(file),
-               "-chk", "-kv",
-               "-f",
-               ]
+    path_binary = path_folder_gfzrnx.joinpath(
+        constants.gfzrnx_binary[platform.system()]
+    )
+    command = [
+        str(path_binary),
+        "-finp",
+        str(file),
+        "-fout",
+        str(file),
+        "-chk",
+        "-kv",
+        "-f",
+    ]
     result = subprocess.run(
         command,
         capture_output=True,
@@ -142,7 +146,7 @@ def repair_with_gfzrnx(file):
         log.info(f"Ran gfzrnx file repair on {file}")
     else:
         log.info(f"gfzrnx file repair run failed: {result}")
-        assert(False)
+        assert False
     return file
 
 
@@ -349,3 +353,7 @@ def parse_rinex_obs_file(rinex_file: Path):
             f"Hashing file content took {hash_time}, we might want to partially hash the file"
         )
     return cached_load(rinex_file, file_content_hash)
+
+
+def is_sorted(iterable):
+    return all(iterable[i] <= iterable[i + 1] for i in range(len(iterable) - 1))
