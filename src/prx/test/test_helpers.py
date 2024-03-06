@@ -289,3 +289,11 @@ def test_gfzrnx_function_call(input_for_test):
     except AssertionError:
         log.info(f"gfzrnx binary did not execute with file {file_sp3}")
     assert True
+
+
+def test_row_wise_dot_product():
+    # Check whether the way we compute the row-wise dot product with numpy yields the expected result
+    A = np.array([[1, 2], [4, 5], [7, 8]])
+    B = np.array([[10, 20], [30, 40], [50, 60]])
+    row_wise_dot = np.sum(A * B, axis=1).reshape(-1, 1)
+    assert (row_wise_dot == np.array([[10+40], [120+200], [350+480]])).all()
