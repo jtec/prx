@@ -180,7 +180,8 @@ def build_records(
         helpers.hash_of_file_content(rinex_3_obs_file),
         rinex_3_ephemerides_file,
         helpers.hash_of_file_content(rinex_3_ephemerides_file),
-        approximate_receiver_ecef_position_m,
+        # Use a tuple here as caching expects an immutable type
+        tuple(approximate_receiver_ecef_position_m),
     )
 
 
@@ -192,6 +193,7 @@ def _build_records_cached(
     rinex_3_ephemerides_file_hash,
     approximate_receiver_ecef_position_m,
 ):
+    approximate_receiver_ecef_position_m = np.array(approximate_receiver_ecef_position_m)
     check_assumptions(rinex_3_obs_file, rinex_3_ephemerides_file)
     obs = helpers.parse_rinex_obs_file(rinex_3_obs_file)
 

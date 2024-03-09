@@ -11,7 +11,9 @@ import georinex
 import imohash
 from functools import lru_cache
 
+import os
 
+disable_caching = os.environ.get('PRX_NO_CACHING', False)
 disk_cache = joblib.Memory(Path(__file__).parent.joinpath("diskcache"), verbose=0)
 
 
@@ -240,7 +242,7 @@ def constellation(satellite_id: str):
 
 
 def compute_sagnac_effect(sat_pos_m, rx_pos_m):
-    """compute the sagnac effect (effect of the Earth rotation during signal propagation°
+    """compute the Sagnac effect (effect of the Earth's rotation during signal propagation°
 
     Input:
     - sat_pos_m: satellite ECEF position. np.ndarray of shape (n, 3)
@@ -362,7 +364,12 @@ def is_sorted(iterable):
 def cache_call(func):
     @lru_cache
     @disk_cache.cache
-    def wrapper_cache_call(*args, **kwargs):
+    def wrapper_cached_call(*args, **kwargs):
         return func(*args, **kwargs)
 
-    return wrapper_cache_call
+    def wrapper_uncached_call(*args, **kwargs):
+        return func(*args, **kwargs)
+
+    if disable_caching:
+        return wrapper_uncached_call
+    return wrapper_cached_call
