@@ -6,7 +6,6 @@ import subprocess
 import numpy as np
 import pandas as pd
 import pytest
-import cProfile as profiler
 
 from prx import helpers
 from prx import constants
