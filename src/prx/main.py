@@ -94,7 +94,7 @@ def write_csv_file(
     records = flat_records.loc[flat_records.observation_type.str.startswith("C")]
     records["C_obs"] = records.observation_value
     records = records.drop(columns=["observation_value", "observation_type"])
-    type_2_unit = {"D": "mps", "L": "m", "S": "dBHz", "C": "m"}
+    type_2_unit = {"D": "hz", "L": "cycles", "S": "dBHz", "C": "m"}
     for obs_type in ["D", "L", "S"]:
         obs = flat_records.loc[flat_records.observation_type.str.startswith(obs_type)][
             [

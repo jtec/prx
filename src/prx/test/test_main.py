@@ -115,4 +115,4 @@ def test_spp_lsq(input_for_test):
             )
             < 1e1
         )
-        assert np.max(np.abs(vt_lsq[0:3, :])) < 1e1
+        assert np.max(np.abs(vt_lsq[0:3, :])) < 1e-1
