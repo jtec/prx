@@ -1,5 +1,4 @@
 import platform
-import sys
 from pathlib import Path
 import logging
 from prx import constants
@@ -20,9 +19,19 @@ logging.basicConfig(
 )
 log = logging.getLogger(__name__)
 
-disable_caching = os.environ.get("PRX_NO_CACHING", "False").lower() in ("true", "1")
+
+def parse_boolean_env_variable(env_variable_name: str, value_if_not_set: bool):
+    var_string = os.environ.get(env_variable_name, None)
+    if var_string is None:
+        return value_if_not_set
+    var_string = var_string.lower().strip()
+    assert var_string in ("True", "true", "1", "False", "false", "0")
+    return var_string in ("True", "true", "1")
+
+
+disable_caching = parse_boolean_env_variable("PRX_NO_CACHING", False)
 if disable_caching:
-    log.debug(f"Environment variable PRX_NO_CACHING is {disable_caching}")
+    log.debug("Caching disabled by environment variable PRX_NO_CACHING")
 disk_cache = joblib.Memory(Path(__file__).parent.joinpath("diskcache"), verbose=0)
 
 
