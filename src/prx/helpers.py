@@ -21,6 +21,7 @@ log = logging.getLogger(__name__)
 
 
 def parse_boolean_env_variable(env_variable_name: str, value_if_not_set: bool):
+    # Based on https://stackoverflow.com/a/65407083/2567449
     var_string = os.environ.get(env_variable_name, None)
     if var_string is None:
         return value_if_not_set
