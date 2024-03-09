@@ -1,4 +1,5 @@
 import platform
+import sys
 from pathlib import Path
 import logging
 from prx import constants
@@ -10,20 +11,19 @@ import joblib
 import georinex
 import imohash
 from functools import lru_cache
-
 import os
-
-disable_caching = os.environ.get("PRX_NO_CACHING", False)
-disk_cache = joblib.Memory(Path(__file__).parent.joinpath("diskcache"), verbose=0)
-
 
 logging.basicConfig(
     format="%(asctime)s,%(msecs)03d %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s",
     datefmt="%Y-%m-%d:%H:%M:%S",
     level=logging.DEBUG,
 )
-
 log = logging.getLogger(__name__)
+
+disable_caching = os.environ.get("PRX_NO_CACHING", "False").lower() in ("true", "1")
+if disable_caching:
+    log.debug(f"Environment variable PRX_NO_CACHING is {disable_caching}")
+disk_cache = joblib.Memory(Path(__file__).parent.joinpath("diskcache"), verbose=0)
 
 
 def get_logger(label):
