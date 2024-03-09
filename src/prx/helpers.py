@@ -1,4 +1,3 @@
-import hashlib
 import platform
 from pathlib import Path
 import logging
@@ -10,9 +9,10 @@ import math
 import joblib
 import georinex
 import imohash
+from functools import lru_cache
 
 
-memory = joblib.Memory(Path(__file__).parent.joinpath("diskcache"), verbose=0)
+disk_cache = joblib.Memory(Path(__file__).parent.joinpath("diskcache"), verbose=0)
 
 
 logging.basicConfig(
@@ -338,7 +338,7 @@ def ecef_2_geodetic(pos_ecef):
 
 
 def parse_rinex_obs_file(rinex_file: Path):
-    @memory.cache
+    @cache_call
     def cached_load(rinex_file: Path, file_hash: str):
         log.info(f"Parsing {rinex_file} ...")
         repair_with_gfzrnx(rinex_file)
@@ -357,3 +357,12 @@ def parse_rinex_obs_file(rinex_file: Path):
 
 def is_sorted(iterable):
     return all(iterable[i] <= iterable[i + 1] for i in range(len(iterable) - 1))
+
+
+def cache_call(func):
+    @lru_cache
+    @disk_cache.cache
+    def wrapper_cache_call(*args, **kwargs):
+        return func(*args, **kwargs)
+
+    return wrapper_cache_call

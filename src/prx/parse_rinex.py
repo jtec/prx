@@ -2,17 +2,14 @@ import georinex
 from pathlib import Path
 
 import pandas as pd
-import joblib
 from prx import helpers
 
 log = helpers.get_logger(__name__)
 
-memory = joblib.Memory(Path(__file__).parent.joinpath("diskcache"), verbose=0)
-
 
 # Can speed up RINEX parsing by using parsing results previously obtained and saved to disk.
 def load(rinex_file: Path):
-    @memory.cache
+    @helpers.cache_call
     def cached_load(rinex_file: Path, file_hash: str):
         log.info(f"Parsing {rinex_file} ...")
         helpers.repair_with_gfzrnx(rinex_file)
