@@ -13,7 +13,7 @@ from functools import lru_cache
 
 import os
 
-disable_caching = os.environ.get('PRX_NO_CACHING', False)
+disable_caching = os.environ.get("PRX_NO_CACHING", False)
 disk_cache = joblib.Memory(Path(__file__).parent.joinpath("diskcache"), verbose=0)
 
 
