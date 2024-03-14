@@ -128,11 +128,17 @@ def interpolate(df, query_time_gpst_s, plot_interpolation=False):
         first_derivative = Polynomial(poly.coef[::-1]).deriv(1)(
             query_time_gpst_s - times[0]
         )
-        if col in ["sat_pos_x_m", "sat_pos_y_m", "sat_pos_z_m"]:
-            interpolated[f"d{col}ps"] = first_derivative
-        elif col == "sat_clock_offset_m":
-            interpolated["sat_clock_drift_mps"] = first_derivative
-
+        match col:
+            case "sat_pos_x_m":
+                interpolated["sat_vel_x_mps"] = first_derivative
+            case "sat_pos_y_m":
+                interpolated["sat_vel_y_mps"] = first_derivative
+            case "sat_pos_z_m":
+                interpolated["sat_vel_z_mps"] = first_derivative
+            case "sat_clock_offset_m":
+                interpolated["sat_clock_drift_mps"] = first_derivative
+            case _:
+                log.warning(f"{col} not recognized")
     return interpolated
 
 
