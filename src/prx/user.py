@@ -18,7 +18,7 @@ def parse_prx_csv_file(prx_file: Path):
 
 def spp_vt_lsq(df, p_ecef_m):
     df = df[df.D_obs_hz.notna()].reset_index(drop=True)
-    df["D_obs_mps"] = df.D_obs_hz * cGpsSpeedOfLight_mps / df.carrier_frequency_hz
+    df["D_obs_mps"] = -df.D_obs_hz * cGpsSpeedOfLight_mps / df.carrier_frequency_hz
     # Remove satellite velocity projected onto line of sight
     rx_sat_vectors = df[["x_m", "y_m", "z_m"]].to_numpy() - p_ecef_m.T
     row_sums = np.linalg.norm(rx_sat_vectors, axis=1)
@@ -30,7 +30,7 @@ def spp_vt_lsq(df, p_ecef_m):
     df["D_obs_corrected_mps"] = (
         df.D_obs_mps.to_numpy().reshape(-1, 1)
         + df.dclock_mps.to_numpy().reshape(-1, 1)
-        + df["satellite_los_velocities"].to_numpy().reshape(-1, 1)
+        - df["satellite_los_velocities"].to_numpy().reshape(-1, 1)
     )
     # Jacobian of Doppler observation w.r.t. receiver clock offset drift w.r.t. constellation system clock
     H_dclock = np.zeros(
