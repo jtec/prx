@@ -5,14 +5,12 @@ import georinex
 import pandas as pd
 import numpy as np
 import git
-import joblib
 
 from prx import atmospheric_corrections as atmo
 from prx.rinex_nav import nav_file_discovery
 from prx import constants, helpers, converters
 from prx.rinex_nav import evaluate as rinex_evaluate
-
-memory = joblib.Memory(Path(__file__).parent.joinpath("diskcache"), verbose=0)
+from prx.helpers import disk_cache
 
 log = helpers.get_logger(__name__)
 
@@ -182,11 +180,12 @@ def build_records(
         helpers.hash_of_file_content(rinex_3_obs_file),
         rinex_3_ephemerides_file,
         helpers.hash_of_file_content(rinex_3_ephemerides_file),
-        approximate_receiver_ecef_position_m,
+        # Use a tuple here as caching expects an immutable type
+        tuple(approximate_receiver_ecef_position_m),
     )
 
 
-@memory.cache
+@helpers.cache_call
 def _build_records_cached(
     rinex_3_obs_file,
     rinex_3_obs_file_hash,
@@ -194,6 +193,9 @@ def _build_records_cached(
     rinex_3_ephemerides_file_hash,
     approximate_receiver_ecef_position_m,
 ):
+    approximate_receiver_ecef_position_m = np.array(
+        approximate_receiver_ecef_position_m
+    )
     check_assumptions(rinex_3_obs_file, rinex_3_ephemerides_file)
     obs = helpers.parse_rinex_obs_file(rinex_3_obs_file)
 
