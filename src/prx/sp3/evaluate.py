@@ -1,23 +1,19 @@
-from functools import lru_cache
 import pandas as pd
 import numpy as np
 from scipy.interpolate import lagrange
 from numpy.polynomial.polynomial import Polynomial
 import georinex
 from pathlib import Path
-import joblib
 import matplotlib.pyplot as plt
 
 from prx import helpers
 from prx import constants
 
-memory = joblib.Memory(Path(__file__).parent.joinpath("diskcache"), verbose=0)
 log = helpers.get_logger(__name__)
 
 
 def parse_sp3_file(file_path: Path):
-    @lru_cache
-    @memory.cache
+    @helpers.cache_call
     def cached_load(file_path: Path, file_hash: str):
         log.info(f"Parsing {file_path} ...")
         parsed = georinex.load(file_path)
