@@ -38,13 +38,13 @@ def set_up_test():
 
 def test_find_local_ephemeris_file(set_up_test):
     aux_files = aux.discover_or_download_auxiliary_files(set_up_test["test_obs_file"])
-    assert type(aux_files) is dict
+    assert isinstance(aux_files, dict)
 
 
 def test_download_remote_ephemeris_files(set_up_test):
     os.remove(set_up_test["test_nav_file"])
     aux_files = aux.discover_or_download_auxiliary_files(set_up_test["test_obs_file"])
-    assert type(aux_files) is dict
+    assert isinstance(aux_files, dict)
 
 
 def test_command_line_call(set_up_test):

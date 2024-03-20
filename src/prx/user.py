@@ -72,10 +72,13 @@ def spp_pt_lsq(df, dx_convergence_l2=1e-6, max_iterations=10):
     n_iterations = 0
     while solution_increment_l2 > dx_convergence_l2:
         # Compute predicted pseudo-range as geometric distance + receiver clock bias, predicted at x_linearization
-        C_obs_predicted = np.linalg.norm(
-            x_linearization[0:3].T - df[["x_m", "y_m", "z_m"]].to_numpy(), axis=1
-        ) + np.squeeze(  # geometric distance
-            H_clock @ x_linearization[3:]
+        C_obs_predicted = (
+            np.linalg.norm(
+                x_linearization[0:3].T - df[["x_m", "y_m", "z_m"]].to_numpy(), axis=1
+            )
+            + np.squeeze(  # geometric distance
+                H_clock @ x_linearization[3:]
+            )
         )  # rx to constellation clock bias
         # compute jacobian matrix
         rx_sat_vectors = df[["x_m", "y_m", "z_m"]].to_numpy() - x_linearization[:3].T
