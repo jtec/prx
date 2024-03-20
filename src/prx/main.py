@@ -213,7 +213,7 @@ def _build_records_cached(
             str(row[3]),
         ]
 
-    flat_obs = flat_obs.apply(                  format_flat_rows, axis=1, result_type="expand")
+    flat_obs = flat_obs.apply(format_flat_rows, axis=1, result_type="expand")
     flat_obs = flat_obs.rename(
         columns={
             0: "time_of_reception_in_receiver_time",
