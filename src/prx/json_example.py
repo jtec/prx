@@ -16,11 +16,11 @@ def generate_example_file(
         os.remove(file_path)
     with open(file_path, "w", encoding="utf-8") as file:
         file.write(
-            "\u241E" + json.dumps(header, ensure_ascii=False, indent=indent) + "\n"
+            "\u241e" + json.dumps(header, ensure_ascii=False, indent=indent) + "\n"
         )
         for observation in observations:
             file.write(
-                "\u241E"
+                "\u241e"
                 + json.dumps(
                     fields_to_arrays(observation), ensure_ascii=False, indent=indent
                 )

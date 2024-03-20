@@ -104,9 +104,7 @@ def discover_or_download_auxiliary_files(observation_file_path=Path()):
         list(header["fields"].keys()),
     )
     if len(ephs) > 1:
-        assert (
-            False
-        ), "Observations crossing day boundaries not handled yet, need to merge ephemeris files here"
+        assert False, "Observations crossing day boundaries not handled yet, need to merge ephemeris files here"
     return {"broadcast_ephemerides": ephs[0]}
 
 
