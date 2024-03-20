@@ -1,4 +1,3 @@
-import hashlib
 import platform
 from pathlib import Path
 import logging
@@ -10,18 +9,31 @@ import math
 import joblib
 import georinex
 import imohash
-
-
-memory = joblib.Memory(Path(__file__).parent.joinpath("diskcache"), verbose=0)
-
+from functools import lru_cache
+import os
 
 logging.basicConfig(
     format="%(asctime)s,%(msecs)03d %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s",
     datefmt="%Y-%m-%d:%H:%M:%S",
     level=logging.DEBUG,
 )
-
 log = logging.getLogger(__name__)
+
+
+def parse_boolean_env_variable(env_variable_name: str, value_if_not_set: bool):
+    # Based on https://stackoverflow.com/a/65407083/2567449
+    var_string = os.environ.get(env_variable_name, None)
+    if var_string is None:
+        return value_if_not_set
+    var_string = var_string.lower().strip()
+    assert var_string in ("True", "true", "1", "False", "false", "0")
+    return var_string in ("True", "true", "1")
+
+
+disable_caching = parse_boolean_env_variable("PRX_NO_CACHING", False)
+if disable_caching:
+    log.debug("Caching disabled by environment variable PRX_NO_CACHING")
+disk_cache = joblib.Memory(Path(__file__).parent.joinpath("diskcache"), verbose=0)
 
 
 def get_logger(label):
@@ -125,15 +137,19 @@ def rinex_header_time_string_2_timestamp_ns(time_string: str) -> pd.Timestamp:
 
 def repair_with_gfzrnx(file):
     path_folder_gfzrnx = prx_repository_root().joinpath("tools", "gfzrnx")
-    path_binary = path_folder_gfzrnx.joinpath(constants.gfzrnx_binary[
-        platform.system()
-                                              ])
-    command = [str(path_binary),
-               "-finp", str(file),
-               "-fout", str(file),
-               "-chk", "-kv",
-               "-f",
-               ]
+    path_binary = path_folder_gfzrnx.joinpath(
+        constants.gfzrnx_binary[platform.system()]
+    )
+    command = [
+        str(path_binary),
+        "-finp",
+        str(file),
+        "-fout",
+        str(file),
+        "-chk",
+        "-kv",
+        "-f",
+    ]
     result = subprocess.run(
         command,
         capture_output=True,
@@ -142,7 +158,7 @@ def repair_with_gfzrnx(file):
         log.info(f"Ran gfzrnx file repair on {file}")
     else:
         log.info(f"gfzrnx file repair run failed: {result}")
-        assert(False)
+        assert False
     return file
 
 def deg_2_rad(angle_deg):
@@ -235,7 +251,7 @@ def constellation(satellite_id: str):
 
 
 def compute_sagnac_effect(sat_pos_m, rx_pos_m):
-    """compute the sagnac effect (effect of the Earth rotation during signal propagation°
+    """compute the Sagnac effect (effect of the Earth's rotation during signal propagation°
 
     Input:
     - sat_pos_m: satellite ECEF position. np.ndarray of shape (n, 3)
@@ -333,7 +349,7 @@ def ecef_2_geodetic(pos_ecef):
 
 
 def parse_rinex_obs_file(rinex_file: Path):
-    @memory.cache
+    @cache_call
     def cached_load(rinex_file: Path, file_hash: str):
         log.info(f"Parsing {rinex_file} ...")
         repair_with_gfzrnx(rinex_file)
@@ -348,3 +364,21 @@ def parse_rinex_obs_file(rinex_file: Path):
             f"Hashing file content took {hash_time}, we might want to partially hash the file"
         )
     return cached_load(rinex_file, file_content_hash)
+
+
+def is_sorted(iterable):
+    return all(iterable[i] <= iterable[i + 1] for i in range(len(iterable) - 1))
+
+
+def cache_call(func):
+    @lru_cache
+    @disk_cache.cache
+    def wrapper_cached_call(*args, **kwargs):
+        return func(*args, **kwargs)
+
+    def wrapper_uncached_call(*args, **kwargs):
+        return func(*args, **kwargs)
+
+    if disable_caching:
+        return wrapper_uncached_call
+    return wrapper_cached_call

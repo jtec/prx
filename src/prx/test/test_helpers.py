@@ -13,6 +13,7 @@ import subprocess
 
 log = logging.getLogger(__name__)
 
+
 @pytest.fixture
 def input_for_test():
     test_directory = Path(f"./tmp_test_directory_{__name__}").resolve()
@@ -205,54 +206,74 @@ def test_sagnac_effect():
     assert np.max(np.abs(sagnac_effect_computed - sagnac_effect_reference)) < tolerance
 
 
+def test_is_sorted():
+    assert helpers.is_sorted([1, 2, 3, 4, 5])
+    assert not helpers.is_sorted([1, 2, 3, 5, 4])
+    assert not helpers.is_sorted([5, 4, 3, 2, 1])
+    assert helpers.is_sorted([1, 1, 1, 1, 1])
+    assert helpers.is_sorted([1])
+    assert helpers.is_sorted([])
+
+
 def test_gfzrnx_execution_on_obs_file(input_for_test):
     """Check execution of gfzrnx on a RNX OBS file and check"""
     # convert test file to RX3 format
     file_obs = converters.anything_to_rinex_3(input_for_test["obs"])
     # list all gfzrnx binaries contained in the folder "prx/tools/gfzrnx/"
     path_folder_gfzrnx = helpers.prx_repository_root().joinpath("tools", "gfzrnx")
-    path_binary = path_folder_gfzrnx.joinpath(constants.gfzrnx_binary[
-                                                  platform.system()
-                                              ])
+    path_binary = path_folder_gfzrnx.joinpath(
+        constants.gfzrnx_binary[platform.system()]
+    )
     # assert len(gfzrnx_binaries) > 0, "Could not find any gfzrnx binary"
-    command = [str(path_binary),
-               "-finp", str(file_obs),
-               "-fout", str(file_obs.parent.joinpath("gfzrnx_out.rnx")),
-               ]
+    command = [
+        str(path_binary),
+        "-finp",
+        str(file_obs),
+        "-fout",
+        str(file_obs.parent.joinpath("gfzrnx_out.rnx")),
+    ]
     result = subprocess.run(
         command,
         capture_output=True,
     )
     if result.returncode == 0:
-        log.info(f"Ran gfzrnx file repair on {file_obs.name} with {constants.gfzrnx_binary[platform.system()]}")
+        log.info(
+            f"Ran gfzrnx file repair on {file_obs.name} with {constants.gfzrnx_binary[platform.system()]}"
+        )
     else:
         log.info(f"gfzrnx file repair run failed: {result}")
 
-    assert (file_obs.parent.joinpath("gfzrnx_out.rnx").exists())
+    assert file_obs.parent.joinpath("gfzrnx_out.rnx").exists()
 
 
 def test_gfzrnx_execution_on_nav_file(input_for_test):
     """Check execution of gfzrnx on a RNX NAV file and check"""
     file_nav = converters.anything_to_rinex_3(input_for_test["nav"])
     path_folder_gfzrnx = helpers.prx_repository_root().joinpath("tools", "gfzrnx")
-    path_binary = path_folder_gfzrnx.joinpath(constants.gfzrnx_binary[
-                                                  platform.system()
-                                              ])
+    path_binary = path_folder_gfzrnx.joinpath(
+        constants.gfzrnx_binary[platform.system()]
+    )
     # assert len(gfzrnx_binaries) > 0, "Could not find any gfzrnx binary"
-    command = [str(path_binary),
-               "-finp", str(file_nav),
-               "-fout", str(file_nav.parent.joinpath("gfzrnx_out.rnx")),
-               ]
+    command = [
+        str(path_binary),
+        "-finp",
+        str(file_nav),
+        "-fout",
+        str(file_nav.parent.joinpath("gfzrnx_out.rnx")),
+    ]
     result = subprocess.run(
         command,
         capture_output=True,
     )
     if result.returncode == 0:
-        log.info(f"Ran gfzrnx file repair on {file_nav.name} with {constants.gfzrnx_binary[platform.system()]}")
+        log.info(
+            f"Ran gfzrnx file repair on {file_nav.name} with {constants.gfzrnx_binary[platform.system()]}"
+        )
     else:
         log.info(f"gfzrnx file repair run failed: {result}")
 
-    assert(file_nav.parent.joinpath("gfzrnx_out.rnx").exists())
+    assert file_nav.parent.joinpath("gfzrnx_out.rnx").exists()
+
 
 def test_gfzrnx_function_call(input_for_test):
     """Check function call of gfzrnx on a RNX OBS file and check"""
@@ -269,3 +290,10 @@ def test_gfzrnx_function_call(input_for_test):
         log.info(f"gfzrnx binary did not execute with file {file_sp3}")
     assert True
 
+
+def test_row_wise_dot_product():
+    # Check whether the way we compute the row-wise dot product with numpy yields the expected result
+    A = np.array([[1, 2], [4, 5], [7, 8]])
+    B = np.array([[10, 20], [30, 40], [50, 60]])
+    row_wise_dot = np.sum(A * B, axis=1).reshape(-1, 1)
+    assert (row_wise_dot == np.array([[10 + 40], [120 + 200], [350 + 480]])).all()

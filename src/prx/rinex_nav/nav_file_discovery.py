@@ -19,6 +19,7 @@ def is_rinex_3_mixed_mgex_broadcast_ephemerides_file(file: Path):
 
 
 def try_downloading_ephemerides_from_bkg(
+    # This function returns a list of paths, in case the observation file spans over several days
     t_start: pd.Timestamp, t_end: pd.Timestamp, folder: Path
 ):
     files = []
@@ -68,6 +69,7 @@ def rinex_3_ephemerides_file_coverage_time(ephemerides_file: Path):
 
 
 def discover_local_ephemerides(
+    # This function returns a list of paths, in case the observation file spans over several days
     t_start: pd.Timestamp, t_end: pd.Timestamp, folder: Path
 ):
     candidates = glob.glob(str(folder.joinpath("**.rnx**")), recursive=True)
@@ -115,6 +117,7 @@ def discover_or_download_auxiliary_files(observation_file_path=Path()):
         rinex_3_obs_file.parent,
         list(header["fields"].keys()),
     )
+    # Note that ephs may be a list of paths, in case the observation file spans over several days
     return {"broadcast_ephemerides": ephs}
 
 if __name__ == "__main__":

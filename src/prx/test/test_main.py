@@ -2,12 +2,15 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
+
+import numpy as np
 import pandas as pd
 import pytest
 
 from prx import helpers
 from prx import constants
 from prx import main
+from prx.user import parse_prx_csv_file, spp_pt_lsq, spp_vt_lsq
 
 
 # This function sets up a temporary directory, copies a rinex observations file into that directory
@@ -40,7 +43,7 @@ def input_for_test():
     assert test_file.parent.joinpath(ephemerides_file).exists()
 
     yield test_file
-    # shutil.rmtree(test_file.parent)
+    shutil.rmtree(test_file.parent)
 
 
 @pytest.fixture
@@ -110,10 +113,50 @@ def test_prx_function_call_with_csv_output(input_for_test):
     assert expected_prx_file.exists()
     df = pd.read_csv(expected_prx_file, comment="#")
     assert not df.empty
+    assert helpers.is_sorted(df.time_of_reception_in_receiver_time)
     # Elevation sanity check
     assert (
         df[(df.prn == 14) & (df.constellation == "C")].elevation_deg - 34.86
     ).abs().max() < 0.3
+
+
+def run_rinex_through_prx(rinex_obs_file: Path):
+    main.process(observation_file_path=rinex_obs_file, output_format="csv")
+    expected_prx_file = Path(
+        str(rinex_obs_file).replace("crx.gz", constants.cPrxCsvFileExtension)
+    )
+    assert expected_prx_file.exists()
+    records, metadata = parse_prx_csv_file(expected_prx_file)
+    records = pd.read_csv(expected_prx_file, comment="#")
+    assert not records.empty
+    assert metadata
+    records.group_delay_m = records.group_delay_m.fillna(0)
+    records = records[records.C_obs.notna() & records.x_m.notna()]
+    return records, metadata
+
+
+def test_spp_lsq(input_for_test):
+    df, metadata = run_rinex_through_prx(input_for_test)
+    df_first_epoch = df[
+        df.time_of_reception_in_receiver_time
+        == df.time_of_reception_in_receiver_time.min()
+    ]
+    for constellations_to_use in [("G", "E", "C"), ("G",), ("E",), ("C",)]:
+        obs = df_first_epoch[df.constellation.isin(constellations_to_use)]
+        pt_lsq = spp_pt_lsq(obs)
+        vt_lsq = spp_vt_lsq(obs, p_ecef_m=pt_lsq[0:3, :])
+        assert (
+            np.max(
+                np.abs(
+                    pt_lsq[0:3, :]
+                    - np.array(
+                        metadata["approximate_receiver_ecef_position_m"]
+                    ).reshape(-1, 1)
+                )
+            )
+            < 1e1
+        )
+        assert np.max(np.abs(vt_lsq[0:3, :])) < 1e-1
 
 
 def test_prx_function_call_for_obs_file_across_two_days(input_for_test_with_first_epoch_at_midnight):
