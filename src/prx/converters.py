@@ -70,7 +70,7 @@ def file_exists_and_can_read_first_line(file: Path):
     try:
         with open(file) as f:
             return f.readline()
-    except UnicodeDecodeError as e_unicode:
+    except UnicodeDecodeError:
         return None
 
 

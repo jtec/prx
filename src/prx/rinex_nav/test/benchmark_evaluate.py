@@ -39,7 +39,7 @@ def benchmark_1(query):
     rinex_nav_file = converters.compressed_to_uncompressed(
         Path(__file__).parent / "datasets/BRDC00IGS_R_20220010000_01D_MN.zip"
     )
-    rinex_sat_states = rinex_nav_evaluate.compute(rinex_nav_file, query)
+    rinex_nav_evaluate.compute(rinex_nav_file, query)
     pass
 
 
