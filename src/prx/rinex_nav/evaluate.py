@@ -496,7 +496,9 @@ def compute_parallel(rinex_nav_file_path, per_signal_query):
     parallel = Parallel(n_jobs=multiprocessing.cpu_count(), return_as="generator")
     processed_chunks = parallel(
         delayed(compute)(rinex_nav_file_path, chunk)
-        for chunk in np.array_split(per_signal_query, 4)
+        for chunk in np.array_split(
+            per_signal_query, min(len(per_signal_query.index), 4)
+        )
     )
     return pd.concat(processed_chunks)
 
