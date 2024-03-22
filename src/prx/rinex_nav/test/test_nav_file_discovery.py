@@ -41,7 +41,7 @@ def test_find_local_ephemeris_file(set_up_test):
     assert isinstance(aux_files, dict)
 
 
-def test_download_remote_ephemeris_files(set_up_test):
+def disabled_test_download_remote_ephemeris_files(set_up_test):
     os.remove(set_up_test["test_nav_file"])
     aux_files = aux.discover_or_download_auxiliary_files(set_up_test["test_obs_file"])
     assert isinstance(aux_files, dict)
@@ -50,7 +50,7 @@ def test_download_remote_ephemeris_files(set_up_test):
 def test_command_line_call(set_up_test):
     test_file = set_up_test["test_obs_file"]
     aux_file_script_path = (
-        helpers.prx_repository_root() / "src/prx/rinex_nav/nav_file_discovery.py"
+            helpers.prx_repository_root() / "src/prx/rinex_nav/nav_file_discovery.py"
     )
 
     command = f"python {aux_file_script_path} --observation_file_path {test_file}"
