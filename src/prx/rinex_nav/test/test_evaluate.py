@@ -62,13 +62,14 @@ def test_compare_rnx3_gps_sat_pos_with_magnitude(input_for_test):
     query = pd.DataFrame(
         {
             "sv": "G01",
+            "signal": "C1C",
             "query_time_isagpst": week_and_seconds_2_timedelta(
                 weeks=2190, seconds=523800
             ),
         },
         index=[0],
     )
-    rinex_sat_states = rinex_nav_evaluate.compute(path_to_rnx3_nav_file, query)
+    rinex_sat_states = rinex_nav_evaluate.compute_parallel(path_to_rnx3_nav_file, query)
 
     # MAGNITUDE position
     sv_pos_magnitude = np.array([13053451.235, -12567273.060, 19015357.126])
@@ -164,7 +165,7 @@ def test_compare_to_sp3(input_for_test):
         pd.Timestamp("2022-01-01T01:10:00.000000000") - constants.cGpstUtcEpoch
     )
 
-    rinex_sat_states = rinex_nav_evaluate.compute(rinex_nav_file, query.copy())
+    rinex_sat_states = rinex_nav_evaluate.compute_parallel(rinex_nav_file, query.copy())
     rinex_sat_states = (
         rinex_sat_states.sort_values(by=["sv", "query_time_isagpst"])
         .sort_index(axis=1)
@@ -254,7 +255,7 @@ def test_2023_beidou_c27(set_up_test_2023):
         ]
     )
 
-    rinex_sat_states = rinex_nav_evaluate.compute(rinex_nav_file, query.copy())
+    rinex_sat_states = rinex_nav_evaluate.compute_parallel(rinex_nav_file, query.copy())
     assert (
         len(rinex_sat_states) == 1
     ), "Was expecting only one, row, make sure to sort before comparing to sp3 with more than one row"
@@ -311,7 +312,7 @@ def test_group_delays(input_for_test):
             {"sv": "J02", "signal": "C2S", "query_time_isagpst": query_time_isagpst},
         ]
     )
-    rinex_sat_states = rinex_nav_evaluate.compute(rinex_nav_file, query)
+    rinex_sat_states = rinex_nav_evaluate.compute_parallel(rinex_nav_file, query)
     # Check that group delays are computed for all signals
     assert not rinex_sat_states["group_delay_m"].isna().any()
 
@@ -371,7 +372,7 @@ def test_gps_group_delay(input_for_test):
                 ),
             ]
         )
-    tgds = rinex_nav_evaluate.compute(rinex_3_navigation_file, query)
+    tgds = rinex_nav_evaluate.compute_parallel(rinex_3_navigation_file, query)
     # Verify that rows are in chronological order
     for code in codes:
         assert (
@@ -454,7 +455,7 @@ def test_gal_group_delay(input_for_test):
                 code_query,
             ]
         )
-    tgds = rinex_nav_evaluate.compute(rinex_3_navigation_file, query)
+    tgds = rinex_nav_evaluate.compute_parallel(rinex_3_navigation_file, query)
     assert max_abs_diff_smaller_than(
         tgds[tgds.signal == "C1C"]["group_delay_m"],
         4.889443516730e-09 * constants.cGpsSpeedOfLight_mps,
@@ -536,7 +537,7 @@ def test_bds_group_delay(input_for_test):
                 code_query,
             ]
         )
-    tgds = rinex_nav_evaluate.compute(rinex_3_navigation_file, query)
+    tgds = rinex_nav_evaluate.compute_parallel(rinex_3_navigation_file, query)
 
     tgd_c2i_s_expected = -5.800000000000e-09 * constants.cGpsSpeedOfLight_mps
     tgd_c7i_s_expected = -1.020000000000e-08 * constants.cGpsSpeedOfLight_mps

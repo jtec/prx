@@ -17,7 +17,7 @@ from prx.user import parse_prx_csv_file, spp_pt_lsq, spp_vt_lsq
 # and returns its path. The @pytest.fixture annotation allows us to pass the function as an input
 # to test functions. When running a test function, pytest will then first run this function, pass
 # whatever is passed to `yield` to the test function, and run the code after `yield` after the test,
-# even  if the test crashes.
+# even if the test crashes.
 @pytest.fixture
 def input_for_test():
     test_directory = Path(f"./tmp_test_directory_{__name__}").resolve()

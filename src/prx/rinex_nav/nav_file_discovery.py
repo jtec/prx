@@ -15,23 +15,50 @@ def is_rinex_3_mixed_mgex_broadcast_ephemerides_file(file: Path):
     return str(file).endswith("MN.rnx")
 
 
-def try_downloading_ephemerides_from_bkg(
+def try_downloading_ephemerides_http(day: pd.Timestamp, folder: Path):
+    # IGS BKG Rinex 3.04 mixed file paths follow this pattern:
+    # https://igs.bkg.bund.de/root_ftp/IGS/BRDC/2023/002/BRDC00IGS_R_20230020000_01D_MN.rnx.gz
+    remote_file = Path(
+        f"/{day.year}/{day.day_of_year:03}/BRDC00IGS_R_{day.year}{day.day_of_year:03}0000_01D_MN.rnx.gz"
+    )
+    local_compressed_file = folder.joinpath(remote_file.name)
+    url = "https://igs.bkg.bund.de/root_ftp/IGS/BRDC" + str(remote_file.as_posix())
+    try:
+        urllib.request.urlretrieve(url, local_compressed_file)
+        local_file = converters.compressed_to_uncompressed(local_compressed_file)
+        os.remove(local_compressed_file)
+        log.info(f"Downloaded broadcast ephemerides file from {url}")
+        return local_file
+    except Exception:
+        log.warning(f"Could not download broadcast ephemerides file from {url}")
+        return None
+
+
+def try_downloading_ephemerides_ftp(day: pd.Timestamp, folder: Path):
+    root = "igs.ign.fr/pub/igs/data"
+    file_name = f"BRDM00DLR_S_{day.year}{day.day_of_year:03}0000_01D_MN.rnx.gz"
+    ftp_file_path = f"ftp://{root}/{day.year}/{day.day_of_year:03}/{file_name}"
+    local_compressed_file = folder / file_name
+    urllib.request.urlretrieve(ftp_file_path, local_compressed_file)
+    if not local_compressed_file.exists():
+        log.warning(f"Could not download {ftp_file_path}")
+        return None
+    local_file = converters.compressed_to_uncompressed(local_compressed_file)
+    os.remove(local_compressed_file)
+    log.info(f"Downloaded broadcast ephemerides file {ftp_file_path}")
+    return local_file
+
+
+def try_downloading_ephemerides(
     t_start: pd.Timestamp, t_end: pd.Timestamp, folder: Path
 ):
     time = t_start
     files = []
     while True:
-        # IGS BKG Rinex 3.04 mixed file paths follow this pattern:
-        # https://igs.bkg.bund.de/root_ftp/IGS/BRDC/2023/002/BRDC00IGS_R_20230020000_01D_MN.rnx.gz
-        remote_file = Path(
-            f"/{time.year}/{time.day_of_year:03}/BRDC00IGS_R_{time.year}{time.day_of_year:03}0000_01D_MN.rnx.gz"
-        )
-        local_compressed_file = folder.joinpath(remote_file.name)
-        url = "https://igs.bkg.bund.de/root_ftp/IGS/BRDC" + str(remote_file.as_posix())
-        urllib.request.urlretrieve(url, local_compressed_file)
-        local_file = converters.compressed_to_uncompressed(local_compressed_file)
-        os.remove(local_compressed_file)
-        log.info(f"Downloaded broadcast ephemerides file from {url}")
+        local_file = try_downloading_ephemerides_http(time, folder)
+        if not local_file:
+            local_file = try_downloading_ephemerides_ftp(time, folder)
+        assert local_file, f"Could not download broadcast ephemerides for {time}"
         local_file = helpers.repair_with_gfzrnx(local_file)
         files.append(local_file)
         # Assuming that the downloaded files cover the whole day:
@@ -40,7 +67,6 @@ def try_downloading_ephemerides_from_bkg(
         )
         if t_coverage_end > t_end:
             return files
-    return None
 
 
 def rinex_3_ephemerides_file_coverage_time(ephemerides_file: Path):
@@ -80,7 +106,7 @@ def discover_local_ephemerides(
 def discover_or_download_ephemerides(
     t_start: pd.Timestamp, t_end: pd.Timestamp, folder, constellations
 ):
-    sources = [discover_local_ephemerides, try_downloading_ephemerides_from_bkg]
+    sources = [discover_local_ephemerides, try_downloading_ephemerides]
     for source in sources:
         ephemerides_files = source(t_start, t_end, folder)
         if ephemerides_files is not None:
