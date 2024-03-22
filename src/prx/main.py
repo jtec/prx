@@ -290,7 +290,7 @@ def _build_records_cached(
         ["observation_type", "satellite", "time_of_emission_isagpst"]
     ]
 
-    sat_states = rinex_evaluate.compute(
+    sat_states = rinex_evaluate.compute_parallel(
         rinex_3_ephemerides_file,
         query,
     )
