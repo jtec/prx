@@ -1,14 +1,16 @@
+import multiprocessing
+
 import pandas as pd
 import numpy as np
 from pathlib import Path
 import scipy
 import georinex
+from joblib import Parallel, delayed
+
 from prx import helpers
 from prx import constants
 
-
 log = helpers.get_logger(__name__)
-
 
 consts = {
     "MU_EARTH": constants.cGpsMuEarth_m3ps2,
@@ -222,6 +224,7 @@ def handle_bds_geos(eph):
     geos["dX_k"] = V_K_frozen[:, 0]
     geos["dY_k"] = V_K_frozen[:, 1]
     geos["dZ_k"] = V_K_frozen[:, 2]
+
     # Add term due to ECEFs angular velocity w.r.t. the frozen frame
 
     def frozen_to_rotating_bdcs(row):
@@ -487,6 +490,15 @@ def compute_clock_offsets(df):
         + 2 * df["SVclockDriftRate"] * df["query_time_wrt_clock_reference_time_s"]
     )
     return df
+
+
+def compute_parallel(rinex_nav_file_path, per_signal_query):
+    parallel = Parallel(n_jobs=multiprocessing.cpu_count(), return_as="generator")
+    processed_chunks = parallel(
+        delayed(compute)(rinex_nav_file_path, chunk)
+        for chunk in np.array_split(per_signal_query, 4)
+    )
+    return pd.concat(processed_chunks)
 
 
 def compute(rinex_nav_file_path, per_signal_query):
