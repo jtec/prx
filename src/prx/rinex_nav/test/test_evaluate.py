@@ -62,6 +62,7 @@ def test_compare_rnx3_gps_sat_pos_with_magnitude(input_for_test):
     query = pd.DataFrame(
         {
             "sv": "G01",
+            "signal": "C1C",
             "query_time_isagpst": week_and_seconds_2_timedelta(
                 weeks=2190, seconds=523800
             ),
