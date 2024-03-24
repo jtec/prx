@@ -149,8 +149,16 @@ def generate_sat_query(sat_state_query_time_isagpst):
             },
             # Multiple satellites with orbits that require propagation of an initial state
             # Two GLONASS satellites
-            # {"sv": "R04", 'signal': 'C1C', "query_time_isagpst": sat_state_query_time_isagpst},
-            # {"sv": "R05", 'signal': 'C1C', "query_time_isagpst": sat_state_query_time_isagpst},
+            {
+                "sv": "R04",
+                "signal": "C1C",
+                "query_time_isagpst": sat_state_query_time_isagpst,
+            },
+            {
+                "sv": "R05",
+                "signal": "C1C",
+                "query_time_isagpst": sat_state_query_time_isagpst,
+            },
         ]
     )
     return query
@@ -206,6 +214,7 @@ def test_compare_to_sp3(input_for_test):
         column,
         expected_max_difference,
     ) in expected_max_differences_broadcast_vs_precise.items():
+        assert not diff[column].isnull().values.any()
         assert (
             diff[column].max() < expected_max_difference
         ), f"Expected maximum difference {expected_max_difference} for column {column}, but got {diff[column].max()}"

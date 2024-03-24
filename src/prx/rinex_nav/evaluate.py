@@ -6,9 +6,7 @@ import georinex
 from prx import helpers
 from prx import constants
 
-
 log = helpers.get_logger(__name__)
-
 
 consts = {
     "MU_EARTH": constants.cGpsMuEarth_m3ps2,
@@ -47,6 +45,59 @@ def time_scale_integer_second_offset(time_scale_a, time_scale_b):
     )
     offset = offset.round("s")
     return offset
+
+
+def glonass_xdot(x, a):
+    p = x[["X", "Y", "Z"]]
+    v = x[["dX", "dY", "dZ"]]
+    mu = 398600.44 * 1e9
+    a_e = 6378136.0
+    J_2 = 1082625.7 * 1e-9
+    omega = 0.7292115 * 1e-5
+    xdot = x.copy() * np.nan
+    xdot[["X", "Y", "Z"]] = x[["dX", "dY", "dZ"]]
+    r = np.linalg.norm(p.to_numpy(), axis=1)
+    c1 = (-mu / p.loc[:, "X"] ** 3) - (3 / 2) * J_2**2 * (mu * (a_e**2 / r**5)) * (
+        1 - 5 * (p.loc[:, "Z"] / r) ** 2
+    )
+    xdot.loc[:, "dX"] = (
+        c1 * p.loc[:, "X"]
+        + omega**2 * p.loc[:, "X"]
+        + 2 * omega * v.loc[:, "dY"]
+        + a.loc[:, "dX2"]
+    )
+    xdot.loc[:, "dY"] = (
+        c1 * p.loc[:, "Y"]
+        + omega**2 * p.loc[:, "Y"]
+        - 2 * omega * v.loc[:, "dX"]
+        + a.loc[:, "dY2"]
+    )
+    xdot.loc[:, "dZ"] = c1 * p.loc[:, "Z"] + a.loc[:, "dZ2"]
+    return xdot
+
+
+def glonass_orbit_position_and_velocity(df):
+    pv = df[["X", "Y", "Z", "dX", "dY", "dZ"]]
+    a = df[["dX2", "dY2", "dZ2"]]
+    ts = df["query_time_wrt_ephemeris_reference_time_s"] * 0
+    t_ends = df["query_time_wrt_ephemeris_reference_time_s"]
+
+    while True:
+        # We integrate in fixed steps until the last step, which is the time between the next-to-last integrated state
+        # and the query time.
+        fixed_integration_time_step = 60
+        time_steps = t_ends - ts
+        time_steps = time_steps.clip(0, fixed_integration_time_step)
+        if np.all(time_steps == 0):
+            df[["x_m", "y_m", "z_m", "dx_mps", "dy_mps", "dz_mps"]] = pv
+            return df
+        # One step of 4th order Runge-Kutta integration:
+        k1 = glonass_xdot(pv, a)
+        k2 = glonass_xdot(pv + k1.mul(time_steps / 2, axis=0), a)
+        k3 = glonass_xdot(pv + k2.mul(time_steps / 2, axis=0), a)
+        k4 = glonass_xdot(pv + k3.mul(time_steps / 2, axis=0), a)
+        pv = pv + (k1 + 2 * k2 + 2 * k3 + k4).mul(time_steps / 6, axis=0)
+        ts = ts + time_steps
 
 
 def eccentric_anomaly(M, e, tol=1e-5, max_iter=10):
@@ -222,6 +273,7 @@ def handle_bds_geos(eph):
     geos["dX_k"] = V_K_frozen[:, 0]
     geos["dY_k"] = V_K_frozen[:, 1]
     geos["dZ_k"] = V_K_frozen[:, 2]
+
     # Add term due to ECEFs angular velocity w.r.t. the frozen frame
 
     def frozen_to_rotating_bdcs(row):
@@ -508,6 +560,8 @@ def compute(rinex_nav_file_path, per_signal_query):
         orbit_type = sub_df["orbit_type"].iloc[0]
         if orbit_type == "kepler":
             sub_df = kepler_orbit_position_and_velocity(sub_df)
+        if orbit_type == "glonass":
+            sub_df = glonass_orbit_position_and_velocity(sub_df)
         else:
             log.info(
                 f"Ephemeris evaluation not implemented or under development for constellation {sub_df['constellation'].iloc[0]}, skipping"
