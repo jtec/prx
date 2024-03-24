@@ -40,8 +40,8 @@ def parse_rinex_nav_file(rinex_file: Path):
 
 def time_scale_integer_second_offset(time_scale_a, time_scale_b):
     offset = (
-        constants.system_time_scale_2_rinex_utc_epoch[time_scale_a]
-        - constants.system_time_scale_2_rinex_utc_epoch[time_scale_b]
+            constants.system_time_scale_2_rinex_utc_epoch[time_scale_a]
+            - constants.system_time_scale_2_rinex_utc_epoch[time_scale_b]
     )
     offset = offset.round("s")
     return offset
@@ -50,33 +50,40 @@ def time_scale_integer_second_offset(time_scale_a, time_scale_b):
 def glonass_xdot(x, a):
     p = x[["X", "Y", "Z"]]
     v = x[["dX", "dY", "dZ"]]
-    mu = 398600.44 * 1e9
-    a_e = 6378136.0
+    GM_e = 398600.4418 * 1e9
+    R_e = 6378136.0
     J_2 = 1082625.7 * 1e-9
-    omega = 0.7292115 * 1e-5
+    omega_e = 7.292115 * 1e-5
     xdot = x.copy() * np.nan
     xdot[["X", "Y", "Z"]] = x[["dX", "dY", "dZ"]]
     r = np.linalg.norm(p.to_numpy(), axis=1)
-    c1 = (-mu / p.loc[:, "X"] ** 3) - (3 / 2) * J_2**2 * (mu * (a_e**2 / r**5)) * (
-        1 - 5 * (p.loc[:, "Z"] / r) ** 2
-    )
+    c1 = -GM_e / r ** 3
+    c2 = - (3 / 2) * J_2 * GM_e * (R_e ** 2 / r ** 5)
+
     xdot.loc[:, "dX"] = (
-        c1 * p.loc[:, "X"]
-        + omega**2 * p.loc[:, "X"]
-        + 2 * omega * v.loc[:, "dY"]
-        + a.loc[:, "dX2"]
+            c1 * p.loc[:, "X"]
+            + c2 * (p.loc[:, "X"] - 5 * p.loc[:, "X"] * p.loc[:, "Z"] ** 2) / r ** 2
+            + omega_e ** 2 * p.loc[:, "X"]
+            + 2 * omega_e * v.loc[:, "dY"]
+            + a.loc[:, "dX2"]
     )
     xdot.loc[:, "dY"] = (
-        c1 * p.loc[:, "Y"]
-        + omega**2 * p.loc[:, "Y"]
-        - 2 * omega * v.loc[:, "dX"]
-        + a.loc[:, "dY2"]
+            c1 * p.loc[:, "Y"]
+            + c2 * (p.loc[:, "Y"] - 5 * p.loc[:, "Y"] * p.loc[:, "Z"] ** 2) / r ** 2
+            + omega_e ** 2 * p.loc[:, "Y"]
+            - 2 * omega_e * v.loc[:, "dX"]
+            + a.loc[:, "dY2"]
     )
-    xdot.loc[:, "dZ"] = c1 * p.loc[:, "Z"] + a.loc[:, "dZ2"]
+    xdot.loc[:, "dZ"] = (
+            c1 * p.loc[:, "Z"]
+            + c2 * (3 * p.loc[:, "Z"] - 5 * p.loc[:, "Z"] ** 3) / r ** 2
+            + a.loc[:, "dZ2"]
+    )
     return xdot
 
 
 def glonass_orbit_position_and_velocity(df):
+    # Based on Montenbruck, 2017, Handbook of GNSS, section 3.3.3
     pv = df[["X", "Y", "Z", "dX", "dY", "dZ"]]
     a = df[["dX2", "dY2", "dZ2"]]
     ts = df["query_time_wrt_ephemeris_reference_time_s"] * 0
@@ -118,28 +125,28 @@ def is_bds_geo(constellation, inclination_rad, semi_major_axis_m):
     # From BDS-SIS-ICD-2.0, 2013-12, section 3.1
     inclination_igso_and_meo_rad = helpers.deg_2_rad(55)
     geo_and_igso_approximate_radius_m = (
-        35786 * constants.cMetersPerKilometer + constants.cBdsCgcs2000SmiMajorAxis_m
+            35786 * constants.cMetersPerKilometer + constants.cBdsCgcs2000SmiMajorAxis_m
     )
     meo_approximate_radius_m = (
-        21528 * constants.cMetersPerKilometer + constants.cBdsCgcs2000SmiMajorAxis_m
+            21528 * constants.cMetersPerKilometer + constants.cBdsCgcs2000SmiMajorAxis_m
     )
     radius_threshold_m = (
-        meo_approximate_radius_m - geo_and_igso_approximate_radius_m
-    ) / 2
+                                 meo_approximate_radius_m - geo_and_igso_approximate_radius_m
+                         ) / 2
     inclination_threshold_rad = inclination_igso_and_meo_rad / 2
     is_geo = (
-        (semi_major_axis_m > radius_threshold_m)
-        & (inclination_rad < inclination_threshold_rad)
-        & (constellation == "C")
+            (semi_major_axis_m > radius_threshold_m)
+            & (inclination_rad < inclination_threshold_rad)
+            & (constellation == "C")
     )
     return is_geo
 
 
 def position_in_orbital_plane(eph):
     # Semi-major axis
-    eph["A"] = eph.sqrtA**2
+    eph["A"] = eph.sqrtA ** 2
     # Computed mean motion
-    n_0 = np.sqrt(eph.MuEarthIcd_m3ps2 / eph.A**3)
+    n_0 = np.sqrt(eph.MuEarthIcd_m3ps2 / eph.A ** 3)
     # Time since ephemeris reference epch
     eph["t_k"] = eph.query_time_wrt_ephemeris_reference_time_s
     # Corrected mean motion
@@ -172,15 +179,15 @@ def position_in_orbital_plane(eph):
     # Derivatives for velocity computation, from
     # IS-GPS-200N, Table 20-IV
     eph["dE_k"] = eph.n / (1 - eph.e * np.cos(eph.E_k))
-    eph["dnu_k"] = eph.dE_k * np.sqrt(1 - eph.e**2) / (1 - eph.e * np.cos(eph.E_k))
+    eph["dnu_k"] = eph.dE_k * np.sqrt(1 - eph.e ** 2) / (1 - eph.e * np.cos(eph.E_k))
     eph["di_k"] = eph.IDOT + 2 * eph.dnu_k * (
-        eph.C_is * np.cos(2.0 * eph.phi_k) - eph.C_ic * np.sin(2.0 * eph.phi_k)
+            eph.C_is * np.cos(2.0 * eph.phi_k) - eph.C_ic * np.sin(2.0 * eph.phi_k)
     )
     eph["du_k"] = eph.dnu_k + 2 * eph.dnu_k * (
-        eph.C_us * np.cos(2.0 * eph.phi_k) - eph.C_uc * np.sin(2.0 * eph.phi_k)
+            eph.C_us * np.cos(2.0 * eph.phi_k) - eph.C_uc * np.sin(2.0 * eph.phi_k)
     )
     eph["dr_k"] = (eph.e * eph.A * eph.dE_k * np.sin(eph.E_k)) + 2 * eph.dnu_k * (
-        eph.C_rs * np.cos(2.0 * eph.phi_k) - eph.C_rc * np.sin(2.0 * eph.phi_k)
+            eph.C_rs * np.cos(2.0 * eph.phi_k) - eph.C_rc * np.sin(2.0 * eph.phi_k)
     )
     eph["dx_k"] = eph.dr_k * np.cos(eph.u_k) - eph.r_k * eph.du_k * np.sin(eph.u_k)
     eph["dy_k"] = eph.dr_k * np.sin(eph.u_k) + eph.r_k * eph.du_k * np.cos(eph.u_k)
@@ -191,15 +198,15 @@ def position_in_orbital_plane(eph):
 def orbital_plane_to_earth_centered_cartesian(eph):
     # Corrected longitude of ascending node in ECEF
     eph["Omega_k"] = (
-        eph.Omega_0
-        + (eph.OmegaDot - eph.OmegaEarthIcd_rps) * eph.t_k
-        - eph.OmegaEarthIcd_rps * eph.t_oe
+            eph.Omega_0
+            + (eph.OmegaDot - eph.OmegaEarthIcd_rps) * eph.t_k
+            - eph.OmegaEarthIcd_rps * eph.t_oe
     )
     # Note that eph.loc[eph.is_bds_geo]["Omega_k"] would modify a copy of the GEO slice, not the original DataFrame.
     eph.loc[eph.is_bds_geo, "Omega_k"] = (
-        eph[eph.is_bds_geo].Omega_0
-        + eph[eph.is_bds_geo].OmegaDot * eph[eph.is_bds_geo].t_k
-        - eph[eph.is_bds_geo].OmegaEarthIcd_rps * eph[eph.is_bds_geo].t_oe
+            eph[eph.is_bds_geo].Omega_0
+            + eph[eph.is_bds_geo].OmegaDot * eph[eph.is_bds_geo].t_k
+            - eph[eph.is_bds_geo].OmegaEarthIcd_rps * eph[eph.is_bds_geo].t_oe
     )
     eph["dOmega_k"] = eph.OmegaDot - eph.OmegaEarthIcd_rps
     eph.loc[eph.is_bds_geo, "dOmega_k"] = eph[eph.is_bds_geo].OmegaDot
@@ -216,18 +223,18 @@ def orbital_plane_to_earth_centered_cartesian(eph):
     # ECEF velocity, from
     # IS-GPS-200N, Table 20-IV
     eph["dX_k"] = (
-        -eph.x_k * eph.dOmega_k * np.sin(eph.Omega_k)
-        + eph.dx_k * np.cos(eph.Omega_k)
-        - eph.dy_k * np.sin(eph.Omega_k) * np.cos(eph.i_k)
-        - eph.y_k * eph.dOmega_k * np.cos(eph.Omega_k) * np.cos(eph.i_k)
-        + eph.y_k * eph.di_k * np.sin(eph.Omega_k) * np.sin(eph.i_k)
+            -eph.x_k * eph.dOmega_k * np.sin(eph.Omega_k)
+            + eph.dx_k * np.cos(eph.Omega_k)
+            - eph.dy_k * np.sin(eph.Omega_k) * np.cos(eph.i_k)
+            - eph.y_k * eph.dOmega_k * np.cos(eph.Omega_k) * np.cos(eph.i_k)
+            + eph.y_k * eph.di_k * np.sin(eph.Omega_k) * np.sin(eph.i_k)
     )
     eph["dY_k"] = (
-        eph.x_k * eph.dOmega_k * np.cos(eph.Omega_k)
-        - eph.y_k * eph.dOmega_k * np.sin(eph.Omega_k) * np.cos(eph.i_k)
-        - eph.y_k * eph.di_k * np.cos(eph.Omega_k) * np.sin(eph.i_k)
-        + eph.dx_k * np.sin(eph.Omega_k)
-        + eph.dy_k * np.cos(eph.Omega_k) * np.cos(eph.i_k)
+            eph.x_k * eph.dOmega_k * np.cos(eph.Omega_k)
+            - eph.y_k * eph.dOmega_k * np.sin(eph.Omega_k) * np.cos(eph.i_k)
+            - eph.y_k * eph.di_k * np.cos(eph.Omega_k) * np.sin(eph.i_k)
+            + eph.dx_k * np.sin(eph.Omega_k)
+            + eph.dy_k * np.cos(eph.Omega_k) * np.cos(eph.i_k)
     )
 
     eph["dZ_k"] = eph.y_k * eph.di_k * np.cos(eph.i_k) + eph.dy_k * np.sin(eph.i_k)
@@ -355,8 +362,8 @@ def convert_nav_dataset_to_dataframe(nav_ds):
         group_constellation = group["constellation"].iloc[0]
         if group_time_scale not in ["GLONASST", "SBAST"]:
             full_seconds = (
-                group[week_field[group_time_scale]] * constants.cSecondsPerWeek
-                + group["Toe"]
+                    group[week_field[group_time_scale]] * constants.cSecondsPerWeek
+                    + group["Toe"]
             )
             group["ephemeris_reference_time_system_time"] = pd.to_timedelta(
                 full_seconds, unit="seconds"
@@ -364,34 +371,34 @@ def convert_nav_dataset_to_dataframe(nav_ds):
         else:
             # For SBAS and GLONASS there are no separate ephemeris reference time fields
             group["ephemeris_reference_time_system_time"] = (
-                group["time"] - constants.cArbitraryGlonassUtcEpoch
+                    group["time"] - constants.cArbitraryGlonassUtcEpoch
             )
             # The first derivative of the clock offset is in a different field for SBAS and GLONASS
             group["SVclockDrift"] = group["SVrelFreqBias"]
             # And the second derivative is zero, i.e. the constellation ground segment uses a fist-order clock model
             group["SVclockDriftRate"] = 0
         group["ephemeris_reference_time_isagpst"] = group[
-            "ephemeris_reference_time_system_time"
-        ] + time_scale_integer_second_offset(group_time_scale, "GPST")
+                                                        "ephemeris_reference_time_system_time"
+                                                    ] + time_scale_integer_second_offset(group_time_scale, "GPST")
         group["clock_offset_reference_time_system_time"] = (
-            group["time"]
-            - constants.system_time_scale_2_rinex_utc_epoch[group_time_scale]
+                group["time"]
+                - constants.system_time_scale_2_rinex_utc_epoch[group_time_scale]
         )
         group["clock_reference_time_isagpst"] = group[
-            "clock_offset_reference_time_system_time"
-        ] + time_scale_integer_second_offset(group_time_scale, "GPST")
+                                                    "clock_offset_reference_time_system_time"
+                                                ] + time_scale_integer_second_offset(group_time_scale, "GPST")
 
         group["validity_start"] = (
-            group["ephemeris_reference_time_isagpst"]
-            + constants.constellation_2_ephemeris_validity_interval[
-                group_constellation
-            ][0]
+                group["ephemeris_reference_time_isagpst"]
+                + constants.constellation_2_ephemeris_validity_interval[
+                    group_constellation
+                ][0]
         )
         group["validity_end"] = (
-            group["ephemeris_reference_time_isagpst"]
-            + constants.constellation_2_ephemeris_validity_interval[
-                group_constellation
-            ][1]
+                group["ephemeris_reference_time_isagpst"]
+                + constants.constellation_2_ephemeris_validity_interval[
+                    group_constellation
+                ][1]
         )
         return group
 
@@ -468,8 +475,8 @@ def select_ephemerides(df, query):
     def find_ephemeris_index(row, df):
         # For each query, find the ephemeris whose time of reference is closest, but before the query time
         query_time_wrt_ephemeris_reference_time = (
-            row.query_time_isagpst
-            - df[df.sv == row.sv]["ephemeris_reference_time_isagpst"]
+                row.query_time_isagpst
+                - df[df.sv == row.sv]["ephemeris_reference_time_isagpst"]
         )
         eligible_ephemerides = df.sv == row.sv
         # For Galileo, select the FNAV ephemeris for E5b signals, and INAV for other signals
@@ -480,7 +487,7 @@ def select_ephemerides(df, query):
         delta_time = query_time_wrt_ephemeris_reference_time[
             eligible_ephemerides
             & (query_time_wrt_ephemeris_reference_time >= pd.Timedelta(seconds=0))
-        ]
+            ]
         if len(delta_time) == 0:
             return np.nan
         match_index = delta_time.idxmin()
@@ -520,23 +527,23 @@ def select_ephemerides(df, query):
     # only one
     # Compute times w.r.t. orbit and clock reference times used by downstream computations
     query["query_time_wrt_ephemeris_reference_time_s"] = (
-        query["query_time_isagpst"] - query["ephemeris_reference_time_isagpst"]
+            query["query_time_isagpst"] - query["ephemeris_reference_time_isagpst"]
     ).apply(helpers.timedelta_2_seconds)
     query["query_time_wrt_clock_reference_time_s"] = (
-        query["query_time_isagpst"] - query["clock_reference_time_isagpst"]
+            query["query_time_isagpst"] - query["clock_reference_time_isagpst"]
     ).apply(helpers.timedelta_2_seconds)
     return query
 
 
 def compute_clock_offsets(df):
     df["clock_m"] = constants.cGpsSpeedOfLight_mps * (
-        df["SVclockBias"]
-        + df["SVclockDrift"] * df["query_time_wrt_clock_reference_time_s"]
-        + df["SVclockDriftRate"] * df["query_time_wrt_clock_reference_time_s"] ** 2
+            df["SVclockBias"]
+            + df["SVclockDrift"] * df["query_time_wrt_clock_reference_time_s"]
+            + df["SVclockDriftRate"] * df["query_time_wrt_clock_reference_time_s"] ** 2
     )
     df["dclock_mps"] = constants.cGpsSpeedOfLight_mps * (
-        df["SVclockDrift"]
-        + 2 * df["SVclockDriftRate"] * df["query_time_wrt_clock_reference_time_s"]
+            df["SVclockDrift"]
+            + 2 * df["SVclockDriftRate"] * df["query_time_wrt_clock_reference_time_s"]
     )
     return df
 
@@ -585,9 +592,9 @@ def compute(rinex_nav_file_path, per_signal_query):
         per_sat_query, on=["sv", "query_time_isagpst"]
     )
     columns_to_keep = [
-        "clock_m",
-        "dclock_mps",
-    ] + columns_to_keep
+                          "clock_m",
+                          "dclock_mps",
+                      ] + columns_to_keep
     per_signal_query = compute_total_group_delays(per_signal_query)
 
     if "signal" in per_signal_query.columns:
@@ -597,7 +604,7 @@ def compute(rinex_nav_file_path, per_signal_query):
 
 
 def compute_total_group_delays(
-    query,
+        query,
 ):
     """
     This computes TGD terms, not ISCs, which are not captured by RINEX 3 - we'll have them with RINEX 4.
@@ -637,9 +644,9 @@ def compute_total_group_delays(
                         df.gamma = 1
                     case "2":
                         df.gamma = (
-                            constants.carrier_frequencies_hz()["G"]["L1"]
-                            / constants.carrier_frequencies_hz()["G"]["L2"]
-                        ) ** 2
+                                           constants.carrier_frequencies_hz()["G"]["L1"]
+                                           / constants.carrier_frequencies_hz()["G"]["L2"]
+                                   ) ** 2
             case "J":
                 df.tgd = df.TGD.values[0]
                 df.gamma = 1
@@ -651,15 +658,15 @@ def compute_total_group_delays(
                     case "5":
                         df.tgd = df.BGDe5a.values[0]
                         df.gamma = (
-                            constants.carrier_frequencies_hz()["E"]["L1"]
-                            / constants.carrier_frequencies_hz()["E"]["L5"]
-                        ) ** 2
+                                           constants.carrier_frequencies_hz()["E"]["L1"]
+                                           / constants.carrier_frequencies_hz()["E"]["L5"]
+                                   ) ** 2
                     case "7":
                         df.tgd = df.BGDe5b.values[0]
                         df.gamma = (
-                            constants.carrier_frequencies_hz()["E"]["L1"]
-                            / constants.carrier_frequencies_hz()["E"]["L7"]
-                        ) ** 2
+                                           constants.carrier_frequencies_hz()["E"]["L1"]
+                                           / constants.carrier_frequencies_hz()["E"]["L7"]
+                                   ) ** 2
             case "C":
                 df.gamma = 1
                 match df.signal.values[0]:
