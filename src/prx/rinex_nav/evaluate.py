@@ -22,9 +22,10 @@ def parse_rinex_nav_file(rinex_file: Path):
         ds = georinex.load(rinex_file)
         return ds
 
-    @helpers.cache_call
+    # @helpers.cache_call
     def cached_load(rinex_file: Path, file_hash: str):
         ds = cached_parse(rinex_file, file_hash)
+        ds.attrs['utc_gpst_leap_seconds'] = georinex.rinexheader(rinex_file)["LEAP SECONDS"]
         df = convert_nav_dataset_to_dataframe(ds)
         return df
 
@@ -38,7 +39,7 @@ def parse_rinex_nav_file(rinex_file: Path):
     return cached_load(rinex_file, file_content_hash)
 
 
-def time_scale_integer_second_offset(time_scale_a, time_scale_b):
+def time_scale_integer_second_offset(time_scale_a, time_scale_b, utc_gpst_leap_seconds=None):
     offset = (
             constants.system_time_scale_2_rinex_utc_epoch[time_scale_a]
             - constants.system_time_scale_2_rinex_utc_epoch[time_scale_b]
@@ -52,31 +53,31 @@ def glonass_xdot(x, a):
     v = x[["dX", "dY", "dZ"]]
     GM_e = 398600.4418 * 1e9
     R_e = 6378136.0
-    J_2 = 1082625.7 * 1e-9
+    J_2 = 1.0826257 * 1e-3
     omega_e = 7.292115 * 1e-5
     xdot = x.copy() * np.nan
     xdot[["X", "Y", "Z"]] = x[["dX", "dY", "dZ"]]
     r = np.linalg.norm(p.to_numpy(), axis=1)
-    c1 = -GM_e / r ** 3
-    c2 = - (3 / 2) * J_2 * GM_e * (R_e ** 2 / r ** 5)
+    c1 = - GM_e / r ** 3
+    c2 = - (3 / 2) * J_2 * GM_e * (R_e ** 2 / r ** 5) * (1 - 5 * p.loc[:, "Z"] ** 2) / r ** 2
 
     xdot.loc[:, "dX"] = (
             c1 * p.loc[:, "X"]
-            + c2 * (p.loc[:, "X"] - 5 * p.loc[:, "X"] * p.loc[:, "Z"] ** 2) / r ** 2
+            + c2 * p.loc[:, "X"]
             + omega_e ** 2 * p.loc[:, "X"]
             + 2 * omega_e * v.loc[:, "dY"]
             + a.loc[:, "dX2"]
     )
     xdot.loc[:, "dY"] = (
             c1 * p.loc[:, "Y"]
-            + c2 * (p.loc[:, "Y"] - 5 * p.loc[:, "Y"] * p.loc[:, "Z"] ** 2) / r ** 2
+            + c2 * p.loc[:, "Y"]
             + omega_e ** 2 * p.loc[:, "Y"]
             - 2 * omega_e * v.loc[:, "dX"]
             + a.loc[:, "dY2"]
     )
     xdot.loc[:, "dZ"] = (
             c1 * p.loc[:, "Z"]
-            + c2 * (3 * p.loc[:, "Z"] - 5 * p.loc[:, "Z"] ** 3) / r ** 2
+            + c2 * p.loc[:, "Z"]
             + a.loc[:, "dZ2"]
     )
     return xdot
@@ -86,25 +87,24 @@ def glonass_orbit_position_and_velocity(df):
     # Based on Montenbruck, 2017, Handbook of GNSS, section 3.3.3
     pv = df[["X", "Y", "Z", "dX", "dY", "dZ"]]
     a = df[["dX2", "dY2", "dZ2"]]
-    ts = df["query_time_wrt_ephemeris_reference_time_s"] * 0
-    t_ends = df["query_time_wrt_ephemeris_reference_time_s"]
+    t = df["query_time_wrt_ephemeris_reference_time_s"] * 0
+    t_query = df["query_time_wrt_ephemeris_reference_time_s"]
 
     while True:
         # We integrate in fixed steps until the last step, which is the time between the next-to-last integrated state
         # and the query time.
         fixed_integration_time_step = 60
-        time_steps = t_ends - ts
-        time_steps = time_steps.clip(0, fixed_integration_time_step)
-        if np.all(time_steps == 0):
+        h = (t_query - t).clip(0, fixed_integration_time_step)
+        if np.all(h == 0):
             df[["x_m", "y_m", "z_m", "dx_mps", "dy_mps", "dz_mps"]] = pv
             return df
         # One step of 4th order Runge-Kutta integration:
         k1 = glonass_xdot(pv, a)
-        k2 = glonass_xdot(pv + k1.mul(time_steps / 2, axis=0), a)
-        k3 = glonass_xdot(pv + k2.mul(time_steps / 2, axis=0), a)
-        k4 = glonass_xdot(pv + k3.mul(time_steps / 2, axis=0), a)
-        pv = pv + (k1 + 2 * k2 + 2 * k3 + k4).mul(time_steps / 6, axis=0)
-        ts = ts + time_steps
+        k2 = glonass_xdot(pv + k1.mul(h / 2, axis=0), a)
+        k3 = glonass_xdot(pv + k2.mul(h / 2, axis=0), a)
+        k4 = glonass_xdot(pv + k3.mul(h / 2, axis=0), a)
+        pv = pv + (k1 + 2 * k2 + 2 * k3 + k4).mul(h / 6, axis=0)
+        t = t + h
 
 
 def eccentric_anomaly(M, e, tol=1e-5, max_iter=10):
@@ -379,7 +379,9 @@ def convert_nav_dataset_to_dataframe(nav_ds):
             group["SVclockDriftRate"] = 0
         group["ephemeris_reference_time_isagpst"] = group[
                                                         "ephemeris_reference_time_system_time"
-                                                    ] + time_scale_integer_second_offset(group_time_scale, "GPST")
+                                                    ] + time_scale_integer_second_offset(group_time_scale, "GPST",
+                                                                                         nav_ds.attrs[
+                                                                                             'utc_gpst_leap_seconds'])
         group["clock_offset_reference_time_system_time"] = (
                 group["time"]
                 - constants.system_time_scale_2_rinex_utc_epoch[group_time_scale]

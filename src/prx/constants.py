@@ -114,8 +114,12 @@ constellation_2_ephemeris_validity_interval = {
     "I": [pd.Timedelta(-1, "hours"), pd.Timedelta(1, "hours")],
 }
 
-system_time_scale_2_rinex_utc_epoch = {
-    "GPST": cGpstUtcEpoch,
+def system_time_scale_2_rinex_utc_epoch(time_scale):
+    match time_scale:
+        case "GPST": return cGpstUtcEpoch
+        case "SBAST": return cGpstUtcEpoch
+        case "GST": return cGpstUtcEpoch
+        case "BDT": return cGpstUtcEpoch + pd.Timedelta(1356 * cSecondsPerWeek, "seconds") + pd.Timedelta(14, "seconds")
     "SBAST": cGpstUtcEpoch,
     "GST": cGpstUtcEpoch,
     "BDT": (
