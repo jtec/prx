@@ -1,23 +1,19 @@
-from functools import lru_cache
 import pandas as pd
 import numpy as np
 from scipy.interpolate import lagrange
 from numpy.polynomial.polynomial import Polynomial
 import georinex
 from pathlib import Path
-import joblib
 import matplotlib.pyplot as plt
 
 from prx import helpers
 from prx import constants
 
-memory = joblib.Memory(Path(__file__).parent.joinpath("diskcache"), verbose=0)
 log = helpers.get_logger(__name__)
 
 
 def parse_sp3_file(file_path: Path):
-    @lru_cache
-    @memory.cache
+    @helpers.cache_call
     def cached_load(file_path: Path, file_hash: str):
         log.info(f"Parsing {file_path} ...")
         parsed = georinex.load(file_path)
@@ -100,8 +96,8 @@ def interpolate(df, query_time_gpst_s, plot_interpolation=False):
     assert (
         start_index >= 0
     ), f"We need at least {n_samples_each_side} before the sample closest to the query time to interpolate"
-    assert end_index < len(
-        df.index
+    assert (
+        end_index < len(df.index)
     ), f"We need at least {n_samples_each_side} after the sample closest to the query time to interpolate"
     columns_to_interpolate = ["sat_pos_x_m", "sat_pos_y_m", "sat_pos_z_m", "sat_clock_offset_m"]
     interpolated = df[closest_sample_index : closest_sample_index + 1]
