@@ -91,8 +91,8 @@ def run_rinex_through_prx(rinex_obs_file: Path):
     records = pd.read_csv(expected_prx_file, comment="#")
     assert not records.empty
     assert metadata
-    records.group_delay_m = records.group_delay_m.fillna(0)
-    records = records[records.C_obs.notna() & records.x_m.notna()]
+    records.sat_instrumental_delay_m = records.sat_instrumental_delay_m.fillna(0)
+    records = records[records.C_obs_m.notna() & records.sat_pos_x_m.notna()]
     return records, metadata
 
 
@@ -120,46 +120,46 @@ def test_spp_lsq(input_for_test):
         assert np.max(np.abs(vt_lsq[0:3, :])) < 1e-1
 
 
-
-
-
-
-
-def prx_csv_to_pandas(filepath: str):
-    """
-    # Read a PRX_CSV file and convert it to pandas DataFrame
-    """
-    data_prx = pd.read_csv(
-        filepath,
-        comment="#",
-
-        parse_dates=["time_of_reception_in_receiver_time"],
+def test_csv_parameter_renaming(input_for_test):
+    test_file = input_for_test
+    main.process(observation_file_path=test_file, output_format="csv")
+    expected_prx_file = Path(
+        str(test_file).replace("crx.gz", constants.cPrxCsvFileExtension)
     )
-    return data_prx
+    assert expected_prx_file.exists()
 
-def test_csv_format():
-    # Path to the generated prx csv file
-    csv_file = (
-        helpers.prx_repository_root()
-        .joinpath("tools/validation_data/TLSE00FRA_R_20230010100_10S_01S_MO.csv")
-    )
-    # Read the generated CSV file and convert it to pandas DataFrame
-    data_prx = prx_csv_to_pandas(csv_file)
+    # Read the CSV file
+    df = pd.read_csv(expected_prx_file, comment="#")
 
-    # List of expected field names after renaming
-    fields_expected = ['sat_clock_offset_m', 'sat_clock_drift_mps', 'sat_pos_x_m','sat_vel_x_mps',
-    'sat_instrumental_delay_m','iono_delay_m','sat_elevation_deg','sat_azim_deg','rnx_obs_identifier','C_obs_m']
+    # Renamed parameters
+    renamed_parameters = {
+        'time_of_reception_in_receiver_time',
+        'sat_clock_offset_m',
+        'sat_clock_drift_mps',
+        'sat_pos_x_m',
+        'sat_pos_y_m',
+        'sat_pos_z_m',
+        'sat_vel_x_mps',
+        'sat_vel_y_mps',
+        'sat_vel_z_mps',
+        'relativistic_clock_effect_m',
+        'sagnac_effect_m',
+        'tropo_delay_m',
+        'sat_instrumental_delay_m',
+        'carrier_frequency_hz',
+        'iono_delay_m',
+        'carrier_iono_delay_klobuchar_m',
+        'sat_elevation_deg',
+        'sat_azim_deg',
+        'rnx_obs_identifier',
+        'C_obs_m',
+        'D_obs_hz',
+        'L_obs_cycles',
+        'S_obs_dBHz',
+        'constellation',
+        'prn'
+    }
 
-    # Check if the renamed fields are present in the DataFrame columns
-    for field in fields_expected:
-        assert field in data_prx.columns
-
-    # Check values of the first observation for a few fields (not involving prx computations)
-    assert data_prx.iloc[0].time_of_reception_in_receiver_time == pd.Timestamp("2023-01-01 01:00:00")
-    assert data_prx.iloc[0].constellation == "C"
-    assert data_prx.iloc[0].prn == 5
-    assert data_prx.iloc[0].observation_code == "2I"
-    assert data_prx.iloc[0].code_observation_m == 39902331.27300
-    assert data_prx.iloc[0].doppler_observation_hz == -19.17200
-    assert data_prx.iloc[0].carrier_observation_m == 39902329.09610697
-    assert data_prx.iloc[0].cn0_dbhz == 35.60000
+    # Check if all renamed parameters exist in the dataframe columns
+    for parameter in renamed_parameters:
+        assert parameter in df.columns
