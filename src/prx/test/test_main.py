@@ -1,3 +1,4 @@
+
 import os
 from pathlib import Path
 import shutil
@@ -20,6 +21,8 @@ from prx.user import parse_prx_csv_file, spp_pt_lsq, spp_vt_lsq
 # even  if the test crashes.
 @pytest.fixture
 def input_for_test():
+
+
     test_directory = Path(f"./tmp_test_directory_{__name__}").resolve()
     if test_directory.exists():
         # Make sure the expected file has not been generated before and is still on disk due to e.g. a previous
@@ -74,7 +77,7 @@ def test_prx_function_call_with_csv_output(input_for_test):
     assert helpers.is_sorted(df.time_of_reception_in_receiver_time)
     # Elevation sanity check
     assert (
-        df[(df.prn == 14) & (df.constellation == "C")].elevation_deg - 34.86
+        df[(df.prn == 14) & (df.constellation == "C")].sat_elevation_deg - 34.86
     ).abs().max() < 0.3
 
 
@@ -88,8 +91,8 @@ def run_rinex_through_prx(rinex_obs_file: Path):
     records = pd.read_csv(expected_prx_file, comment="#")
     assert not records.empty
     assert metadata
-    records.group_delay_m = records.group_delay_m.fillna(0)
-    records = records[records.C_obs.notna() & records.x_m.notna()]
+    records.sat_instrumental_delay_m = records.sat_instrumental_delay_m.fillna(0)
+    records = records[records.C_obs_m.notna() & records.sat_pos_x_m.notna()]
     return records, metadata
 
 
@@ -115,3 +118,48 @@ def test_spp_lsq(input_for_test):
             < 1e1
         )
         assert np.max(np.abs(vt_lsq[0:3, :])) < 1e-1
+
+
+def test_csv_parameter_renaming(input_for_test):
+    test_file = input_for_test
+    main.process(observation_file_path=test_file, output_format="csv")
+    expected_prx_file = Path(
+        str(test_file).replace("crx.gz", constants.cPrxCsvFileExtension)
+    )
+    assert expected_prx_file.exists()
+
+    # Read the CSV file
+    df = pd.read_csv(expected_prx_file, comment="#")
+
+    # Renamed parameters
+    renamed_parameters = {
+        'time_of_reception_in_receiver_time',
+        'sat_clock_offset_m',
+        'sat_clock_drift_mps',
+        'sat_pos_x_m',
+        'sat_pos_y_m',
+        'sat_pos_z_m',
+        'sat_vel_x_mps',
+        'sat_vel_y_mps',
+        'sat_vel_z_mps',
+        'relativistic_clock_effect_m',
+        'sagnac_effect_m',
+        'tropo_delay_m',
+        'sat_instrumental_delay_m',
+        'carrier_frequency_hz',
+        'iono_delay_m',
+        'carrier_iono_delay_klobuchar_m',
+        'sat_elevation_deg',
+        'sat_azim_deg',
+        'rnx_obs_identifier',
+        'C_obs_m',
+        'D_obs_hz',
+        'L_obs_cycles',
+        'S_obs_dBHz',
+        'constellation',
+        'prn'
+    }
+
+    # Check if all renamed parameters exist in the dataframe columns
+    for parameter in renamed_parameters:
+        assert parameter in df.columns
