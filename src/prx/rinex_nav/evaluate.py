@@ -64,8 +64,8 @@ def glonass_xdot(x, a):
     xdot = x.copy() * np.nan
     xdot[["X", "Y", "Z"]] = x[["dX", "dY", "dZ"]]
     r = np.linalg.norm(p.to_numpy(), axis=1)
-    c1 = -GM_e / r ** 3
-    c2 = -(3 / 2) * J_2 * GM_e * (R_e ** 2 / r ** 5) * (1 - 5 * p.loc[:, "Z"] ** 2) / r ** 2
+    c1 = - GM_e / r ** 3
+    c2 = - (3 / 2) * J_2 * GM_e * (R_e ** 2 / r ** 5) * (1 - (5 * p.loc[:, "Z"] ** 2) / r ** 2)
 
     xdot.loc[:, "dX"] = (
             c1 * p.loc[:, "X"]
@@ -81,7 +81,11 @@ def glonass_xdot(x, a):
             - 2 * omega_e * v.loc[:, "dX"]
             + a.loc[:, "dY2"]
     )
-    xdot.loc[:, "dZ"] = c1 * p.loc[:, "Z"] + c2 * p.loc[:, "Z"] + a.loc[:, "dZ2"]
+    xdot.loc[:, "dZ"] = (
+            c1 * p.loc[:, "Z"]
+            + c2 * p.loc[:, "Z"]
+            + a.loc[:, "dZ2"]
+    )
     return xdot
 
 
@@ -104,7 +108,7 @@ def glonass_orbit_position_and_velocity(df):
         k1 = glonass_xdot(pv, a)
         k2 = glonass_xdot(pv + k1.mul(h / 2, axis=0), a)
         k3 = glonass_xdot(pv + k2.mul(h / 2, axis=0), a)
-        k4 = glonass_xdot(pv + k3.mul(h / 2, axis=0), a)
+        k4 = glonass_xdot(pv + k3.mul(h, axis=0), a)
         pv = pv + (k1 + 2 * k2 + 2 * k3 + k4).mul(h / 6, axis=0)
         t = t + h
 
