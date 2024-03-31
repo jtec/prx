@@ -3,8 +3,7 @@ import pandas as pd
 from collections import defaultdict
 
 cGpstUtcEpoch = pd.Timestamp(np.datetime64("1980-01-06T00:00:00.000000000"))
-cTaiEpoch = pd.Timestamp(np.datetime64("1958-01-01T00:00:00.000000000"))
-cArbitraryGlonassUtcEpoch = pd.Timestamp(np.datetime64("1980-01-06T00:00:00.000000000"))
+cBdtUtcEpoch = pd.Timestamp(np.datetime64("2006-01-01T00:00:00.000000000"))
 
 cNanoSecondsPerSecond = 1e9
 cMicrosecondsPerSecond = 1e6
@@ -114,23 +113,27 @@ constellation_2_ephemeris_validity_interval = {
     "I": [pd.Timedelta(-1, "hours"), pd.Timedelta(1, "hours")],
 }
 
-def system_time_scale_2_rinex_utc_epoch(time_scale):
+
+def system_time_scale_rinex_utc_epoch(time_scale):
+    # Returns the time at which the system time scale (e.g. in weeks and week seconds) is zero.
     match time_scale:
-        case "GPST": return cGpstUtcEpoch
-        case "SBAST": return cGpstUtcEpoch
-        case "GST": return cGpstUtcEpoch
-        case "BDT": return cGpstUtcEpoch + pd.Timedelta(1356 * cSecondsPerWeek, "seconds") + pd.Timedelta(14, "seconds")
-    "SBAST": cGpstUtcEpoch,
-    "GST": cGpstUtcEpoch,
-    "BDT": (
-        cGpstUtcEpoch
-        + pd.Timedelta(1356 * cSecondsPerWeek, "seconds")
-        + pd.Timedelta(14, "seconds")
-    ),
-    "GLONASST": cArbitraryGlonassUtcEpoch,
-    "QZSST": cGpstUtcEpoch,
-    "IRNSST": cGpstUtcEpoch,
-}
+        case "GPST":
+            return cGpstUtcEpoch
+        case "SBAST":
+            return cGpstUtcEpoch
+        case "QZSST":
+            return cGpstUtcEpoch
+        case "IRNSST":
+            return cGpstUtcEpoch
+        # The offset between GST and GPST is removed by RINEX file encoders:
+        case "GST":
+            return cGpstUtcEpoch
+        # BDT is monotonic but offset from GPST
+        case "BDT":
+            return cBdtUtcEpoch
+        case "GLONASST":
+            assert False, "GLONASS system time does not have an epoch."
+
 
 gfzrnx_binary = {
     "Windows": "gfzrnx_217_win64.exe",
