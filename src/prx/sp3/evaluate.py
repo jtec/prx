@@ -139,7 +139,9 @@ def compute(sp3_file_path, query):
     def interpolate_sat_states(row):
         sat_pv = interpolate(
             df[df["sv"] == row["sv"]],
-            helpers.timedelta_2_seconds(row["query_time_isagpst"]),
+            helpers.timedelta_2_seconds(
+                row["query_time_isagpst"] - constants.cGpstUtcEpoch
+            ),
         )
 
         return pd.concat((row.drop("sv"), sat_pv.squeeze()))
