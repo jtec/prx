@@ -498,10 +498,12 @@ def compute_parallel(rinex_nav_file_path, per_signal_query):
     # split dataframe into `n_chunks` smaller dataframes
     n_chunks = min(len(per_signal_query.index), 4)
     chunk_length = floor(len(per_signal_query) / n_chunks)
-    chunks = [per_signal_query[i:i + chunk_length] for i in range(0, len(per_signal_query), chunk_length)]
+    chunks = [
+        per_signal_query[i : i + chunk_length]
+        for i in range(0, len(per_signal_query), chunk_length)
+    ]
     processed_chunks = parallel(
-        delayed(compute)(rinex_nav_file_path, chunk)
-        for chunk in chunks
+        delayed(compute)(rinex_nav_file_path, chunk) for chunk in chunks
     )
     return pd.concat(processed_chunks)
 
