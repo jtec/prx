@@ -5,6 +5,7 @@ import georinex
 import urllib.request
 import glob
 import pandas as pd
+import numpy as np
 
 from prx import converters, helpers
 
@@ -22,27 +23,33 @@ def try_downloading_ephemerides_from_bkg(
     folder: Path,
 ):
     files = []
-    time_starts = np.array(
+    time_start_day = np.array(
         [
             pd.Timestamp(year=t_start.year, month=t_start.month, day=t_start.day),
             pd.Timestamp(year=t_end.year, month=t_end.month, day=t_end.day),
         ],
     )
-    for time in time_starts:
-        # IGS BKG Rinex 3.04 mixed file paths follow this pattern:
-        # For files after 2022
-        # https://igs.bkg.bund.de/root_ftp/IGS/BRDC/2023/002/BRDC00IGS_R_20230020000_01D_MN.rnx.gz
-        # For files before 2022
-        # https://igs.bkg.bund.de/root_ftp/IGS/BRDC/2021/365/BRDC00WRD_R_20213650000_01D_MN.rnx.gz
-        if time.year < 2022:
-            country_code = "WRD"
-        else:
-            country_code = "IGS"
-        remote_file = Path(
-            f"/{time.year}/{time.day_of_year:03}/BRDC00{country_code}_R_{time.year}{time.day_of_year:03}0000_01D_MN.rnx.gz"
-        )
-        local_compressed_file = folder.joinpath(remote_file.name)
-        url = "https://igs.bkg.bund.de/root_ftp/IGS/BRDC" + str(remote_file.as_posix())
+    for time_day in time_start_day:
+        files.append(try_downloading_ephemerides(time_day, folder))
+    return files
+
+
+def try_downloading_ephemerides_http(day: pd.Timestamp, folder: Path):
+    # IGS BKG Rinex 3.04 mixed file paths follow this pattern:
+    # For files after 2022
+    # https://igs.bkg.bund.de/root_ftp/IGS/BRDC/2023/002/BRDC00IGS_R_20230020000_01D_MN.rnx.gz
+    # For files before 2022
+    # https://igs.bkg.bund.de/root_ftp/IGS/BRDC/2021/365/BRDC00WRD_R_20213650000_01D_MN.rnx.gz
+    if day.year < 2022:
+        country_code = "WRD"
+    else:
+        country_code = "IGS"
+    remote_file = Path(
+        f"/{day.year}/{day.day_of_year:03}/BRDC00{country_code}_R_{day.year}{day.day_of_year:03}0000_01D_MN.rnx.gz"
+    )
+    local_compressed_file = folder.joinpath(remote_file.name)
+    url = "https://igs.bkg.bund.de/root_ftp/IGS/BRDC" + str(remote_file.as_posix())
+    try:
         urllib.request.urlretrieve(url, local_compressed_file)
         local_file = converters.compressed_to_uncompressed(local_compressed_file)
         os.remove(local_compressed_file)
@@ -68,18 +75,17 @@ def try_downloading_ephemerides_ftp(day: pd.Timestamp, folder: Path):
     return local_file
 
 
-def try_downloading_ephemerides(
-    t_start: pd.Timestamp, t_end: pd.Timestamp, folder: Path
-):
+def try_downloading_ephemerides(t_start: pd.Timestamp, t_end, folder: Path):
     time = t_start
     files = []
-    while True:
-        local_file = try_downloading_ephemerides_http(time, folder)
-        if not local_file:
-            local_file = try_downloading_ephemerides_ftp(time, folder)
-        assert local_file, f"Could not download broadcast ephemerides for {time}"
-        local_file = helpers.repair_with_gfzrnx(local_file)
-        files.append(local_file)
+
+    local_file = try_downloading_ephemerides_http(time, folder)
+    if not local_file:
+        local_file = try_downloading_ephemerides_ftp(time, folder)
+    assert local_file, f"Could not download broadcast ephemerides for {time}"
+
+    local_file = helpers.repair_with_gfzrnx(local_file)
+    files.append(local_file)
     if len(files) == 0:
         return None
     else:

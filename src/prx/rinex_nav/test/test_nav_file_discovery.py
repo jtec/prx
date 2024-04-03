@@ -41,7 +41,7 @@ def test_find_local_ephemeris_file(set_up_test):
     assert isinstance(aux_files, dict)
 
 
-def disabled_test_download_remote_ephemeris_files(set_up_test):
+def test_download_remote_ephemeris_files(set_up_test):
     os.remove(set_up_test["test_nav_file"])
     aux_files = aux.discover_or_download_auxiliary_files(set_up_test["test_obs_file"])
     assert isinstance(aux_files, dict)
