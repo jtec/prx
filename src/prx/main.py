@@ -161,7 +161,9 @@ def build_metadata(input_files):
     return prx_metadata
 
 
-def check_assumptions(rinex_3_obs_file,):
+def check_assumptions(
+    rinex_3_obs_file,
+):
     obs_header = georinex.rinexheader(rinex_3_obs_file)
     if "RCV CLOCK OFFS APPL" in obs_header.keys():
         assert (
@@ -182,7 +184,9 @@ def build_records(
         helpers.hash_of_file_content(rinex_3_obs_file),
         # Use a tuple here as caching expects an immutable type
         tuple(rinex_3_ephemerides_files),
-        "".join([helpers.hash_of_file_content(file) for file in rinex_3_ephemerides_files]),
+        "".join(
+            [helpers.hash_of_file_content(file) for file in rinex_3_ephemerides_files]
+        ),
         tuple(approximate_receiver_ecef_position_m),
     )
 
@@ -305,11 +309,25 @@ def _build_records_cached(
             rinex_evaluate.compute(
                 file,
                 query.loc[
-                    (query.query_time_isagpst >= rinex_evaluate.to_isagpst(
-                        pd.Timestamp(year=year, month=1, day=1) + pd.Timedelta(days=doy-1) - constants.cGpstUtcEpoch, "GPST")) &
-                    (query.query_time_isagpst < rinex_evaluate.to_isagpst(
-                        pd.Timestamp(year=year, month=1, day=1) + pd.Timedelta(days=doy) - constants.cGpstUtcEpoch, "GPST"))
-                    ],
+                    (
+                        query.query_time_isagpst
+                        >= rinex_evaluate.to_isagpst(
+                            pd.Timestamp(year=year, month=1, day=1)
+                            + pd.Timedelta(days=doy - 1)
+                            - constants.cGpstUtcEpoch,
+                            "GPST",
+                        )
+                    )
+                    & (
+                        query.query_time_isagpst
+                        < rinex_evaluate.to_isagpst(
+                            pd.Timestamp(year=year, month=1, day=1)
+                            + pd.Timedelta(days=doy)
+                            - constants.cGpstUtcEpoch,
+                            "GPST",
+                        )
+                    )
+                ],
             )
         )
     sat_states = pd.concat(sat_states_per_day)
@@ -410,7 +428,10 @@ def _build_records_cached(
     # create a dictionary containing the headers of the different NAV files.
     # The keys are the "YYYYDDD" (year and day of year) and are located at
     # [12:19] of the file name using RINEX naming convention
-    nav_header_dict = {file.name[12:19]: georinex.rinexheader(file) for file in rinex_3_ephemerides_files}
+    nav_header_dict = {
+        file.name[12:19]: georinex.rinexheader(file)
+        for file in rinex_3_ephemerides_files
+    }
 
     for file in rinex_3_ephemerides_files:
         # get year and doy from NAV filename
@@ -419,27 +440,38 @@ def _build_records_cached(
         log.info(f"Computing iono delay for {year}-{doy:03d}")
 
         # Selection criteria: time of emission belonging to the day of the current NAV file
-        mask = (flat_obs.time_of_emission_isagpst >= rinex_evaluate.to_isagpst(
-            pd.Timestamp(year=year, month=1, day=1) + pd.Timedelta(days=doy - 1) - constants.cGpstUtcEpoch,"GPST")
-                ) &\
-               (flat_obs.time_of_emission_isagpst < rinex_evaluate.to_isagpst(
-                   pd.Timestamp(year=year, month=1, day=1) + pd.Timedelta(days=doy) - constants.cGpstUtcEpoch, "GPST"))
+        mask = (
+            flat_obs.time_of_emission_isagpst
+            >= rinex_evaluate.to_isagpst(
+                pd.Timestamp(year=year, month=1, day=1)
+                + pd.Timedelta(days=doy - 1)
+                - constants.cGpstUtcEpoch,
+                "GPST",
+            )
+        ) & (
+            flat_obs.time_of_emission_isagpst
+            < rinex_evaluate.to_isagpst(
+                pd.Timestamp(year=year, month=1, day=1)
+                + pd.Timedelta(days=doy)
+                - constants.cGpstUtcEpoch,
+                "GPST",
+            )
+        )
 
         flat_obs.loc[
             mask,
             "code_iono_delay_klobuchar_m",
         ] = -atmo.compute_klobuchar_l1_correction(
             flat_obs.loc[mask].time_of_emission_weeksecond_system_time.to_numpy(),
-            nav_header_dict[f"{year:03d}"+f"{doy:03d}"]["IONOSPHERIC CORR"]["GPSA"],
-            nav_header_dict[f"{year:03d}"+f"{doy:03d}"]["IONOSPHERIC CORR"]["GPSB"],
+            nav_header_dict[f"{year:03d}" + f"{doy:03d}"]["IONOSPHERIC CORR"]["GPSA"],
+            nav_header_dict[f"{year:03d}" + f"{doy:03d}"]["IONOSPHERIC CORR"]["GPSB"],
             flat_obs.loc[mask].elevation_rad,
             flat_obs.loc[mask].azimuth_rad,
             latitude_user_rad,
             longitude_user_rad,
         ) * (
             constants.carrier_frequencies_hz()["G"]["L1"] ** 2
-            / flat_obs.loc[mask].carrier_frequency_hz
-            ** 2
+            / flat_obs.loc[mask].carrier_frequency_hz ** 2
         )
 
     return flat_obs

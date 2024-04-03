@@ -67,16 +67,20 @@ def input_for_test_with_first_epoch_at_midnight():
 
     # nav data from same day
     shutil.copy(
-        Path(__file__).parent / f"datasets/TLSE_2023001/BRDC00IGS_R_20230010000_01D_MN.rnx.zip",
+        Path(__file__).parent
+        / f"datasets/TLSE_2023001/BRDC00IGS_R_20230010000_01D_MN.rnx.zip",
         test_directory.joinpath("BRDC00IGS_R_20230010000_01D_MN.rnx.zip"),
     )
     # nav data from previous day
     shutil.copy(
-        Path(__file__).parent / f"datasets/TLSE_2023001/BRDC00IGS_R_20223650000_01D_MN.rnx.gz",
+        Path(__file__).parent
+        / f"datasets/TLSE_2023001/BRDC00IGS_R_20223650000_01D_MN.rnx.gz",
         test_directory.joinpath("BRDC00IGS_R_20223650000_01D_MN.rnx.gz"),
     )
 
-    yield {"obs_file": test_obs_file,}
+    yield {
+        "obs_file": test_obs_file,
+    }
     shutil.rmtree(test_directory)
 
 
@@ -111,7 +115,10 @@ def test_prx_function_call_with_csv_output(input_for_test):
         df[(df.prn == 14) & (df.constellation == "C")].elevation_deg - 34.86
     ).abs().max() < 0.3
 
-def test_prx_function_call_for_obs_file_across_two_days(input_for_test_with_first_epoch_at_midnight):
+
+def test_prx_function_call_for_obs_file_across_two_days(
+    input_for_test_with_first_epoch_at_midnight,
+):
     test_file = input_for_test_with_first_epoch_at_midnight["obs_file"]
     main.process(observation_file_path=test_file, output_format="csv")
     expected_prx_file = Path(
@@ -158,25 +165,32 @@ def test_spp_lsq(input_for_test):
         )
         assert np.max(np.abs(vt_lsq[0:3, :])) < 1e-1
 
-def test_spp_lsq_for_obs_file_across_two_days(input_for_test_with_first_epoch_at_midnight):
-    df, metadata = run_rinex_through_prx(input_for_test_with_first_epoch_at_midnight["obs_file"])
+
+def test_spp_lsq_for_obs_file_across_two_days(
+    input_for_test_with_first_epoch_at_midnight,
+):
+    df, metadata = run_rinex_through_prx(
+        input_for_test_with_first_epoch_at_midnight["obs_file"]
+    )
     df_first_epoch = df[
         df.time_of_reception_in_receiver_time
         == df.time_of_reception_in_receiver_time.min()
-        ]
-    for constellations_to_use in [("G",),]:
+    ]
+    for constellations_to_use in [
+        ("G",),
+    ]:
         obs = df_first_epoch[df.constellation.isin(constellations_to_use)]
         pt_lsq = spp_pt_lsq(obs)
         vt_lsq = spp_vt_lsq(obs, p_ecef_m=pt_lsq[0:3, :])
         assert (
-                np.max(
-                    np.abs(
-                        pt_lsq[0:3, :]
-                        - np.array(
-                            metadata["approximate_receiver_ecef_position_m"]
-                        ).reshape(-1, 1)
-                    )
+            np.max(
+                np.abs(
+                    pt_lsq[0:3, :]
+                    - np.array(
+                        metadata["approximate_receiver_ecef_position_m"]
+                    ).reshape(-1, 1)
                 )
-                < 1e1
+            )
+            < 1e1
         )
         assert np.max(np.abs(vt_lsq[0:3, :])) < 1e-1
