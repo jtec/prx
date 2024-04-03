@@ -68,13 +68,13 @@ def input_for_test_with_first_epoch_at_midnight():
     # nav data from same day
     shutil.copy(
         Path(__file__).parent
-        / f"datasets/TLSE_2023001/BRDC00IGS_R_20230010000_01D_MN.rnx.zip",
+        / "datasets/TLSE_2023001/BRDC00IGS_R_20230010000_01D_MN.rnx.zip",
         test_directory.joinpath("BRDC00IGS_R_20230010000_01D_MN.rnx.zip"),
     )
     # nav data from previous day
     shutil.copy(
         Path(__file__).parent
-        / f"datasets/TLSE_2023001/BRDC00IGS_R_20223650000_01D_MN.rnx.gz",
+        / "datasets/TLSE_2023001/BRDC00IGS_R_20223650000_01D_MN.rnx.gz",
         test_directory.joinpath("BRDC00IGS_R_20223650000_01D_MN.rnx.gz"),
     )
 
