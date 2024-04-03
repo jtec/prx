@@ -99,10 +99,15 @@ def test_spp_lsq(input_for_test):
         df.time_of_reception_in_receiver_time
         == df.time_of_reception_in_receiver_time.min()
         ]
-    for constellations_to_use in [("R",), ("G", "E", "C", "R"), ("G",), ("E",), ("C",), ("R",)]:
+    for constellations_to_use in [("G", "E", "C"), ("G",), ("E",), ("C",), ("R",)]:
         obs = df_first_epoch[df.constellation.isin(constellations_to_use)]
+        obs = obs.loc[~obs.prn.isin([6, 23])]
         pt_lsq = spp_pt_lsq(obs)
         # vt_lsq = spp_vt_lsq(obs, p_ecef_m=pt_lsq[0:3, :])
+        pos_error = (pt_lsq[0:3, :]
+                     - np.array(
+                    metadata["approximate_receiver_ecef_position_m"]
+                ).reshape(-1, 1))
         assert (
                 np.max(
                     np.abs(

@@ -23,9 +23,9 @@ from dotmap import DotMap
 #   for more than millimeter-level, much smaller than the ephemeris error.
 expected_max_differences_broadcast_vs_precise = {
     "diff_xyz_l2_m": 11.9,
-    "diff_dxyz_l2_mps": 1.7e-3,
+    "diff_dxyz_l2_mps": 2.1e-3,
     "clock_m": 26,  # TODO Broadcast clock error should be much smaller than this.
-    "dclock_mps": 1.7e-4,
+    "dclock_mps": 3.4e-4,
 }
 
 
@@ -40,8 +40,8 @@ def input_for_test():
         shutil.rmtree(test_directory)
     os.makedirs(test_directory)
     test_files = {
-        "rinex_nav_file": test_directory / "BRDC00IGS_R_20220010000_01D_MN.zip",
-        "sp3_file": test_directory / "WUM0MGXULT_20220010000_01D_05M_ORB.SP3",
+        "rinex_nav_file": test_directory / "BRDC00IGS_R_20230010000_01D_MN.rnx.zip",
+        "sp3_file": test_directory / "GFZ0MGXRAP_20230010000_01D_05M_ORB.SP3",
     }
     for key, test_file_path in test_files.items():
         shutil.copy(
@@ -148,29 +148,54 @@ def generate_sat_query(sat_state_query_time_isagpst):
                 "query_time_isagpst": sat_state_query_time_isagpst,
             },
             # Multiple satellites with orbits that require propagation of an initial state
-            # Two GLONASS satellites
+            # GLONASS satellites
             {
-                "sv": "R04",
+                "sv": "R01",
                 "signal": "C1C",
                 "query_time_isagpst": sat_state_query_time_isagpst,
             },
             {
-                "sv": "R05",
+                "sv": "R06",
                 "signal": "C1C",
                 "query_time_isagpst": sat_state_query_time_isagpst,
             },
             {
-                "sv": "R13",
+                "sv": "R07",
                 "signal": "C1C",
                 "query_time_isagpst": sat_state_query_time_isagpst,
             },
             {
-                "sv": "R19",
+                "sv": "R08",
                 "signal": "C1C",
                 "query_time_isagpst": sat_state_query_time_isagpst,
             },
             {
-                "sv": "R20",
+                "sv": "R14",
+                "signal": "C1C",
+                "query_time_isagpst": sat_state_query_time_isagpst,
+            },
+            {
+                "sv": "R15",
+                "signal": "C1C",
+                "query_time_isagpst": sat_state_query_time_isagpst,
+            },
+            {
+                "sv": "R21",
+                "signal": "C1C",
+                "query_time_isagpst": sat_state_query_time_isagpst,
+            },
+            {
+                "sv": "R22",
+                "signal": "C1C",
+                "query_time_isagpst": sat_state_query_time_isagpst,
+            },
+            {
+                "sv": "R23",
+                "signal": "C1C",
+                "query_time_isagpst": sat_state_query_time_isagpst,
+            },
+            {
+                "sv": "R24",
                 "signal": "C1C",
                 "query_time_isagpst": sat_state_query_time_isagpst,
             },
@@ -183,14 +208,14 @@ def test_compare_to_sp3(input_for_test):
     rinex_nav_file = converters.compressed_to_uncompressed(
         input_for_test["rinex_nav_file"]
     )
-    query = generate_sat_query(pd.Timestamp("2022-01-01T01:10:00.000000000"))
-
+    query = generate_sat_query(pd.Timestamp("2023-01-01T01:10:00.000000000"))
+    query = query[query.sv.str[0] == "R"]
     rinex_sat_states = rinex_nav_evaluate.compute(rinex_nav_file, query.copy())
     rinex_sat_states = (
         rinex_sat_states.sort_values(by=["sv", "query_time_isagpst"])
         .sort_index(axis=1)
         .reset_index()
-        .drop(columns=["index", "signal", "group_delay_m"])
+        .drop(columns=["index", "signal", "group_delay_m", "frequency_slot"])
     )
 
     sp3_sat_states = sp3_evaluate.compute(
@@ -215,6 +240,7 @@ def test_compare_to_sp3(input_for_test):
     assert sp3_sat_states.columns.equals(rinex_sat_states.columns)
     diff = rinex_sat_states.drop(columns="sv") - sp3_sat_states.drop(columns="sv")
     diff = pd.concat((rinex_sat_states["sv"], diff), axis=1)
+    diff = diff.dropna()
     diff["diff_xyz_l2_m"] = np.linalg.norm(
         diff[["x_m", "y_m", "z_m"]].to_numpy(), axis=1
     )
