@@ -1,3 +1,4 @@
+import logging
 import os
 from pathlib import Path
 import shutil
@@ -10,7 +11,7 @@ import pytest
 from prx import helpers
 from prx import constants
 from prx import main
-from prx.user import parse_prx_csv_file, spp_pt_lsq
+from prx.user import parse_prx_csv_file, spp_pt_lsq, spp_vt_lsq
 
 
 # This function sets up a temporary directory, copies a rinex observations file into that directory
@@ -74,8 +75,8 @@ def test_prx_function_call_with_csv_output(input_for_test):
     assert helpers.is_sorted(df.time_of_reception_in_receiver_time)
     # Elevation sanity check
     assert (
-                   df[(df.prn == 14) & (df.constellation == "C")].elevation_deg - 34.86
-           ).abs().max() < 0.3
+        df[(df.prn == 14) & (df.constellation == "C")].elevation_deg - 34.86
+    ).abs().max() < 0.3
 
 
 def run_rinex_through_prx(rinex_obs_file: Path):
@@ -95,28 +96,24 @@ def run_rinex_through_prx(rinex_obs_file: Path):
 
 def test_spp_lsq(input_for_test):
     df, metadata = run_rinex_through_prx(input_for_test)
+    df["sv"] = df["constellation"].astype(str) + df["prn"].astype(str)
     df_first_epoch = df[
         df.time_of_reception_in_receiver_time
         == df.time_of_reception_in_receiver_time.min()
-        ]
+    ]
     for constellations_to_use in [("G", "E", "C"), ("G",), ("E",), ("C",), ("R",)]:
         obs = df_first_epoch[df.constellation.isin(constellations_to_use)]
-        obs = obs.loc[~obs.prn.isin([6, 23])]
         pt_lsq = spp_pt_lsq(obs)
-        # vt_lsq = spp_vt_lsq(obs, p_ecef_m=pt_lsq[0:3, :])
-        pos_error = (pt_lsq[0:3, :]
-                     - np.array(
-                    metadata["approximate_receiver_ecef_position_m"]
-                ).reshape(-1, 1))
-        assert (
-                np.max(
-                    np.abs(
-                        pt_lsq[0:3, :]
-                        - np.array(
-                            metadata["approximate_receiver_ecef_position_m"]
-                        ).reshape(-1, 1)
-                    )
-                )
-                < 1e1
+        vt_lsq = spp_vt_lsq(obs, p_ecef_m=pt_lsq[0:3, :])
+        position_offset = pt_lsq[0:3, :] - np.array(
+            metadata["approximate_receiver_ecef_position_m"]
+        ).reshape(-1, 1)
+        # Static receiver, so:
+        velocity_offset = vt_lsq[0:3, :]
+        logging.info(
+            f"Using constellations: {constellations_to_use}, {len(obs.sv.unique())} SVs"
         )
-        # assert np.max(np.abs(vt_lsq[0:3, :])) < 1e-1
+        logging.info(f"Position offset: {position_offset}")
+        logging.info(f"Velocity offset: {velocity_offset}")
+        assert np.max(np.abs(position_offset)) < 1e1
+        # assert np.max(np.abs(velocity_offset)) < 1e-1

@@ -15,10 +15,10 @@ log = helpers.get_logger(__name__)
 
 
 def write_prx_file(
-        prx_header: dict,
-        prx_records: pd.DataFrame,
-        file_name_without_extension: Path,
-        output_format: str,
+    prx_header: dict,
+    prx_records: pd.DataFrame,
+    file_name_without_extension: Path,
+    output_format: str,
 ):
     output_writers = {"jsonseq": write_json_text_sequence_file, "csv": write_csv_file}
     if output_format not in output_writers.keys():
@@ -27,7 +27,7 @@ def write_prx_file(
 
 
 def write_json_text_sequence_file(
-        prx_header: dict, prx_records: pd.DataFrame, file_name_without_extension: Path
+    prx_header: dict, prx_records: pd.DataFrame, file_name_without_extension: Path
 ):
     output_file = Path(
         f"{str(file_name_without_extension)}.{constants.cPrxJsonTextSequenceFileExtension}"
@@ -37,13 +37,13 @@ def write_json_text_sequence_file(
         drop_columns = [
             "time_of_reception_in_receiver_time",
             "satellite",
-            "time_of_emission_in_satellite_time",
+            "time_of_emission_in_satellite_time_integer_second_aligned_to_receiver_time",
         ]
         for epoch in prx_records["time_of_reception_in_receiver_time"].unique():
             epoch = pd.Timestamp(epoch)
             epoch_obs = prx_records[
                 prx_records["time_of_reception_in_receiver_time"] == epoch
-                ]
+            ]
             record = {
                 "time_of_reception_in_receiver_time": epoch.strftime(
                     "%Y:%m:%dT%H:%M:%S.%f"
@@ -70,7 +70,7 @@ def write_json_text_sequence_file(
 
 
 def write_csv_file(
-        prx_header: dict, flat_records: pd.DataFrame, file_name_without_extension: Path
+    prx_header: dict, flat_records: pd.DataFrame, file_name_without_extension: Path
 ):
     output_file = Path(
         f"{str(file_name_without_extension)}.{constants.cPrxCsvFileExtension}"
@@ -116,7 +116,7 @@ def write_csv_file(
     records = records.drop(
         columns=[
             "satellite",
-            "time_of_emission_in_satellite_time",
+            "time_of_emission_in_satellite_time_integer_second_aligned_to_receiver_time",
             "time_of_emission_isagpst",
             "time_of_emission_weeksecond_isagpst",
         ]
@@ -160,17 +160,17 @@ def check_assumptions(rinex_3_obs_file, rinex_3_nav_file):
     obs_header = georinex.rinexheader(rinex_3_obs_file)
     if "RCV CLOCK OFFS APPL" in obs_header.keys():
         assert (
-                obs_header["RCV CLOCK OFFS APPL"].strip() == "0"
+            obs_header["RCV CLOCK OFFS APPL"].strip() == "0"
         ), "Handling of 'RCV CLOCK OFFS APPL' != 0 not implemented yet."
     assert (
-            obs_header["TIME OF FIRST OBS"].split()[-1].strip() == "GPS"
+        obs_header["TIME OF FIRST OBS"].split()[-1].strip() == "GPS"
     ), "Handling of observation files using time scales other than GPST not implemented yet."
 
 
 def build_records(
-        rinex_3_obs_file,
-        rinex_3_ephemerides_file,
-        approximate_receiver_ecef_position_m,
+    rinex_3_obs_file,
+    rinex_3_ephemerides_file,
+    approximate_receiver_ecef_position_m,
 ):
     return _build_records_cached(
         rinex_3_obs_file,
@@ -182,19 +182,21 @@ def build_records(
     )
 
 
-# @helpers.cache_call
+@helpers.cache_call
 def _build_records_cached(
-        rinex_3_obs_file,
-        rinex_3_obs_file_hash,
-        rinex_3_ephemerides_file,
-        rinex_3_ephemerides_file_hash,
-        approximate_receiver_ecef_position_m,
+    rinex_3_obs_file,
+    rinex_3_obs_file_hash,
+    rinex_3_ephemerides_file,
+    rinex_3_ephemerides_file_hash,
+    approximate_receiver_ecef_position_m,
 ):
     approximate_receiver_ecef_position_m = np.array(
         approximate_receiver_ecef_position_m
     )
     check_assumptions(rinex_3_obs_file, rinex_3_ephemerides_file)
-    gpst_utc_leapseconds = helpers.get_gpst_utc_leap_seconds_from_rinex_header(rinex_3_obs_file)
+    gpst_utc_leapseconds = helpers.get_gpst_utc_leap_seconds_from_rinex_header(
+        rinex_3_obs_file
+    )
     obs = helpers.parse_rinex_obs_file(rinex_3_obs_file)
 
     # Flatten the xarray DataSet into a pandas DataFrame:
@@ -245,29 +247,33 @@ def _build_records_cached(
     #  - time-of-flight: around 70 ms for MEO orbits. This includes small
     #  terms (up to tens of meters in units of distance, ten meters correspond to 34 nanoseconds)
     #  such as satellite code bias and atmospheric delays
-    #  - receiver clock offset w.r.t. the satellite's constellation time (GPST, GST, BDT etc.)
     #  - satellite clock offset w.r.t. its constellation time
-    # By subtracting it from the receiver time of reception, we get the time of emission in
-    # the satellite's constellation time frame, plus the satellite system time clock offset plus those small terms
-    # of a few tens of nanoseconds.
+    #  - the receiver clock offset w.r.t. the satellite's constellation time (GPST, GST, BDT etc.) modulo 1 second
+    # The integer seconds of the receiver clock offset w.r.t. the satellite's constellation time (GPST, GST, BDT etc.)
+    # are likely removed by the receiver to align all pseudoranges to the same order of magnitude, so the time of
+    # emission we get here is "time of emission "
+    # By subtracting the term from the receiver time of reception, we get the time of emission in
+    # the satellite's constellation time frame (integer-second aligned to the receiver time frame), plus the
+    # satellite system time clock offset plus those small terms
+    # of a few tens of nanoseconds
     tof_dtrx = pd.to_timedelta(
         per_sat[code_phase_columns]
         .mean(axis=1, skipna=True)
         .divide(constants.cGpsSpeedOfLight_mps),
         unit="s",
     )
-    per_sat["time_of_emission_in_satellite_time"] = (
-            per_sat["time_of_reception_in_receiver_time"]
-            - tof_dtrx
-    )
-    per_sat["time_of_emission_isagpst"] = rinex_evaluate.to_isagpst(
-        per_sat.time_of_emission_in_satellite_time,
-        per_sat.time_scale,
-        gpst_utc_leapseconds,
+    per_sat[
+        "time_of_emission_in_satellite_time_integer_second_aligned_to_receiver_time"
+    ] = per_sat["time_of_reception_in_receiver_time"] - tof_dtrx
+    # As error terms are tens of nanoseconds here, and the receiver clock is integer-second aligned to GPST, we
+    # already have times-of-emission that are integer-second aligned GPST here.
+    per_sat["time_of_emission_isagpst"] = (
+        per_sat.time_of_emission_in_satellite_time_integer_second_aligned_to_receiver_time
     )
     per_sat["time_of_emission_weeksecond_isagpst"] = per_sat.apply(
         lambda row: helpers.timedelta_2_weeks_and_seconds(
-            row.time_of_emission_isagpst - constants.system_time_scale_rinex_utc_epoch['GPST']
+            row.time_of_emission_isagpst
+            - constants.system_time_scale_rinex_utc_epoch["GPST"]
         )[1],
         axis=1,
     )
@@ -277,7 +283,7 @@ def _build_records_cached(
             [
                 "time_of_reception_in_receiver_time",
                 "satellite",
-                "time_of_emission_in_satellite_time",
+                "time_of_emission_in_satellite_time_integer_second_aligned_to_receiver_time",
                 "time_of_emission_isagpst",
                 "time_of_emission_weeksecond_isagpst",
             ]
@@ -381,12 +387,15 @@ def _build_records_cached(
     )
 
     def signal_2_carrier_frequency(row):
-        if np.isnan(row['frequency_slot']):
+        if np.isnan(row["frequency_slot"]):
             return np.nan
-        return constants.carrier_frequencies_hz()[row.satellite[0]]["L" + row.observation_type[1]][
-            row['frequency_slot']]
+        return constants.carrier_frequencies_hz()[row.satellite[0]][
+            "L" + row.observation_type[1]
+        ][row["frequency_slot"]]
 
-    flat_obs.loc[:, "carrier_frequency_hz"] = flat_obs.apply(signal_2_carrier_frequency, axis=1)
+    flat_obs.loc[:, "carrier_frequency_hz"] = flat_obs.apply(
+        signal_2_carrier_frequency, axis=1
+    )
 
     nav_header = georinex.rinexheader(rinex_3_ephemerides_file)
     flat_obs.loc[
@@ -402,10 +411,10 @@ def _build_records_cached(
         latitude_user_rad,
         longitude_user_rad,
     ) * (
-                constants.carrier_frequencies_hz()["G"]["L1"][1] ** 2
-                / flat_obs[flat_obs.observation_type.str.startswith("C")].carrier_frequency_hz
-                ** 2
-        )
+        constants.carrier_frequencies_hz()["G"]["L1"][1] ** 2
+        / flat_obs[flat_obs.observation_type.str.startswith("C")].carrier_frequency_hz
+        ** 2
+    )
     flat_obs.loc[
         flat_obs.observation_type.str.startswith("L"), "carrier_iono_delay_klobuchar_m"
     ] = atmo.compute_klobuchar_l1_correction(
@@ -419,10 +428,10 @@ def _build_records_cached(
         latitude_user_rad,
         longitude_user_rad,
     ) * (
-                constants.carrier_frequencies_hz()["G"]["L1"][1] ** 2
-                / flat_obs[flat_obs.observation_type.str.startswith("L")].carrier_frequency_hz
-                ** 2
-        )
+        constants.carrier_frequencies_hz()["G"]["L1"][1] ** 2
+        / flat_obs[flat_obs.observation_type.str.startswith("L")].carrier_frequency_hz
+        ** 2
+    )
 
     return flat_obs
 
@@ -439,8 +448,7 @@ def process(observation_file_path: Path, output_format="csv"):
         rinex_3_obs_file
     )
     metadata = build_metadata(
-        {"obs_file": rinex_3_obs_file,
-         "nav_file": aux_files["broadcast_ephemerides"]}
+        {"obs_file": rinex_3_obs_file, "nav_file": aux_files["broadcast_ephemerides"]}
     )
     records = build_records(
         rinex_3_obs_file,
@@ -459,7 +467,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         prog="prx",
         description="prx processes RINEX observations, computes a few useful things such as satellite position, "
-                    "relativistic effects etc. and outputs everything to a text file in a convenient format.",
+        "relativistic effects etc. and outputs everything to a text file in a convenient format.",
         epilog="P.S. GNSS rules!",
     )
     parser.add_argument(
@@ -474,7 +482,7 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
     if (
-            args.observation_file_path is not None
-            and Path(args.observation_file_path).exists()
+        args.observation_file_path is not None
+        and Path(args.observation_file_path).exists()
     ):
         process(Path(args.observation_file_path), args.output_format)

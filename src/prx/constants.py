@@ -18,7 +18,7 @@ cHzPerMhz = 1e6
 cWgs84EarthFlatteningFactor = 1 / 298.257223563
 cWgs84EarthSemiMajorAxis_m = 6378137.0
 cWgs84EarthEccentricity = np.sqrt(
-    2 * cWgs84EarthFlatteningFactor - cWgs84EarthFlatteningFactor ** 2
+    2 * cWgs84EarthFlatteningFactor - cWgs84EarthFlatteningFactor**2
 )
 # GPS ICD constants
 cGpsPi = 3.1415926535898
