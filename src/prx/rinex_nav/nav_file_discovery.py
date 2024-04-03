@@ -5,7 +5,6 @@ import georinex
 import urllib.request
 import glob
 import pandas as pd
-import numpy as np
 
 from prx import converters, helpers
 
@@ -14,24 +13,6 @@ log = helpers.get_logger(__name__)
 
 def is_rinex_3_mixed_mgex_broadcast_ephemerides_file(file: Path):
     return str(file).endswith("MN.rnx")
-
-
-def try_downloading_ephemerides_from_bkg(
-    # This function returns a list of paths, in case the observation file spans over several days
-    t_start: pd.Timestamp,
-    t_end: pd.Timestamp,
-    folder: Path,
-):
-    files = []
-    time_start_day = np.array(
-        [
-            pd.Timestamp(year=t_start.year, month=t_start.month, day=t_start.day),
-            pd.Timestamp(year=t_end.year, month=t_end.month, day=t_end.day),
-        ],
-    )
-    for time_day in time_start_day:
-        files.append(try_downloading_ephemerides(time_day, folder))
-    return files
 
 
 def try_downloading_ephemerides_http(day: pd.Timestamp, folder: Path):
@@ -96,7 +77,7 @@ def rinex_3_ephemerides_file_coverage_time(ephemerides_file: Path):
     parts = str(ephemerides_file).split("_")
     start_time = pd.to_datetime(parts[-3], format="%Y%j%H%M")
     assert (
-        parts[-2][-1] == "D"
+            parts[-2][-1] == "D"
     ), f"Was expecting 'D' (days) as duration unit in Rinex ephemerides file name: {ephemerides_file}"
     duration = parts[-2][:-1]
     duration_unit = parts[-2][-1]
@@ -105,10 +86,10 @@ def rinex_3_ephemerides_file_coverage_time(ephemerides_file: Path):
 
 
 def discover_local_ephemerides(
-    # This function returns a list of paths, in case the observation file spans over several days
-    t_start: pd.Timestamp,
-    t_end: pd.Timestamp,
-    folder: Path,
+        # This function returns a list of paths, in case the observation file spans over several days
+        t_start: pd.Timestamp,
+        t_end: pd.Timestamp,
+        folder: Path,
 ):
     candidates = glob.glob(str(folder.joinpath("**.rnx**")), recursive=True)
     nav_files = []
@@ -130,7 +111,7 @@ def discover_local_ephemerides(
 
 
 def discover_or_download_ephemerides(
-    t_start: pd.Timestamp, t_end: pd.Timestamp, folder, constellations
+        t_start: pd.Timestamp, t_end: pd.Timestamp, folder, constellations
 ):
     sources = [discover_local_ephemerides, try_downloading_ephemerides]
     for source in sources:
@@ -163,7 +144,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         prog="rinex_aux_files",
         description="rinex_aux_files discovers or downloads files needed to get started on positioning: "
-        "broadcast ephemeris, precise ephemeris etc.",
+                    "broadcast ephemeris, precise ephemeris etc.",
     )
     parser.add_argument(
         "--observation_file_path", type=str, help="Observation file path", required=True
