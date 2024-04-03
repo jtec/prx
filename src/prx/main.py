@@ -138,6 +138,11 @@ def write_csv_file(
 
 
 def build_metadata(input_files):
+    # convert input_files to a list of files
+    files = []
+    files.append(input_files["obs_file"])
+    files.extend([file for file in input_files["nav_file"]])
+
     prx_metadata = {}
     obs_header = georinex.rinexheader(input_files["obs_file"])
     prx_metadata["approximate_receiver_ecef_position_m"] = (
@@ -148,7 +153,7 @@ def build_metadata(input_files):
             "name": file.name,
             "murmur3_hash": helpers.hash_of_file_content(file, use_sampling=False),
         }
-        for _, file in input_files.items()
+        for file in files
     ]
     prx_metadata["prx_git_commit_id"] = git.Repo(
         search_parent_directories=True
@@ -156,7 +161,9 @@ def build_metadata(input_files):
     return prx_metadata
 
 
-def check_assumptions(rinex_3_obs_file, rinex_3_nav_file):
+def check_assumptions(
+    rinex_3_obs_file,
+):
     obs_header = georinex.rinexheader(rinex_3_obs_file)
     if "RCV CLOCK OFFS APPL" in obs_header.keys():
         assert (
@@ -169,15 +176,17 @@ def check_assumptions(rinex_3_obs_file, rinex_3_nav_file):
 
 def build_records(
     rinex_3_obs_file,
-    rinex_3_ephemerides_file,
+    rinex_3_ephemerides_files,
     approximate_receiver_ecef_position_m,
 ):
     return _build_records_cached(
         rinex_3_obs_file,
         helpers.hash_of_file_content(rinex_3_obs_file),
-        rinex_3_ephemerides_file,
-        helpers.hash_of_file_content(rinex_3_ephemerides_file),
         # Use a tuple here as caching expects an immutable type
+        tuple(rinex_3_ephemerides_files),
+        "".join(
+            [helpers.hash_of_file_content(file) for file in rinex_3_ephemerides_files]
+        ),
         tuple(approximate_receiver_ecef_position_m),
     )
 
@@ -186,14 +195,14 @@ def build_records(
 def _build_records_cached(
     rinex_3_obs_file,
     rinex_3_obs_file_hash,
-    rinex_3_ephemerides_file,
+    rinex_3_ephemerides_files,
     rinex_3_ephemerides_file_hash,
     approximate_receiver_ecef_position_m,
 ):
     approximate_receiver_ecef_position_m = np.array(
         approximate_receiver_ecef_position_m
     )
-    check_assumptions(rinex_3_obs_file, rinex_3_ephemerides_file)
+    check_assumptions(rinex_3_obs_file)
     obs = helpers.parse_rinex_obs_file(rinex_3_obs_file)
 
     # Flatten the xarray DataSet into a pandas DataFrame:
@@ -290,10 +299,38 @@ def _build_records_cached(
         ["observation_type", "satellite", "time_of_emission_isagpst"]
     ]
 
-    sat_states = rinex_evaluate.compute_parallel(
-        rinex_3_ephemerides_file,
-        query,
-    )
+    sat_states_per_day = []
+    for file in rinex_3_ephemerides_files:
+        # get year and doy from NAV filename
+        year = int(file.name[12:16])
+        doy = int(file.name[16:19])
+        log.info(f"Computing satellite states for {year}-{doy:03d}")
+        sat_states_per_day.append(
+            rinex_evaluate.compute_parallel(
+                file,
+                query.loc[
+                    (
+                        query.query_time_isagpst
+                        >= rinex_evaluate.to_isagpst(
+                            pd.Timestamp(year=year, month=1, day=1)
+                            + pd.Timedelta(days=doy - 1)
+                            - constants.cGpstUtcEpoch,
+                            "GPST",
+                        )
+                    )
+                    & (
+                        query.query_time_isagpst
+                        < rinex_evaluate.to_isagpst(
+                            pd.Timestamp(year=year, month=1, day=1)
+                            + pd.Timedelta(days=doy)
+                            - constants.cGpstUtcEpoch,
+                            "GPST",
+                        )
+                    )
+                ],
+            )
+        )
+    sat_states = pd.concat(sat_states_per_day)
     sat_states = sat_states.rename(
         columns={
             "sv": "satellite",
@@ -387,41 +424,55 @@ def _build_records_cached(
             axis=1,
         )
     )
-    nav_header = georinex.rinexheader(rinex_3_ephemerides_file)
-    flat_obs.loc[
-        flat_obs.observation_type.str.startswith("C"), "code_iono_delay_klobuchar_m"
-    ] = -atmo.compute_klobuchar_l1_correction(
-        flat_obs[
-            flat_obs.observation_type.str.startswith("C")
-        ].time_of_emission_weeksecond_system_time.to_numpy(),
-        nav_header["IONOSPHERIC CORR"]["GPSA"],
-        nav_header["IONOSPHERIC CORR"]["GPSB"],
-        flat_obs[flat_obs.observation_type.str.startswith("C")].elevation_rad,
-        flat_obs[flat_obs.observation_type.str.startswith("C")].azimuth_rad,
-        latitude_user_rad,
-        longitude_user_rad,
-    ) * (
-        constants.carrier_frequencies_hz()["G"]["L1"] ** 2
-        / flat_obs[flat_obs.observation_type.str.startswith("C")].carrier_frequency_hz
-        ** 2
-    )
-    flat_obs.loc[
-        flat_obs.observation_type.str.startswith("L"), "carrier_iono_delay_klobuchar_m"
-    ] = atmo.compute_klobuchar_l1_correction(
-        flat_obs[
-            flat_obs.observation_type.str.startswith("L")
-        ].time_of_emission_weeksecond_system_time.to_numpy(),
-        nav_header["IONOSPHERIC CORR"]["GPSA"],
-        nav_header["IONOSPHERIC CORR"]["GPSB"],
-        flat_obs[flat_obs.observation_type.str.startswith("L")].elevation_rad,
-        flat_obs[flat_obs.observation_type.str.startswith("L")].azimuth_rad,
-        latitude_user_rad,
-        longitude_user_rad,
-    ) * (
-        constants.carrier_frequencies_hz()["G"]["L1"] ** 2
-        / flat_obs[flat_obs.observation_type.str.startswith("L")].carrier_frequency_hz
-        ** 2
-    )
+
+    # create a dictionary containing the headers of the different NAV files.
+    # The keys are the "YYYYDDD" (year and day of year) and are located at
+    # [12:19] of the file name using RINEX naming convention
+    nav_header_dict = {
+        file.name[12:19]: georinex.rinexheader(file)
+        for file in rinex_3_ephemerides_files
+    }
+
+    for file in rinex_3_ephemerides_files:
+        # get year and doy from NAV filename
+        year = int(file.name[12:16])
+        doy = int(file.name[16:19])
+        log.info(f"Computing iono delay for {year}-{doy:03d}")
+
+        # Selection criteria: time of emission belonging to the day of the current NAV file
+        mask = (
+            flat_obs.time_of_emission_isagpst
+            >= rinex_evaluate.to_isagpst(
+                pd.Timestamp(year=year, month=1, day=1)
+                + pd.Timedelta(days=doy - 1)
+                - constants.cGpstUtcEpoch,
+                "GPST",
+            )
+        ) & (
+            flat_obs.time_of_emission_isagpst
+            < rinex_evaluate.to_isagpst(
+                pd.Timestamp(year=year, month=1, day=1)
+                + pd.Timedelta(days=doy)
+                - constants.cGpstUtcEpoch,
+                "GPST",
+            )
+        )
+
+        flat_obs.loc[
+            mask,
+            "code_iono_delay_klobuchar_m",
+        ] = -atmo.compute_klobuchar_l1_correction(
+            flat_obs.loc[mask].time_of_emission_weeksecond_system_time.to_numpy(),
+            nav_header_dict[f"{year:03d}" + f"{doy:03d}"]["IONOSPHERIC CORR"]["GPSA"],
+            nav_header_dict[f"{year:03d}" + f"{doy:03d}"]["IONOSPHERIC CORR"]["GPSB"],
+            flat_obs.loc[mask].elevation_rad,
+            flat_obs.loc[mask].azimuth_rad,
+            latitude_user_rad,
+            longitude_user_rad,
+        ) * (
+            constants.carrier_frequencies_hz()["G"]["L1"] ** 2
+            / flat_obs.loc[mask].carrier_frequency_hz ** 2
+        )
 
     return flat_obs
 

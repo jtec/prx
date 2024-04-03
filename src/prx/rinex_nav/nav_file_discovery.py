@@ -15,15 +15,34 @@ def is_rinex_3_mixed_mgex_broadcast_ephemerides_file(file: Path):
     return str(file).endswith("MN.rnx")
 
 
-def try_downloading_ephemerides_http(day: pd.Timestamp, folder: Path):
-    # IGS BKG Rinex 3.04 mixed file paths follow this pattern:
-    # https://igs.bkg.bund.de/root_ftp/IGS/BRDC/2023/002/BRDC00IGS_R_20230020000_01D_MN.rnx.gz
-    remote_file = Path(
-        f"/{day.year}/{day.day_of_year:03}/BRDC00IGS_R_{day.year}{day.day_of_year:03}0000_01D_MN.rnx.gz"
+def try_downloading_ephemerides_from_bkg(
+    # This function returns a list of paths, in case the observation file spans over several days
+    t_start: pd.Timestamp,
+    t_end: pd.Timestamp,
+    folder: Path,
+):
+    files = []
+    time_starts = np.array(
+        [
+            pd.Timestamp(year=t_start.year, month=t_start.month, day=t_start.day),
+            pd.Timestamp(year=t_end.year, month=t_end.month, day=t_end.day),
+        ],
     )
-    local_compressed_file = folder.joinpath(remote_file.name)
-    url = "https://igs.bkg.bund.de/root_ftp/IGS/BRDC" + str(remote_file.as_posix())
-    try:
+    for time in time_starts:
+        # IGS BKG Rinex 3.04 mixed file paths follow this pattern:
+        # For files after 2022
+        # https://igs.bkg.bund.de/root_ftp/IGS/BRDC/2023/002/BRDC00IGS_R_20230020000_01D_MN.rnx.gz
+        # For files before 2022
+        # https://igs.bkg.bund.de/root_ftp/IGS/BRDC/2021/365/BRDC00WRD_R_20213650000_01D_MN.rnx.gz
+        if time.year < 2022:
+            country_code = "WRD"
+        else:
+            country_code = "IGS"
+        remote_file = Path(
+            f"/{time.year}/{time.day_of_year:03}/BRDC00{country_code}_R_{time.year}{time.day_of_year:03}0000_01D_MN.rnx.gz"
+        )
+        local_compressed_file = folder.joinpath(remote_file.name)
+        url = "https://igs.bkg.bund.de/root_ftp/IGS/BRDC" + str(remote_file.as_posix())
         urllib.request.urlretrieve(url, local_compressed_file)
         local_file = converters.compressed_to_uncompressed(local_compressed_file)
         os.remove(local_compressed_file)
@@ -61,12 +80,10 @@ def try_downloading_ephemerides(
         assert local_file, f"Could not download broadcast ephemerides for {time}"
         local_file = helpers.repair_with_gfzrnx(local_file)
         files.append(local_file)
-        # Assuming that the downloaded files cover the whole day:
-        t_coverage_start, t_coverage_end = rinex_3_ephemerides_file_coverage_time(
-            local_file
-        )
-        if t_coverage_end > t_end:
-            return files
+    if len(files) == 0:
+        return None
+    else:
+        return files
 
 
 def rinex_3_ephemerides_file_coverage_time(ephemerides_file: Path):
@@ -82,7 +99,10 @@ def rinex_3_ephemerides_file_coverage_time(ephemerides_file: Path):
 
 
 def discover_local_ephemerides(
-    t_start: pd.Timestamp, t_end: pd.Timestamp, folder: Path
+    # This function returns a list of paths, in case the observation file spans over several days
+    t_start: pd.Timestamp,
+    t_end: pd.Timestamp,
+    folder: Path,
 ):
     candidates = glob.glob(str(folder.joinpath("**.rnx**")), recursive=True)
     nav_files = []
@@ -129,9 +149,8 @@ def discover_or_download_auxiliary_files(observation_file_path=Path()):
         rinex_3_obs_file.parent,
         list(header["fields"].keys()),
     )
-    if len(ephs) > 1:
-        assert False, "Observations crossing day boundaries not handled yet, need to merge ephemeris files here"
-    return {"broadcast_ephemerides": ephs[0]}
+    # Note that ephs may be a list of paths, in case the observation file spans over several days
+    return {"broadcast_ephemerides": ephs}
 
 
 if __name__ == "__main__":
