@@ -600,7 +600,7 @@ def compute(rinex_nav_file_path, per_signal_query):
         orbit_type = sub_df["orbit_type"].iloc[0]
         if orbit_type == "kepler":
             sub_df = kepler_orbit_position_and_velocity(sub_df)
-        if orbit_type == "glonass":
+        elif orbit_type == "glonass":
             sub_df = glonass_orbit_position_and_velocity(sub_df)
         else:
             log.info(

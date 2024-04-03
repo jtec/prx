@@ -38,14 +38,14 @@ def parse_sp3_file(file_path: Path):
         )
         df.drop(columns=["time"], inplace=True)
         df["clock_m"] = (
-            constants.cGpsSpeedOfLight_mps * df["clock"]
-        ) / constants.cMicrosecondsPerSecond
+                                constants.cGpsSpeedOfLight_mps * df["clock"]
+                        ) / constants.cMicrosecondsPerSecond
         df["dclock_mps"] = (
-            constants.cGpsSpeedOfLight_mps * df["dclock"]
-        ) / constants.cMicrosecondsPerSecond
+                                   constants.cGpsSpeedOfLight_mps * df["dclock"]
+                           ) / constants.cMicrosecondsPerSecond
         for axis in ["x", "y", "z"]:
             df["position_" + axis] = (
-                df["position_" + axis] * constants.cMetersPerKilometer
+                    df["position_" + axis] * constants.cMetersPerKilometer
             )
         # Give some columns more pithy names
         df.rename(
@@ -70,7 +70,7 @@ def parse_sp3_file(file_path: Path):
 
 
 def plot_lagrange_interpolation(
-    polynomial, times, samples, interpolation_time, interpolated_value, label
+        polynomial, times, samples, interpolation_time, interpolated_value, label
 ):
     polynomial_times = np.linspace(min(times), max(times), 10 * times.size)
     polynomial_samples = Polynomial(polynomial.coef[::-1])(polynomial_times)
@@ -94,23 +94,23 @@ def interpolate(df, query_time_gpst_s, plot_interpolation=False):
     start_index = closest_sample_index - n_samples_each_side
     end_index = closest_sample_index + n_samples_each_side
     assert (
-        start_index >= 0
+            start_index >= 0
     ), f"We need at least {n_samples_each_side} before the sample closest to the query time to interpolate"
     assert (
-        end_index < len(df.index)
+            end_index < len(df.index)
     ), f"We need at least {n_samples_each_side} after the sample closest to the query time to interpolate"
     columns_to_interpolate = ["x_m", "y_m", "z_m", "clock_m"]
-    interpolated = df[closest_sample_index : closest_sample_index + 1]
+    interpolated = df[closest_sample_index: closest_sample_index + 1]
     interpolated["gpst_s"] = query_time_gpst_s
     for col in columns_to_interpolate:
         interpolated[col] = float("nan")
     for col in columns_to_interpolate:
-        times = df["gpst_s"].iloc[start_index : end_index + 1].to_numpy()
-        samples = df[col].iloc[start_index : end_index + 1].to_numpy()
+        times = df["gpst_s"].iloc[start_index: end_index + 1].to_numpy()
+        samples = df[col].iloc[start_index: end_index + 1].to_numpy()
         # Improve numerical conditioning by subtracting the first sample
         poly = lagrange(times - times[0], samples - samples[0])
         interpolated[col] = (
-            Polynomial(poly.coef[::-1])(query_time_gpst_s - times[0]) + samples[0]
+                Polynomial(poly.coef[::-1])(query_time_gpst_s - times[0]) + samples[0]
         )
         if plot_interpolation:
             plot_lagrange_interpolation(
@@ -137,13 +137,26 @@ def compute(sp3_file_path, query):
     df = df[df["sv"].isin(query["sv"])]
 
     def interpolate_sat_states(row):
-        sat_pv = interpolate(
-            df[df["sv"] == row["sv"]],
-            helpers.timedelta_2_seconds(
-                row["query_time_isagpst"] - constants.cGpstUtcEpoch
-            ),
-        )
-
+        samples = df[df["sv"] == row["sv"]]
+        if len(samples.index) > 0:
+            sat_pv = interpolate(
+                samples,
+                helpers.timedelta_2_seconds(
+                    row["query_time_isagpst"] - constants.cGpstUtcEpoch
+                ),
+            )
+        else:
+            sat_pv = pd.DataFrame()
+            sat_pv["gpst_s"] = [row.query_time_isagpst]
+            sat_pv["sv"] = [row.sv]
+            sat_pv['x_m'] = [np.nan]
+            sat_pv['y_m'] = [np.nan]
+            sat_pv['z_m'] = [np.nan]
+            sat_pv['clock_m'] = [np.nan]
+            sat_pv['dx_mps'] = [np.nan]
+            sat_pv['dy_mps'] = [np.nan]
+            sat_pv['dz_mps'] = [np.nan]
+            sat_pv['dclock_mps'] = [np.nan]
         return pd.concat((row.drop("sv"), sat_pv.squeeze()))
 
     query = query.apply(interpolate_sat_states, axis=1).reset_index()
