@@ -306,7 +306,7 @@ def _build_records_cached(
         doy = int(file.name[16:19])
         log.info(f"Computing satellite states for {year}-{doy:03d}")
         sat_states_per_day.append(
-            rinex_evaluate.compute(
+            rinex_evaluate.compute_parallel(
                 file,
                 query.loc[
                     (
