@@ -10,7 +10,6 @@ from prx import atmospheric_corrections as atmo
 from prx.rinex_nav import nav_file_discovery
 from prx import constants, helpers, converters
 from prx.rinex_nav import evaluate as rinex_evaluate
-from prx.helpers import disk_cache
 
 log = helpers.get_logger(__name__)
 
@@ -23,9 +22,7 @@ def write_prx_file(
 ):
     output_writers = {"jsonseq": write_json_text_sequence_file, "csv": write_csv_file}
     if output_format not in output_writers.keys():
-        assert (
-            False
-        ), f"Output format {output_format} not supported,  we can do {list(output_writers.keys())}"
+        assert False, f"Output format {output_format} not supported,  we can do {list(output_writers.keys())}"
     output_writers[output_format](prx_header, prx_records, file_name_without_extension)
 
 
@@ -36,7 +33,7 @@ def write_json_text_sequence_file(
         f"{str(file_name_without_extension)}.{constants.cPrxJsonTextSequenceFileExtension}"
     )
     with open(output_file, "w", encoding="utf-8") as file:
-        file.write("\u241E" + json.dumps(prx_header, ensure_ascii=False) + "\n")
+        file.write("\u241e" + json.dumps(prx_header, ensure_ascii=False) + "\n")
         drop_columns = [
             "time_of_reception_in_receiver_time",
             "satellite",
@@ -68,7 +65,7 @@ def write_json_text_sequence_file(
                     if type(row[col].values[0]) is np.ndarray:
                         row[col].values[0] = row[col].values[0].tolist()
                     record["satellites"][sat][col] = row[col].values[0]
-            file.write("\u241E" + json.dumps(record, ensure_ascii=False) + "\n")
+            file.write("\u241e" + json.dumps(record, ensure_ascii=False) + "\n")
     log.info(f"Generated JSON Text Sequence prx file: {output_file}")
 
 
@@ -204,14 +201,6 @@ def _build_records_cached(
     check_assumptions(rinex_3_obs_file)
     obs = helpers.parse_rinex_obs_file(rinex_3_obs_file)
 
-    obs_header = georinex.rinexheader(rinex_3_obs_file)
-    if "GLONASS SLOT / FRQ #" in obs_header.keys():
-        glonass_slot_dict = helpers.build_glonass_slot_dictionary(
-            obs_header["GLONASS SLOT / FRQ #"]
-        )
-    else:
-        glonass_slot_dict = None
-
     # Flatten the xarray DataSet into a pandas DataFrame:
     log.info("Converting Dataset into flat Dataframe of observations")
     flat_obs = pd.DataFrame()
@@ -344,11 +333,11 @@ def _build_records_cached(
         how="left",
     )
     # Compute anything else that is satellite-specific
-    sat_states[
-        "relativistic_clock_effect_m"
-    ] = helpers.compute_relativistic_clock_effect(
-        sat_states[["x_m", "y_m", "z_m"]].to_numpy(),
-        sat_states[["dx_mps", "dy_mps", "dz_mps"]].to_numpy(),
+    sat_states["relativistic_clock_effect_m"] = (
+        helpers.compute_relativistic_clock_effect(
+            sat_states[["x_m", "y_m", "z_m"]].to_numpy(),
+            sat_states[["dx_mps", "dy_mps", "dz_mps"]].to_numpy(),
+        )
     )
     sat_states["sagnac_effect_m"] = helpers.compute_sagnac_effect(
         sat_states[["x_m", "y_m", "z_m"]].to_numpy(),
@@ -409,13 +398,13 @@ def _build_records_cached(
         how="left",
     )
 
-    flat_obs.loc[
-        flat_obs.satellite.str[0] != "R", "carrier_frequency_hz"
-    ] = flat_obs.apply(
-        lambda row: constants.carrier_frequencies_hz()[row.satellite[0]][
-            "L" + row.observation_type[1]
-        ],
-        axis=1,
+    flat_obs.loc[flat_obs.satellite.str[0] != "R", "carrier_frequency_hz"] = (
+        flat_obs.apply(
+            lambda row: constants.carrier_frequencies_hz()[row.satellite[0]][
+                "L" + row.observation_type[1]
+            ],
+            axis=1,
+        )
     )
 
     # create a dictionary containing the headers of the different NAV files.

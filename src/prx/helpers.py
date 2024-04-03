@@ -228,15 +228,6 @@ def build_glonass_slot_dictionary(header_line):
 
 
 def satellite_id_2_system_time_scale(satellite_id):
-    constellation_2_system_time_scale = {
-        "G": "GPST",
-        "S": "SBAST",
-        "E": "GST",
-        "C": "BDT",
-        "R": "GLONASST",
-        "J": "QZSST",
-        "I": "IRNSST",
-    }
     assert (
         len(satellite_id) == 3
     ), f"Satellite ID unexpectedly not three characters long: {satellite_id}"
@@ -314,11 +305,7 @@ def compute_satellite_elevation_and_azimuth(sat_pos_ecef, receiver_pos_ecef):
         np.dot(unit_vector_rx_satellite_ecef, unit_e_ecef),
         np.dot(unit_vector_rx_satellite_ecef, unit_n_ecef),
     )
-    elevation_deg = np.rad2deg(elevation_rad)
 
-    up = receiver_pos_ecef / np.linalg.norm(receiver_pos_ecef)
-    angle_up_los_deg = np.rad2deg(np.arccos(np.dot(unit_vector_rx_satellite_ecef, up)))
-    elevation_deg_2 = 90 - angle_up_los_deg
     return elevation_rad, azimuth_rad
 
 

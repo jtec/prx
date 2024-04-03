@@ -15,7 +15,7 @@ def main():
         password = "Quaxolotl1&"
         scraped_file = Path("./cddis_download") / (str(week) + ".html")
         os.makedirs(scraped_file.parent, exist_ok=True)
-        response = download_url(
+        download_url(
             url,
             username,
             password,
