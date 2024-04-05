@@ -49,8 +49,7 @@ def test_at_sample(input_for_test):
     query = pd.DataFrame(
         [
             {
-                "query_time_isagpst": pd.Timestamp("2021-12-31T00:20:00.00000000")
-                - constants.cGpstUtcEpoch,
+                "query_time_isagpst": pd.Timestamp("2021-12-31T00:20:00.00000000"),
                 "sv": "G01",
             }
         ]
@@ -83,8 +82,7 @@ def test_between_samples(input_for_test):
     query = pd.DataFrame(
         [
             {
-                "query_time_isagpst": pd.Timestamp("2021-12-31T00:30:00.00000000")
-                - constants.cGpstUtcEpoch,
+                "query_time_isagpst": pd.Timestamp("2021-12-31T00:30:00.00000000"),
                 "sv": "G01",
             }
         ]
