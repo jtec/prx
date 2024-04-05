@@ -3,7 +3,7 @@ from pathlib import Path
 from prx.rinex_nav import evaluate as rinex_nav_evaluate
 from prx import constants
 from prx import converters
-import cProfile as profile
+import cProfile
 
 
 def generate_query(n_epochs=1):
@@ -23,34 +23,45 @@ def generate_query(n_epochs=1):
     query_template = pd.DataFrame(
         {
             "sv": sats,
+            "signal": "C1C",
             "query_time_isagpst": pd.Timestamp("2022-01-01T01:10:00.000000000")
             - constants.cGpstUtcEpoch,
         }
     )
     query = query_template.copy()
-    for i in range(1, n_epochs + 1):
+    for i in range(1, n_epochs):
         next_query = query_template.copy()
         next_query["query_time_isagpst"] += pd.Timedelta(seconds=i)
         query = pd.concat((query, next_query), axis=0)
     return query
 
 
-def benchmark_1(query):
-    rinex_nav_file = converters.compressed_to_uncompressed(
-        Path(__file__).parent / "datasets/BRDC00IGS_R_20220010000_01D_MN.zip"
-    )
-    rinex_nav_evaluate.compute(rinex_nav_file, query)
-    pass
+def benchmark(query, rinex_nav_file):
+    return rinex_nav_evaluate.compute_parallel(rinex_nav_file, query)
 
 
 if __name__ == "__main__":
-    query = generate_query(10)
-    p = profile.Profile()
-    # warm up cache
-    benchmark_1(query)
+    rinex_nav_file = converters.compressed_to_uncompressed(
+        Path(__file__).parent / "datasets/BRDC00IGS_R_20220010000_01D_MN.zip"
+    )
+    query = generate_query(100)
+    print(
+        f"Profiling ephemeris evaluation with {len(query.sv.unique())} satellites and"
+        f" {len(query.query_time_isagpst.unique())} epochs"
+    )
+    p = cProfile.Profile()
+    # Warm up cache: we can expect a navigation file to be cached
+    result = benchmark(query, rinex_nav_file)
     p.enable()
-    benchmark_1(query)
+    benchmark(query, rinex_nav_file)
     p.disable()
     stats_file = Path("benchmark_1.prof").resolve()
     p.dump_stats(stats_file)
+    df = pd.DataFrame(
+        p.getstats(),
+        columns=["func", "ncalls", "ccalls", "tottime", "cumtime", "callers"],
+    ).sort_values(by="tottime", ascending=False)
+    print(
+        f"Approximate ephemeris evaluation speed: {len(query.query_time_isagpst.unique()) / df.iloc[0, :]['tottime']} epochs per second"
+    )
     print(f"To inspect profiling results, call \n snakeviz {stats_file}")

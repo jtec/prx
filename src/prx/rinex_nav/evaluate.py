@@ -1,8 +1,13 @@
+import multiprocessing
+
 import pandas as pd
 import numpy as np
 from pathlib import Path
 import scipy
 import georinex
+from joblib import Parallel, delayed
+from math import floor
+
 from prx import helpers
 from prx import constants
 
@@ -589,6 +594,21 @@ def compute_clock_offsets(df):
         + 2 * df["SVclockDriftRate"] * df["query_time_wrt_clock_reference_time_s"]
     )
     return df
+
+
+def compute_parallel(rinex_nav_file_path, per_signal_query):
+    parallel = Parallel(n_jobs=multiprocessing.cpu_count(), return_as="generator")
+    # split dataframe into `n_chunks` smaller dataframes
+    n_chunks = min(len(per_signal_query.index), 4)
+    chunk_length = floor(len(per_signal_query) / n_chunks)
+    chunks = [
+        per_signal_query[i : i + chunk_length]
+        for i in range(0, len(per_signal_query), chunk_length)
+    ]
+    processed_chunks = parallel(
+        delayed(compute)(rinex_nav_file_path, chunk) for chunk in chunks
+    )
+    return pd.concat(processed_chunks)
 
 
 def compute(rinex_nav_file_path, per_signal_query):
