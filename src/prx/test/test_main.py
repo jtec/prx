@@ -75,8 +75,8 @@ def test_prx_function_call_with_csv_output(input_for_test):
     assert helpers.is_sorted(df.time_of_reception_in_receiver_time)
     # Elevation sanity check
     assert (
-                   df[(df.prn == 14) & (df.constellation == "C")].elevation_deg - 34.86
-           ).abs().max() < 0.3
+        df[(df.prn == 14) & (df.constellation == "C")].elevation_deg - 34.86
+    ).abs().max() < 0.3
 
 
 def run_rinex_through_prx(rinex_obs_file: Path):
@@ -100,7 +100,7 @@ def test_spp_lsq(input_for_test):
     df_first_epoch = df[
         df.time_of_reception_in_receiver_time
         == df.time_of_reception_in_receiver_time.min()
-        ]
+    ]
     for constellations_to_use in [("G", "E", "C"), ("G",), ("E",), ("C",), ("R",)]:
         obs = df_first_epoch[df.constellation.isin(constellations_to_use)]
         pt_lsq = spp_pt_lsq(obs)

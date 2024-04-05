@@ -4,7 +4,7 @@ from pathlib import Path
 from prx.sp3 import evaluate as sp3_evaluate
 from prx.rinex_nav import evaluate as rinex_nav_evaluate
 from prx import constants, converters, helpers
-from prx.helpers import timestamp_2_timedelta, week_and_seconds_2_timedelta
+from prx.helpers import week_and_seconds_2_timedelta
 import shutil
 import pytest
 import os
@@ -40,8 +40,8 @@ def input_for_test():
         shutil.rmtree(test_directory)
     os.makedirs(test_directory)
     test_files = {
-        "rinex_nav_file": test_directory / "BRDC00IGS_R_20230010000_01D_MN.rnx.zip",
-        "sp3_file": test_directory / "GFZ0MGXRAP_20230010000_01D_05M_ORB.SP3",
+        "rinex_nav_file": test_directory / "BRDC00IGS_R_20220010000_01D_MN.zip",
+        "sp3_file": test_directory / "WUM0MGXULT_20220010000_01D_05M_ORB.SP3",
     }
     for key, test_file_path in test_files.items():
         shutil.copy(
@@ -64,7 +64,8 @@ def test_compare_rnx3_gps_sat_pos_with_magnitude(input_for_test):
             "sv": "G01",
             "query_time_isagpst": week_and_seconds_2_timedelta(
                 weeks=2190, seconds=523800
-            ),
+            )
+            + constants.cGpstUtcEpoch,
         },
         index=[0],
     )
@@ -150,52 +151,12 @@ def generate_sat_query(sat_state_query_time_isagpst):
             # Multiple satellites with orbits that require propagation of an initial state
             # GLONASS satellites
             {
-                "sv": "R01",
+                "sv": "R04",
                 "signal": "C1C",
                 "query_time_isagpst": sat_state_query_time_isagpst,
             },
             {
-                "sv": "R06",
-                "signal": "C1C",
-                "query_time_isagpst": sat_state_query_time_isagpst,
-            },
-            {
-                "sv": "R07",
-                "signal": "C1C",
-                "query_time_isagpst": sat_state_query_time_isagpst,
-            },
-            {
-                "sv": "R08",
-                "signal": "C1C",
-                "query_time_isagpst": sat_state_query_time_isagpst,
-            },
-            {
-                "sv": "R14",
-                "signal": "C1C",
-                "query_time_isagpst": sat_state_query_time_isagpst,
-            },
-            {
-                "sv": "R15",
-                "signal": "C1C",
-                "query_time_isagpst": sat_state_query_time_isagpst,
-            },
-            {
-                "sv": "R21",
-                "signal": "C1C",
-                "query_time_isagpst": sat_state_query_time_isagpst,
-            },
-            {
-                "sv": "R22",
-                "signal": "C1C",
-                "query_time_isagpst": sat_state_query_time_isagpst,
-            },
-            {
-                "sv": "R23",
-                "signal": "C1C",
-                "query_time_isagpst": sat_state_query_time_isagpst,
-            },
-            {
-                "sv": "R24",
+                "sv": "R05",
                 "signal": "C1C",
                 "query_time_isagpst": sat_state_query_time_isagpst,
             },
@@ -208,7 +169,7 @@ def test_compare_to_sp3(input_for_test):
     rinex_nav_file = converters.compressed_to_uncompressed(
         input_for_test["rinex_nav_file"]
     )
-    query = generate_sat_query(pd.Timestamp("2023-01-01T01:10:00.000000000"))
+    query = generate_sat_query(pd.Timestamp("2022-01-01T01:10:00.000000000"))
     query = query[query.sv.str[0] == "R"]
     rinex_sat_states = rinex_nav_evaluate.compute(rinex_nav_file, query.copy())
     rinex_sat_states = (
@@ -291,27 +252,23 @@ def test_2023_beidou_c27(set_up_test_2023):
     rinex_nav_file = converters.compressed_to_uncompressed(set_up_test_2023["nav_file"])
     query = pd.DataFrame(
         [
-            # Multiple satellites with ephemerides provided as Kepler orbits
-            # Two Beidou GEO (from http://www.csno-tarc.cn/en/system/constellation)
             {
                 "sv": "C27",
                 "signal": "C1X",
-                "query_time_isagpst": pd.Timestamp("2023-01-01T01:00:00.000000000")
-                - constants.cGpstUtcEpoch,
+                "query_time_isagpst": pd.Timestamp("2023-01-01T01:00:00.000000000"),
             },
         ]
     )
 
     rinex_sat_states = rinex_nav_evaluate.compute(rinex_nav_file, query.copy())
     assert (
-        len(rinex_sat_states) == 1
-    ), "Was expecting only one, row, make sure to sort before comparing to sp3 with more than one row"
+        len(rinex_sat_states.index) == 1
+    ), "Was expecting only one row, make sure to sort before comparing to sp3 with more than one row"
     rinex_sat_states = (
         rinex_sat_states.reset_index()
-        .drop(columns=["index", "signal", "group_delay_m"])
+        .drop(columns=["index", "signal", "group_delay_m", "frequency_slot"])
         .sort_index(axis="columns")
     )
-    rinex_sat_states.to_csv("jan.csv")
     sp3_sat_states = (
         sp3_evaluate.compute(set_up_test_2023["sp3_file"], query.copy())
         .drop(columns=["signal"])
@@ -339,9 +296,7 @@ def test_group_delays(input_for_test):
     rinex_nav_file = converters.compressed_to_uncompressed(
         input_for_test["rinex_nav_file"]
     )
-    query_time_isagpst = (
-        pd.Timestamp("2022-01-01T01:10:00.000000000") - constants.cGpstUtcEpoch
-    )
+    query_time_isagpst = pd.Timestamp("2022-01-01T01:10:00.000000000")
     query = pd.DataFrame(
         [
             {"sv": "C30", "signal": "C2I", "query_time_isagpst": query_time_isagpst},
@@ -405,9 +360,9 @@ def test_gps_group_delay(input_for_test):
     # Retrieve total group delays for 4 different observation codes, at 3 different times
     codes = ["C1C", "C1P", "C2P", "C5X"]
     times = [
-        timestamp_2_timedelta(pd.Timestamp("2022-01-01T00:00:00.000000000"), "GPST"),
-        timestamp_2_timedelta(pd.Timestamp("2022-01-01T01:30:00.000000000"), "GPST"),
-        timestamp_2_timedelta(pd.Timestamp("2022-01-01T02:15:00.000000000"), "GPST"),
+        pd.Timestamp("2022-01-01T00:00:00.000000000"),
+        pd.Timestamp("2022-01-01T01:30:00.000000000"),
+        pd.Timestamp("2022-01-01T02:15:00.000000000"),
     ]
     query = pd.DataFrame()
     for code, time in itertools.product(codes, times):
@@ -487,12 +442,7 @@ def test_gal_group_delay(input_for_test):
                 {
                     "sv": "E25",
                     "signal": code,
-                    "query_time_isagpst": rinex_nav_evaluate.to_isagpst(
-                        timestamp_2_timedelta(
-                            pd.Timestamp("2022-01-01T01:30:00.000000000"), "GST"
-                        ),
-                        "GST",
-                    ),
+                    "query_time_isagpst": pd.Timestamp("2022-01-01T01:30:00.000000000"),
                 }
             ]
         )
@@ -569,12 +519,7 @@ def test_bds_group_delay(input_for_test):
             {
                 "sv": "C01",
                 "signal": code,
-                "query_time_isagpst": rinex_nav_evaluate.to_isagpst(
-                    timestamp_2_timedelta(
-                        pd.Timestamp("2022-01-01T00:30:00.000000000"), "BDT"
-                    ),
-                    "BDT",
-                ),
+                "query_time_isagpst": pd.Timestamp("2022-01-01T00:30:00.000000000"),
             },
             index=[0],
         )

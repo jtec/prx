@@ -194,9 +194,6 @@ def _build_records_cached(
         approximate_receiver_ecef_position_m
     )
     check_assumptions(rinex_3_obs_file, rinex_3_ephemerides_file)
-    gpst_utc_leapseconds = helpers.get_gpst_utc_leap_seconds_from_rinex_header(
-        rinex_3_obs_file
-    )
     obs = helpers.parse_rinex_obs_file(rinex_3_obs_file)
 
     # Flatten the xarray DataSet into a pandas DataFrame:
