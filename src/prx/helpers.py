@@ -354,6 +354,25 @@ def parse_rinex_obs_file(rinex_file: Path):
     return cached_load(rinex_file, file_content_hash)
 
 
+def get_gpst_utc_leap_seconds_from_rinex_header(rinex_file: Path):
+    header = georinex.rinexheader(rinex_file)
+    assert "LEAP SECONDS" in header, "LEAP SECONDS not found in RINEX header"
+    ls_before = header["LEAP SECONDS"][0:6].strip()
+    assert (
+        len(ls_before) > 0 and len(ls_before) < 3
+    ), f"Unexpected leap seconds {ls_before} in {rinex_file}"
+    ls_after = header["LEAP SECONDS"][6:12].strip()
+    if ls_after == "":
+        return int(ls_before)
+    assert (
+        len(ls_after) > 0 and len(ls_after) < 3
+    ), f"Unexpected leap seconds {ls_after} in {rinex_file}"
+    assert (
+        ls_after == ls_before
+    ), f"Leap second change annoucement in {rinex_file}, this case is not tested, aborting."
+    return int(ls_before)
+
+
 def is_sorted(iterable):
     return all(iterable[i] <= iterable[i + 1] for i in range(len(iterable) - 1))
 

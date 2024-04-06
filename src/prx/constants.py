@@ -3,8 +3,7 @@ import pandas as pd
 from collections import defaultdict
 
 cGpstUtcEpoch = pd.Timestamp(np.datetime64("1980-01-06T00:00:00.000000000"))
-cTaiEpoch = pd.Timestamp(np.datetime64("1958-01-01T00:00:00.000000000"))
-cArbitraryGlonassUtcEpoch = pd.Timestamp(np.datetime64("1980-01-06T00:00:00.000000000"))
+cBdtUtcEpoch = pd.Timestamp(np.datetime64("2006-01-01T00:00:00.000000000"))
 
 cNanoSecondsPerSecond = 1e9
 cMicrosecondsPerSecond = 1e6
@@ -54,9 +53,10 @@ cPrxCsvFileExtension = "csv"
 def carrier_frequencies_hz():
     cf = defaultdict(dict)
     # GPS
-    cf["G"]["L1"] = 1575.42 * cHzPerMhz
-    cf["G"]["L2"] = 1227.60 * cHzPerMhz
-    cf["G"]["L5"] = 1176.45 * cHzPerMhz
+    # We use at least one frequency slot here for all constellations to accommodate GLONASS.
+    cf["G"]["L1"] = {int(1): 1575.42 * cHzPerMhz}
+    cf["G"]["L2"] = {int(1): 1227.60 * cHzPerMhz}
+    cf["G"]["L5"] = {int(1): 1176.45 * cHzPerMhz}
     # GLONASS FDMA signals
     cf["R"]["L1"] = defaultdict(dict)
     cf["R"]["L2"] = defaultdict(dict)
@@ -64,32 +64,32 @@ def carrier_frequencies_hz():
         cf["R"]["L1"][frequency_slot] = (1602 + frequency_slot * 9 / 16) * cHzPerMhz
         cf["R"]["L2"][frequency_slot] = (1246 + frequency_slot * 7 / 16) * cHzPerMhz
     # Glonass CDMA signals
-    cf["R"]["L4"] = 1600.995 * cHzPerMhz
-    cf["R"]["L3"] = 1202.025 * cHzPerMhz
+    cf["R"]["L4"] = {int(1): 1600.995 * cHzPerMhz}
+    cf["R"]["L3"] = {int(1): 1202.025 * cHzPerMhz}
     # Galileo
-    cf["E"]["L1"] = 1575.42 * cHzPerMhz
-    cf["E"]["L5"] = 1176.45 * cHzPerMhz
-    cf["E"]["L7"] = 1207.140 * cHzPerMhz
-    cf["E"]["L8"] = 1191.795 * cHzPerMhz
-    cf["E"]["L6"] = 1278.75 * cHzPerMhz
+    cf["E"]["L1"] = {int(1): 1575.42 * cHzPerMhz}
+    cf["E"]["L5"] = {int(1): 1176.45 * cHzPerMhz}
+    cf["E"]["L7"] = {int(1): 1207.140 * cHzPerMhz}
+    cf["E"]["L8"] = {int(1): 1191.795 * cHzPerMhz}
+    cf["E"]["L6"] = {int(1): 1278.75 * cHzPerMhz}
     # SBAS
-    cf["S"]["L1"] = 1575.42 * cHzPerMhz
-    cf["S"]["L5"] = 1176.45 * cHzPerMhz
+    cf["S"]["L1"] = {int(1): 1575.42 * cHzPerMhz}
+    cf["S"]["L5"] = {int(1): 1176.45 * cHzPerMhz}
     # QZSS
-    cf["J"]["L1"] = 1575.42 * cHzPerMhz
-    cf["J"]["L2"] = 1227.60 * cHzPerMhz
-    cf["J"]["L5"] = 1176.45 * cHzPerMhz
-    cf["J"]["L6"] = 1278.75 * cHzPerMhz
+    cf["J"]["L1"] = {int(1): 1575.42 * cHzPerMhz}
+    cf["J"]["L2"] = {int(1): 1227.60 * cHzPerMhz}
+    cf["J"]["L5"] = {int(1): 1176.45 * cHzPerMhz}
+    cf["J"]["L6"] = {int(1): 1278.75 * cHzPerMhz}
     # Beidou
-    cf["C"]["L1"] = 1575.42 * cHzPerMhz
-    cf["C"]["L2"] = 1561.098 * cHzPerMhz
-    cf["C"]["L5"] = 1176.45 * cHzPerMhz
-    cf["C"]["L7"] = 1207.140 * cHzPerMhz
-    cf["C"]["L6"] = 1268.52 * cHzPerMhz
-    cf["C"]["L8"] = 1191.795 * cHzPerMhz
+    cf["C"]["L1"] = {int(1): 1575.42 * cHzPerMhz}
+    cf["C"]["L2"] = {int(1): 1561.098 * cHzPerMhz}
+    cf["C"]["L5"] = {int(1): 1176.45 * cHzPerMhz}
+    cf["C"]["L7"] = {int(1): 1207.140 * cHzPerMhz}
+    cf["C"]["L6"] = {int(1): 1268.52 * cHzPerMhz}
+    cf["C"]["L8"] = {int(1): 1191.795 * cHzPerMhz}
     # NavIC/IRNSS
-    cf["I"]["L5"] = 1176.45 * cHzPerMhz
-    cf["I"]["S"] = 2492.028 * cHzPerMhz
+    cf["I"]["L5"] = {int(1): 1176.45 * cHzPerMhz}
+    cf["I"]["S"] = {int(1): 2492.028 * cHzPerMhz}
     return dict(cf)
 
 
@@ -114,18 +114,17 @@ constellation_2_ephemeris_validity_interval = {
     "I": [pd.Timedelta(-1, "hours"), pd.Timedelta(1, "hours")],
 }
 
-system_time_scale_2_rinex_utc_epoch = {
+system_time_scale_rinex_utc_epoch = {
+    # Returns the time at which the system time scale (e.g. in weeks and week seconds) is zero.
     "GPST": cGpstUtcEpoch,
     "SBAST": cGpstUtcEpoch,
-    "GST": cGpstUtcEpoch,
-    "BDT": (
-        cGpstUtcEpoch
-        + pd.Timedelta(1356 * cSecondsPerWeek, "seconds")
-        + pd.Timedelta(14, "seconds")
-    ),
-    "GLONASST": cArbitraryGlonassUtcEpoch,
     "QZSST": cGpstUtcEpoch,
     "IRNSST": cGpstUtcEpoch,
+    # The offset between GST and GPST is removed by RINEX file encoders:
+    "GST": cGpstUtcEpoch,
+    "BDT": cBdtUtcEpoch,
+    # GLONASS time does not use weeks and week seconds, it has no epoch,
+    "GLONASST": pd.NaT,
 }
 
 gfzrnx_binary = {
