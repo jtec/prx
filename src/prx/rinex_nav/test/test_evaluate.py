@@ -161,6 +161,17 @@ def generate_sat_query(sat_state_query_time_isagpst):
                 "signal": "C1C",
                 "query_time_isagpst": sat_state_query_time_isagpst,
             },
+            # Two SBAS satellites
+            {
+                "sv": "S23",
+                "signal": "C1C",
+                "query_time_isagpst": sat_state_query_time_isagpst,
+            },
+            {
+                "sv": "S26",
+                "signal": "C1C",
+                "query_time_isagpst": sat_state_query_time_isagpst,
+            },
         ]
     )
     return query
@@ -171,8 +182,7 @@ def test_compare_to_sp3(input_for_test):
         input_for_test["rinex_nav_file"]
     )
     query = generate_sat_query(pd.Timestamp("2022-01-01T01:10:00.000000000"))
-    query = query[query.sv.str[0] == "R"]
-    rinex_sat_states = rinex_nav_evaluate.compute_parallel(rinex_nav_file, query.copy())
+    rinex_sat_states = rinex_nav_evaluate.compute(rinex_nav_file, query.copy())
     rinex_sat_states = (
         rinex_sat_states.sort_values(by=["sv", "query_time_isagpst"])
         .sort_index(axis=1)

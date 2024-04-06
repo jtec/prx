@@ -122,6 +122,21 @@ def glonass_xdot_montenbruck(x, acc_sun_moon):
     return xdot
 
 
+def sbas_orbit_position_and_velocity(df):
+    # Based on Montenbruck, 2017, Handbook of GNSS, section 3.3.3, eq. 3.59
+    t_query = df["query_time_wrt_ephemeris_reference_time_s"].values.reshape(-1, 1)
+    df[["x_m", "y_m", "z_m"]] = (
+        df[["X", "Y", "Z"]].values
+        + df[["dX", "dY", "dZ"]].mul(t_query, axis=0).values
+        + 0.5 * df[["dX2", "dY2", "dZ2"]].mul(t_query**2, axis=0).values
+    )
+    df[["dx_mps", "dy_mps", "dz_mps"]] = (
+        df[["dX", "dY", "dZ"]].values
+        + df[["dX2", "dY2", "dZ2"]].mul(t_query, axis=0).values
+    )
+    return df
+
+
 def glonass_orbit_position_and_velocity(df):
     # Based on Montenbruck, 2017, Handbook of GNSS, section 3.3.3
     pv = df[["X", "Y", "Z", "dX", "dY", "dZ"]]
@@ -597,7 +612,7 @@ def compute_clock_offsets(df):
 
 
 def compute_parallel(rinex_nav_file_path, per_signal_query):
-    parallel = Parallel(n_jobs=multiprocessing.cpu_count(), return_as="generator")
+    parallel = Parallel(n_jobs=multiprocessing.cpu_count(), return_as="list")
     # split dataframe into `n_chunks` smaller dataframes
     n_chunks = min(len(per_signal_query.index), 4)
     chunk_length = floor(len(per_signal_query) / n_chunks)
@@ -632,6 +647,8 @@ def compute(rinex_nav_file_path, per_signal_query):
             sub_df = kepler_orbit_position_and_velocity(sub_df)
         elif orbit_type == "glonass":
             sub_df = glonass_orbit_position_and_velocity(sub_df)
+        elif orbit_type == "sbas":
+            sub_df = sbas_orbit_position_and_velocity(sub_df)
         else:
             log.info(
                 f"Ephemeris evaluation not implemented or under development for constellation {sub_df['constellation'].iloc[0]}, skipping"
