@@ -182,7 +182,7 @@ def test_compare_to_sp3(input_for_test):
         input_for_test["rinex_nav_file"]
     )
     query = generate_sat_query(pd.Timestamp("2022-01-01T01:10:00.000000000"))
-    rinex_sat_states = rinex_nav_evaluate.compute(rinex_nav_file, query.copy())
+    rinex_sat_states = rinex_nav_evaluate.compute_parallel(rinex_nav_file, query.copy())
     rinex_sat_states = (
         rinex_sat_states.sort_values(by=["sv", "query_time_isagpst"])
         .sort_index(axis=1)
