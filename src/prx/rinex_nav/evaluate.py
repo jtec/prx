@@ -30,6 +30,9 @@ def parse_rinex_nav_file(rinex_file: Path):
     @helpers.cache_call
     def cached_load(rinex_file: Path, file_hash: str):
         ds = cached_parse(rinex_file, file_hash)
+        ds.attrs["utc_gpst_leap_seconds"] = (
+            helpers.get_gpst_utc_leap_seconds_from_rinex_header(rinex_file)
+        )
         df = convert_nav_dataset_to_dataframe(ds)
         return df
 
@@ -43,13 +46,105 @@ def parse_rinex_nav_file(rinex_file: Path):
     return cached_load(rinex_file, file_content_hash)
 
 
-def time_scale_integer_second_offset(time_scale_a, time_scale_b):
-    offset = (
-        constants.system_time_scale_2_rinex_utc_epoch[time_scale_a]
-        - constants.system_time_scale_2_rinex_utc_epoch[time_scale_b]
+def time_scale_integer_second_offset_wrt_gpst(time_scale, utc_gpst_leap_seconds=None):
+    if time_scale in ["GPST", "SBAST", "QZSST", "IRNSST", "GST"]:
+        return pd.Timedelta(seconds=0)
+    if time_scale == "BDT":
+        return pd.Timedelta(seconds=-14)
+    if time_scale == "GLONASST":
+        assert (
+            utc_gpst_leap_seconds is not None
+        ), "Need GPST-UTC leap seconds to compute GLONASST intger second offset w.r.t. GPST"
+        return pd.Timedelta(seconds=-utc_gpst_leap_seconds)
+    assert False, f"Unexpected time scale: {time_scale}"
+
+
+def glonass_xdot_rtklib(x, acc_sun_moon):
+    p = x[["X", "Y", "Z"]]
+    v = x[["dX", "dY", "dZ"]]
+    GM_e = 398600.4418 * 1e9
+    R_e = 6378136.0
+    J_2 = 1.0826257 * 1e-3
+    omega_e = 7.292115 * 1e-5
+    xdot = x.copy() * np.nan
+    xdot[["X", "Y", "Z"]] = x[["dX", "dY", "dZ"]]
+    r = np.linalg.norm(p.to_numpy(), axis=1)
+    # How
+    # https://github.com/tomojitakasu/RTKLIB/blob/71db0ffa0d9735697c6adfd06fdf766d0e5ce807/src/ephemeris.c#L261
+    # computes it:
+    a = 1.5 * J_2 * GM_e * (R_e**2 / r**5)
+    b = 5 * p.loc[:, "Z"] ** 2 / r**2
+    c = -GM_e / r**3 - a * (1 - b)
+    xdot.loc[:, "dX"] = (
+        (c + omega_e**2) * p.loc[:, "X"]
+        + 2 * omega_e * v.loc[:, "dY"]
+        + acc_sun_moon.loc[:, "dX2"]
     )
-    offset = offset.round("s")
-    return offset
+    xdot.loc[:, "dY"] = (
+        (c + omega_e**2) * p.loc[:, "Y"]
+        - 2 * omega_e * v.loc[:, "dX"]
+        + acc_sun_moon.loc[:, "dY2"]
+    )
+    xdot.loc[:, "dZ"] = (c - 2 * a) * p.loc[:, "Z"] + acc_sun_moon.loc[:, "dZ2"]
+    return xdot
+
+
+def glonass_xdot_montenbruck(x, acc_sun_moon):
+    p = x[["X", "Y", "Z"]]
+    v = x[["dX", "dY", "dZ"]]
+    GM_e = 398600.4418 * 1e9
+    R_e = 6378136.0
+    J_2 = 1.0826257 * 1e-3
+    omega_e = 7.292115 * 1e-5
+    xdot = x.copy() * np.nan
+    xdot[["X", "Y", "Z"]] = x[["dX", "dY", "dZ"]]
+    r = np.linalg.norm(p.to_numpy(), axis=1)
+    # How Montenbruck, 2017, Handbook of GNSS, section 3.3.3 computes it:
+    c1 = -GM_e / r**3
+    c2 = -(3 / 2) * J_2 * GM_e * (R_e**2 / r**5) * (1 - (5 * p.loc[:, "Z"] ** 2) / r**2)
+    xdot.loc[:, "dX"] = (
+        c1 * p.loc[:, "X"]
+        + c2 * p.loc[:, "X"]
+        + omega_e**2 * p.loc[:, "X"]
+        + 2 * omega_e * v.loc[:, "dY"]
+        + acc_sun_moon.loc[:, "dX2"]
+    )
+    xdot.loc[:, "dY"] = (
+        c1 * p.loc[:, "Y"]
+        + c2 * p.loc[:, "Y"]
+        + omega_e**2 * p.loc[:, "Y"]
+        - 2 * omega_e * v.loc[:, "dX"]
+        + acc_sun_moon.loc[:, "dY2"]
+    )
+    xdot.loc[:, "dZ"] = (
+        c1 * p.loc[:, "Z"] + c2 * p.loc[:, "Z"] + acc_sun_moon.loc[:, "dZ2"]
+    )
+    return xdot
+
+
+def glonass_orbit_position_and_velocity(df):
+    # Based on Montenbruck, 2017, Handbook of GNSS, section 3.3.3
+    pv = df[["X", "Y", "Z", "dX", "dY", "dZ"]]
+    a = df[["dX2", "dY2", "dZ2"]]
+    t = df["query_time_wrt_ephemeris_reference_time_s"] * 0
+    t_query = df["query_time_wrt_ephemeris_reference_time_s"]
+
+    while True:
+        # We integrate in fixed steps until the last step, which is the time between the next-to-last integrated state
+        # and the query time.
+        fixed_integration_time_step = 60
+        h = (t_query - t).clip(0, fixed_integration_time_step)
+        if np.all(h == 0):
+            df[["x_m", "y_m", "z_m", "dx_mps", "dy_mps", "dz_mps"]] = pv
+            return df
+        # One step of 4th order Runge-Kutta integration:
+        glonass_xdot = glonass_xdot_rtklib
+        k1 = glonass_xdot(pv, a)
+        k2 = glonass_xdot(pv + k1.mul(h / 2, axis=0), a)
+        k3 = glonass_xdot(pv + k2.mul(h / 2, axis=0), a)
+        k4 = glonass_xdot(pv + k3.mul(h, axis=0), a)
+        pv = pv + (k1 + 2 * k2 + 2 * k3 + k4).mul(h / 6, axis=0)
+        t = t + h
 
 
 def eccentric_anomaly(M, e, tol=1e-5, max_iter=10):
@@ -310,29 +405,28 @@ def convert_nav_dataset_to_dataframe(nav_ds):
                 group[week_field[group_time_scale]] * constants.cSecondsPerWeek
                 + group["Toe"]
             )
-            group["ephemeris_reference_time_system_time"] = pd.to_timedelta(
-                full_seconds, unit="seconds"
+            group["ephemeris_reference_time_system_time"] = (
+                constants.system_time_scale_rinex_utc_epoch[group_time_scale]
+                + pd.to_timedelta(full_seconds, unit="seconds")
             )
         else:
             # For SBAS and GLONASS there are no separate ephemeris reference time fields
-            group["ephemeris_reference_time_system_time"] = (
-                group["time"] - constants.cArbitraryGlonassUtcEpoch
-            )
+            group["ephemeris_reference_time_system_time"] = group["time"]
             # The first derivative of the clock offset is in a different field for SBAS and GLONASS
             group["SVclockDrift"] = group["SVrelFreqBias"]
             # And the second derivative is zero, i.e. the constellation ground segment uses a fist-order clock model
             group["SVclockDriftRate"] = 0
-        group["ephemeris_reference_time_isagpst"] = group[
-            "ephemeris_reference_time_system_time"
-        ] + time_scale_integer_second_offset(group_time_scale, "GPST")
-        group["clock_offset_reference_time_system_time"] = (
-            group["time"]
-            - constants.system_time_scale_2_rinex_utc_epoch[group_time_scale]
+        group["ephemeris_reference_time_isagpst"] = to_isagpst(
+            group["ephemeris_reference_time_system_time"],
+            group_time_scale,
+            int(nav_ds.attrs["utc_gpst_leap_seconds"]),
         )
-        group["clock_reference_time_isagpst"] = group[
-            "clock_offset_reference_time_system_time"
-        ] + time_scale_integer_second_offset(group_time_scale, "GPST")
-
+        group["clock_offset_reference_time_system_time"] = group["time"]
+        group["clock_reference_time_isagpst"] = to_isagpst(
+            group["clock_offset_reference_time_system_time"],
+            group_time_scale,
+            int(nav_ds.attrs["utc_gpst_leap_seconds"]),
+        )
         group["validity_start"] = (
             group["ephemeris_reference_time_isagpst"]
             + constants.constellation_2_ephemeris_validity_interval[
@@ -379,6 +473,10 @@ def convert_nav_dataset_to_dataframe(nav_ds):
     )
     df = df.reset_index(drop=True)
     df = compute_gal_inav_fnav_indicators(df)
+    df["frequency_slot"] = int(1)
+    df.loc[df.sv.str[0] == "R", "frequency_slot"] = df.loc[
+        df.sv.str[0] == "R", "FreqNum"
+    ].astype(int)
     return df
 
 
@@ -403,14 +501,20 @@ def compute_gal_inav_fnav_indicators(df):
     return df
 
 
-def to_isagpst(time, timescale):
-    if isinstance(time, pd.Timedelta) and isinstance(timescale, str):
-        return time + time_scale_integer_second_offset(timescale, "GPST")
-    if isinstance(time, pd.Series) and isinstance(timescale, pd.Series):
-        integer_second_offsets = timescale.apply(
-            lambda element: time_scale_integer_second_offset(element, "GPST")
+def to_isagpst(time, timescale, gpst_utc_leapseconds):
+    if (isinstance(time, pd.Timedelta) or isinstance(time, pd.Series)) and isinstance(
+        timescale, str
+    ):
+        return time - time_scale_integer_second_offset_wrt_gpst(
+            timescale, gpst_utc_leapseconds
         )
-        return time + integer_second_offsets
+    if isinstance(time, pd.Series) and isinstance(timescale, pd.Series):
+        return time - timescale.apply(
+            lambda element: time_scale_integer_second_offset_wrt_gpst(
+                element, gpst_utc_leapseconds
+            )
+        )
+
     assert (
         False
     ), f"Unexpected types: time is {type(time)}, timescale is {type(timescale)}"
@@ -441,7 +545,6 @@ def select_ephemerides(df, query):
     query["ephemeris_index"] = query.apply(find_ephemeris_index, args=(df,), axis=1)
     # Some satellites might not have ephemerides. We create dummy ephemerides with NaN values for those.
     sats_without_ephemerides = query[query.ephemeris_index.isna()].sv.unique()
-    # ephemerides = [df]
     for sv in sats_without_ephemerides:
         nan_ephemeris = df.iloc[[0]].copy()
         nan_ephemeris[
@@ -527,6 +630,8 @@ def compute(rinex_nav_file_path, per_signal_query):
         orbit_type = sub_df["orbit_type"].iloc[0]
         if orbit_type == "kepler":
             sub_df = kepler_orbit_position_and_velocity(sub_df)
+        elif orbit_type == "glonass":
+            sub_df = glonass_orbit_position_and_velocity(sub_df)
         else:
             log.info(
                 f"Ephemeris evaluation not implemented or under development for constellation {sub_df['constellation'].iloc[0]}, skipping"
@@ -557,6 +662,7 @@ def compute(rinex_nav_file_path, per_signal_query):
 
     if "signal" in per_signal_query.columns:
         columns_to_keep = ["signal", "group_delay_m"] + columns_to_keep
+    columns_to_keep.append("frequency_slot")
     per_signal_query = per_signal_query[columns_to_keep].reset_index(drop=True)
     return per_signal_query
 
@@ -602,8 +708,8 @@ def compute_total_group_delays(
                         df.gamma = 1
                     case "2":
                         df.gamma = (
-                            constants.carrier_frequencies_hz()["G"]["L1"]
-                            / constants.carrier_frequencies_hz()["G"]["L2"]
+                            constants.carrier_frequencies_hz()["G"]["L1"][1]
+                            / constants.carrier_frequencies_hz()["G"]["L2"][1]
                         ) ** 2
             case "J":
                 df.tgd = df.TGD.values[0]
@@ -616,14 +722,14 @@ def compute_total_group_delays(
                     case "5":
                         df.tgd = df.BGDe5a.values[0]
                         df.gamma = (
-                            constants.carrier_frequencies_hz()["E"]["L1"]
-                            / constants.carrier_frequencies_hz()["E"]["L5"]
+                            constants.carrier_frequencies_hz()["E"]["L1"][1]
+                            / constants.carrier_frequencies_hz()["E"]["L5"][1]
                         ) ** 2
                     case "7":
                         df.tgd = df.BGDe5b.values[0]
                         df.gamma = (
-                            constants.carrier_frequencies_hz()["E"]["L1"]
-                            / constants.carrier_frequencies_hz()["E"]["L7"]
+                            constants.carrier_frequencies_hz()["E"]["L1"][1]
+                            / constants.carrier_frequencies_hz()["E"]["L7"][1]
                         ) ** 2
             case "C":
                 df.gamma = 1

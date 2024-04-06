@@ -137,11 +137,26 @@ def compute(sp3_file_path, query):
     df = df[df["sv"].isin(query["sv"])]
 
     def interpolate_sat_states(row):
-        sat_pv = interpolate(
-            df[df["sv"] == row["sv"]],
-            helpers.timedelta_2_seconds(row["query_time_isagpst"]),
-        )
-
+        samples = df[df["sv"] == row["sv"]]
+        if len(samples.index) > 0:
+            sat_pv = interpolate(
+                samples,
+                helpers.timedelta_2_seconds(
+                    row["query_time_isagpst"] - constants.cGpstUtcEpoch
+                ),
+            )
+        else:
+            sat_pv = pd.DataFrame()
+            sat_pv["gpst_s"] = [row.query_time_isagpst]
+            sat_pv["sv"] = [row.sv]
+            sat_pv["x_m"] = [np.nan]
+            sat_pv["y_m"] = [np.nan]
+            sat_pv["z_m"] = [np.nan]
+            sat_pv["clock_m"] = [np.nan]
+            sat_pv["dx_mps"] = [np.nan]
+            sat_pv["dy_mps"] = [np.nan]
+            sat_pv["dz_mps"] = [np.nan]
+            sat_pv["dclock_mps"] = [np.nan]
         return pd.concat((row.drop("sv"), sat_pv.squeeze()))
 
     query = query.apply(interpolate_sat_states, axis=1).reset_index()
