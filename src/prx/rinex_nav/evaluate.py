@@ -20,14 +20,14 @@ consts = {
 
 
 def parse_rinex_nav_file(rinex_file: Path):
-    @helpers.cache_call
+    @helpers.disk_cache.cache
     def cached_parse(rinex_file: Path, file_hash: str):
         log.info(f"Parsing {rinex_file} ...")
         helpers.repair_with_gfzrnx(rinex_file)
         ds = georinex.load(rinex_file)
         return ds
 
-    @helpers.cache_call
+    @helpers.disk_cache.cache
     def cached_load(rinex_file: Path, file_hash: str):
         ds = cached_parse(rinex_file, file_hash)
         ds.attrs["utc_gpst_leap_seconds"] = (
@@ -597,7 +597,11 @@ def compute_clock_offsets(df):
 
 
 def compute_parallel(rinex_nav_file_path, per_signal_query):
-    parallel = Parallel(n_jobs=multiprocessing.cpu_count(), return_as="generator")
+    # Warm up nav file parser cache so that we son't parse the file multiple times
+    _ = parse_rinex_nav_file(rinex_nav_file_path)
+    parallel = Parallel(
+        n_jobs=round(multiprocessing.cpu_count() / 2), return_as="generator"
+    )
     # split dataframe into `n_chunks` smaller dataframes
     n_chunks = min(len(per_signal_query.index), 4)
     chunk_length = floor(len(per_signal_query) / n_chunks)

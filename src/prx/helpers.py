@@ -9,7 +9,6 @@ import math
 import joblib
 import georinex
 import imohash
-from functools import lru_cache
 import os
 
 logging.basicConfig(
@@ -30,10 +29,13 @@ def parse_boolean_env_variable(env_variable_name: str, value_if_not_set: bool):
     return var_string in ("True", "true", "1")
 
 
+disk_cache = joblib.Memory(
+    Path(__file__).parent.joinpath("diskcache"), verbose=0, mmap_mode="r"
+)
 disable_caching = parse_boolean_env_variable("PRX_NO_CACHING", False)
 if disable_caching:
-    log.debug("Caching disabled by environment variable PRX_NO_CACHING")
-disk_cache = joblib.Memory(Path(__file__).parent.joinpath("diskcache"), verbose=0)
+    log.debug("Caching disabled by environment variable PRX_NO_CACHING, purging cache.")
+    disk_cache.clear()
 
 
 def get_logger(label):
@@ -337,7 +339,7 @@ def ecef_2_geodetic(pos_ecef):
 
 
 def parse_rinex_obs_file(rinex_file: Path):
-    @cache_call
+    @disk_cache.cache
     def cached_load(rinex_file: Path, file_hash: str):
         log.info(f"Parsing {rinex_file} ...")
         repair_with_gfzrnx(rinex_file)
@@ -375,17 +377,3 @@ def get_gpst_utc_leap_seconds_from_rinex_header(rinex_file: Path):
 
 def is_sorted(iterable):
     return all(iterable[i] <= iterable[i + 1] for i in range(len(iterable) - 1))
-
-
-def cache_call(func):
-    @lru_cache
-    @disk_cache.cache
-    def wrapper_cached_call(*args, **kwargs):
-        return func(*args, **kwargs)
-
-    def wrapper_uncached_call(*args, **kwargs):
-        return func(*args, **kwargs)
-
-    if disable_caching:
-        return wrapper_uncached_call
-    return wrapper_cached_call
