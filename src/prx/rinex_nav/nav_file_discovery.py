@@ -65,7 +65,6 @@ def try_downloading_ephemerides(t_start: pd.Timestamp, t_end, folder: Path):
         local_file = try_downloading_ephemerides_ftp(time, folder)
     assert local_file, f"Could not download broadcast ephemerides for {time}"
 
-    local_file = helpers.repair_with_gfzrnx(local_file)
     files.append(local_file)
     if len(files) == 0:
         return None
@@ -77,7 +76,7 @@ def rinex_3_ephemerides_file_coverage_time(ephemerides_file: Path):
     parts = str(ephemerides_file).split("_")
     start_time = pd.to_datetime(parts[-3], format="%Y%j%H%M")
     assert (
-        parts[-2][-1] == "D"
+            parts[-2][-1] == "D"
     ), f"Was expecting 'D' (days) as duration unit in Rinex ephemerides file name: {ephemerides_file}"
     duration = parts[-2][:-1]
     duration_unit = parts[-2][-1]
@@ -86,10 +85,10 @@ def rinex_3_ephemerides_file_coverage_time(ephemerides_file: Path):
 
 
 def discover_local_ephemerides(
-    # This function returns a list of paths, in case the observation file spans several days
-    t_start: pd.Timestamp,
-    t_end: pd.Timestamp,
-    folder: Path,
+        # This function returns a list of paths, in case the observation file spans several days
+        t_start: pd.Timestamp,
+        t_end: pd.Timestamp,
+        folder: Path,
 ):
     candidates = glob.glob(str(folder.joinpath("**.rnx**")), recursive=True)
     nav_files = []
@@ -117,12 +116,13 @@ def discover_local_ephemerides(
 
 
 def discover_or_download_ephemerides(
-    t_start: pd.Timestamp, t_end: pd.Timestamp, folder, constellations
+        t_start: pd.Timestamp, t_end: pd.Timestamp, folder, constellations
 ):
     sources = [discover_local_ephemerides, try_downloading_ephemerides]
     for source in sources:
         ephemerides_files = source(t_start, t_end, folder)
         if ephemerides_files is not None:
+            ephemerides_files = [helpers.repair_with_gfzrnx(f) for f in ephemerides_files]
             return ephemerides_files
     return None
 
@@ -151,7 +151,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         prog="rinex_aux_files",
         description="rinex_aux_files discovers or downloads files needed to get started on positioning: "
-        "broadcast ephemeris, precise ephemeris etc.",
+                    "broadcast ephemeris, precise ephemeris etc.",
     )
     parser.add_argument(
         "--observation_file_path", type=str, help="Observation file path", required=True
