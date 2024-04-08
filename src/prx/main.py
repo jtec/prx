@@ -191,7 +191,7 @@ def build_records(
     )
 
 
-@helpers.cache_call
+@helpers.disk_cache.cache
 def _build_records_cached(
     rinex_3_obs_file,
     rinex_3_obs_file_hash,
@@ -214,21 +214,16 @@ def _build_records_cached(
         df = df.assign(obs_type=lambda x: obs_label)
         flat_obs = pd.concat([flat_obs, df])
 
-    def format_flat_rows(row):
-        return [
-            pd.Timestamp(row[0]),
-            str(row[1]),
-            row[2],
-            str(row[3]),
-        ]
+    flat_obs.time = pd.to_datetime(flat_obs.time, format="%Y-%m-%dT%H:%M:%S")
+    flat_obs.obs_value = flat_obs.obs_value.astype(float)
+    flat_obs[["sv", "obs_type"]] = flat_obs[["sv", "obs_type"]].astype(str)
 
-    flat_obs = flat_obs.apply(format_flat_rows, axis=1, result_type="expand")
     flat_obs = flat_obs.rename(
         columns={
-            0: "time_of_reception_in_receiver_time",
-            1: "satellite",
-            2: "observation_value",
-            3: "observation_type",
+            "time": "time_of_reception_in_receiver_time",
+            "sv": "satellite",
+            "obs_value": "observation_value",
+            "obs_type": "observation_type",
         },
     )
 
@@ -306,22 +301,23 @@ def _build_records_cached(
         # get year and doy from NAV filename
         year = int(file.name[12:16])
         doy = int(file.name[16:19])
+        day_query = query.loc[
+            (
+                query.query_time_isagpst
+                >= pd.Timestamp(year=year, month=1, day=1) + pd.Timedelta(days=doy - 1)
+            )
+            & (
+                query.query_time_isagpst
+                < pd.Timestamp(year=year, month=1, day=1) + pd.Timedelta(days=doy)
+            )
+        ]
+        if day_query.empty:
+            continue
         log.info(f"Computing satellite states for {year}-{doy:03d}")
         sat_states_per_day.append(
             rinex_evaluate.compute_parallel(
                 file,
-                query.loc[
-                    (
-                        query.query_time_isagpst
-                        >= pd.Timestamp(year=year, month=1, day=1)
-                        + pd.Timedelta(days=doy - 1)
-                    )
-                    & (
-                        query.query_time_isagpst
-                        < pd.Timestamp(year=year, month=1, day=1)
-                        + pd.Timedelta(days=doy)
-                    )
-                ],
+                day_query,
             )
         )
     sat_states = pd.concat(sat_states_per_day)
@@ -504,7 +500,7 @@ if __name__ == "__main__":
         type=str,
         help="Output file format",
         choices=["jsonseq", "csv"],
-        default="jsonseq",
+        default="csv",
     )
     args = parser.parse_args()
     if (
