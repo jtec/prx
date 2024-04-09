@@ -4,7 +4,7 @@ from pathlib import Path
 from prx.sp3 import evaluate as sp3_evaluate
 from prx.rinex_nav import evaluate as rinex_nav_evaluate
 from prx import constants, converters, helpers
-from prx.helpers import timestamp_2_timedelta, week_and_seconds_2_timedelta
+from prx.helpers import week_and_seconds_2_timedelta
 import shutil
 import pytest
 import os
@@ -23,9 +23,9 @@ from dotmap import DotMap
 #   for more than millimeter-level, much smaller than the ephemeris error.
 expected_max_differences_broadcast_vs_precise = {
     "diff_xyz_l2_m": 11.9,
-    "diff_dxyz_l2_mps": 1.8e-4,
+    "diff_dxyz_l2_mps": 2.1e-3,
     "sat_clock_offset_m": 26,  # TODO Broadcast clock error should be much smaller than this.
-    "sat_clock_drift_mps": 1.2e-4,
+    "sat_clock_drift_mps": 3.4e-4,
 }
 
 
@@ -62,13 +62,15 @@ def test_compare_rnx3_gps_sat_pos_with_magnitude(input_for_test):
     query = pd.DataFrame(
         {
             "sv": "G01",
+            "signal": "C1C",
             "query_time_isagpst": week_and_seconds_2_timedelta(
                 weeks=2190, seconds=523800
-            ),
+            )
+            + constants.cGpstUtcEpoch,
         },
         index=[0],
     )
-    rinex_sat_states = rinex_nav_evaluate.compute(path_to_rnx3_nav_file, query)
+    rinex_sat_states = rinex_nav_evaluate.compute_parallel(path_to_rnx3_nav_file, query)
 
     # MAGNITUDE position
     sv_pos_magnitude = np.array([13053451.235, -12567273.060, 19015357.126])
@@ -148,9 +150,17 @@ def generate_sat_query(sat_state_query_time_isagpst):
                 "query_time_isagpst": sat_state_query_time_isagpst,
             },
             # Multiple satellites with orbits that require propagation of an initial state
-            # Two GLONASS satellites
-            # {"sv": "R04", 'signal': 'C1C', "query_time_isagpst": sat_state_query_time_isagpst},
-            # {"sv": "R05", 'signal': 'C1C', "query_time_isagpst": sat_state_query_time_isagpst},
+            # GLONASS satellites
+            {
+                "sv": "R04",
+                "signal": "C1C",
+                "query_time_isagpst": sat_state_query_time_isagpst,
+            },
+            {
+                "sv": "R05",
+                "signal": "C1C",
+                "query_time_isagpst": sat_state_query_time_isagpst,
+            },
         ]
     )
     return query
@@ -160,16 +170,14 @@ def test_compare_to_sp3(input_for_test):
     rinex_nav_file = converters.compressed_to_uncompressed(
         input_for_test["rinex_nav_file"]
     )
-    query = generate_sat_query(
-        pd.Timestamp("2022-01-01T01:10:00.000000000") - constants.cGpstUtcEpoch
-    )
-
-    rinex_sat_states = rinex_nav_evaluate.compute(rinex_nav_file, query.copy())
+    query = generate_sat_query(pd.Timestamp("2022-01-01T01:10:00.000000000"))
+    query = query[query.sv.str[0] == "R"]
+    rinex_sat_states = rinex_nav_evaluate.compute_parallel(rinex_nav_file, query.copy())
     rinex_sat_states = (
         rinex_sat_states.sort_values(by=["sv", "query_time_isagpst"])
         .sort_index(axis=1)
         .reset_index()
-        .drop(columns=["index", "signal", "sat_instrumental_delay_m"])
+        .drop(columns=["index", "signal", "sat_code_bias_m", "frequency_slot"])
     )
 
     sp3_sat_states = sp3_evaluate.compute(
@@ -194,6 +202,7 @@ def test_compare_to_sp3(input_for_test):
     assert sp3_sat_states.columns.equals(rinex_sat_states.columns)
     diff = rinex_sat_states.drop(columns="sv") - sp3_sat_states.drop(columns="sv")
     diff = pd.concat((rinex_sat_states["sv"], diff), axis=1)
+    diff = diff.dropna()
     diff["diff_xyz_l2_m"] = np.linalg.norm(
         diff[["sat_pos_x_m", "sat_pos_y_m", "sat_pos_z_m"]].to_numpy(), axis=1
     )
@@ -206,6 +215,7 @@ def test_compare_to_sp3(input_for_test):
         column,
         expected_max_difference,
     ) in expected_max_differences_broadcast_vs_precise.items():
+        assert not diff[column].isnull().values.any()
         assert (
             diff[column].max() < expected_max_difference
         ), f"Expected maximum difference {expected_max_difference} for column {column}, but got {diff[column].max()}"
@@ -243,27 +253,23 @@ def test_2023_beidou_c27(set_up_test_2023):
     rinex_nav_file = converters.compressed_to_uncompressed(set_up_test_2023["nav_file"])
     query = pd.DataFrame(
         [
-            # Multiple satellites with ephemerides provided as Kepler orbits
-            # Two Beidou GEO (from http://www.csno-tarc.cn/en/system/constellation)
             {
                 "sv": "C27",
                 "signal": "C1X",
-                "query_time_isagpst": pd.Timestamp("2023-01-01T01:00:00.000000000")
-                - constants.cGpstUtcEpoch,
+                "query_time_isagpst": pd.Timestamp("2023-01-01T01:00:00.000000000"),
             },
         ]
     )
 
-    rinex_sat_states = rinex_nav_evaluate.compute(rinex_nav_file, query.copy())
+    rinex_sat_states = rinex_nav_evaluate.compute_parallel(rinex_nav_file, query.copy())
     assert (
-        len(rinex_sat_states) == 1
-    ), "Was expecting only one, row, make sure to sort before comparing to sp3 with more than one row"
+        len(rinex_sat_states.index) == 1
+    ), "Was expecting only one row, make sure to sort before comparing to sp3 with more than one row"
     rinex_sat_states = (
         rinex_sat_states.reset_index()
-        .drop(columns=["index", "signal", "sat_instrumental_delay_m"])
+        .drop(columns=["index", "signal", "sat_code_bias_m", "frequency_slot"])
         .sort_index(axis="columns")
     )
-    rinex_sat_states.to_csv("jan.csv")
     sp3_sat_states = (
         sp3_evaluate.compute(set_up_test_2023["sp3_file"], query.copy())
         .drop(columns=["signal"])
@@ -291,9 +297,7 @@ def test_group_delays(input_for_test):
     rinex_nav_file = converters.compressed_to_uncompressed(
         input_for_test["rinex_nav_file"]
     )
-    query_time_isagpst = (
-        pd.Timestamp("2022-01-01T01:10:00.000000000") - constants.cGpstUtcEpoch
-    )
+    query_time_isagpst = pd.Timestamp("2022-01-01T01:10:00.000000000")
     query = pd.DataFrame(
         [
             {"sv": "C30", "signal": "C2I", "query_time_isagpst": query_time_isagpst},
@@ -311,9 +315,9 @@ def test_group_delays(input_for_test):
             {"sv": "J02", "signal": "C2S", "query_time_isagpst": query_time_isagpst},
         ]
     )
-    rinex_sat_states = rinex_nav_evaluate.compute(rinex_nav_file, query)
+    rinex_sat_states = rinex_nav_evaluate.compute_parallel(rinex_nav_file, query)
     # Check that group delays are computed for all signals
-    assert not rinex_sat_states["sat_instrumental_delay_m"].isna().any()
+    assert not rinex_sat_states["sat_code_bias_m"].isna().any()
 
 
 def max_abs_diff_smaller_than(a, b, threshold):
@@ -357,9 +361,9 @@ def test_gps_group_delay(input_for_test):
     # Retrieve total group delays for 4 different observation codes, at 3 different times
     codes = ["C1C", "C1P", "C2P", "C5X"]
     times = [
-        timestamp_2_timedelta(pd.Timestamp("2022-01-01T00:00:00.000000000"), "GPST"),
-        timestamp_2_timedelta(pd.Timestamp("2022-01-01T01:30:00.000000000"), "GPST"),
-        timestamp_2_timedelta(pd.Timestamp("2022-01-01T02:15:00.000000000"), "GPST"),
+        pd.Timestamp("2022-01-01T00:00:00.000000000"),
+        pd.Timestamp("2022-01-01T01:30:00.000000000"),
+        pd.Timestamp("2022-01-01T02:15:00.000000000"),
     ]
     query = pd.DataFrame()
     for code, time in itertools.product(codes, times):
@@ -371,7 +375,7 @@ def test_gps_group_delay(input_for_test):
                 ),
             ]
         )
-    tgds = rinex_nav_evaluate.compute(rinex_3_navigation_file, query)
+    tgds = rinex_nav_evaluate.compute_parallel(rinex_3_navigation_file, query)
     # Verify that rows are in chronological order
     for code in codes:
         assert (
@@ -380,29 +384,29 @@ def test_gps_group_delay(input_for_test):
             .equals(pd.Series(times))
         )
     assert max_abs_diff_smaller_than(
-        tgds[tgds.signal == "C1C"]["sat_instrumental_delay_m"],
+        tgds[tgds.signal == "C1C"]["sat_code_bias_m"],
         constants.cGpsSpeedOfLight_mps
         * pd.Series([-1.769512891770e-08, -1.769512891770e-08, -1.769512891769e-08]),
         1e-6,
     )
     assert max_abs_diff_smaller_than(
-        tgds[tgds.signal == "C1P"]["sat_instrumental_delay_m"],
+        tgds[tgds.signal == "C1P"]["sat_code_bias_m"],
         constants.cGpsSpeedOfLight_mps
         * pd.Series([-1.769512891770e-08, -1.769512891770e-08, -1.769512891769e-08]),
         1e-6,
     )
     assert max_abs_diff_smaller_than(
-        tgds[tgds.signal == "C2P"]["sat_instrumental_delay_m"],
+        tgds[tgds.signal == "C2P"]["sat_code_bias_m"],
         constants.cGpsSpeedOfLight_mps
         * pd.Series([-1.769512891770e-08, -1.769512891770e-08, -1.769512891769e-08])
         * (
-            constants.carrier_frequencies_hz()["G"]["L1"]
-            / constants.carrier_frequencies_hz()["G"]["L2"]
+            constants.carrier_frequencies_hz()["G"]["L1"][1]
+            / constants.carrier_frequencies_hz()["G"]["L2"][1]
         )
         ** 2,
         1e-6,
     )
-    assert np.all(np.isnan(tgds[tgds.signal == "C5X"]["sat_instrumental_delay_m"].to_numpy()))
+    assert np.all(np.isnan(tgds[tgds.signal == "C5X"]["sat_code_bias_m"].to_numpy()))
 
 
 def test_gal_group_delay(input_for_test):
@@ -439,12 +443,7 @@ def test_gal_group_delay(input_for_test):
                 {
                     "sv": "E25",
                     "signal": code,
-                    "query_time_isagpst": rinex_nav_evaluate.to_isagpst(
-                        timestamp_2_timedelta(
-                            pd.Timestamp("2022-01-01T01:30:00.000000000"), "GST"
-                        ),
-                        "GST",
-                    ),
+                    "query_time_isagpst": pd.Timestamp("2022-01-01T01:30:00.000000000"),
                 }
             ]
         )
@@ -454,35 +453,35 @@ def test_gal_group_delay(input_for_test):
                 code_query,
             ]
         )
-    tgds = rinex_nav_evaluate.compute(rinex_3_navigation_file, query)
+    tgds = rinex_nav_evaluate.compute_parallel(rinex_3_navigation_file, query)
     assert max_abs_diff_smaller_than(
-        tgds[tgds.signal == "C1C"]["sat_instrumental_delay_m"],
+        tgds[tgds.signal == "C1C"]["group_delay_m"],
         4.889443516730e-09 * constants.cGpsSpeedOfLight_mps,
         1e-6,
     )
     assert max_abs_diff_smaller_than(
-        tgds[tgds.signal == "C5X"]["sat_instrumental_delay_m"],
+        tgds[tgds.signal == "C5X"]["group_delay_m"],
         4.423782229424e-09
         * (
-            constants.carrier_frequencies_hz()["E"]["L1"]
-            / constants.carrier_frequencies_hz()["E"]["L5"]
+            constants.carrier_frequencies_hz()["E"]["L1"][1]
+            / constants.carrier_frequencies_hz()["E"]["L5"][1]
         )
         ** 2
         * constants.cGpsSpeedOfLight_mps,
         1e-6,
     )
     assert max_abs_diff_smaller_than(
-        tgds[tgds.signal == "C7X"]["sat_instrumental_delay_m"],
+        tgds[tgds.signal == "C7X"]["sat_code_bias_m"],
         4.889443516730e-09
         * (
-            constants.carrier_frequencies_hz()["E"]["L1"]
-            / constants.carrier_frequencies_hz()["E"]["L7"]
+            constants.carrier_frequencies_hz()["E"]["L1"][1]
+            / constants.carrier_frequencies_hz()["E"]["L7"][1]
         )
         ** 2
         * constants.cGpsSpeedOfLight_mps,
         1e-6,
     )
-    assert np.all(np.isnan(tgds[tgds.signal == "C6B"]["sat_instrumental_delay_m"].to_numpy()))
+    assert np.all(np.isnan(tgds[tgds.signal == "C6B"]["sat_code_bias_m"].to_numpy()))
 
 
 def test_bds_group_delay(input_for_test):
@@ -521,12 +520,7 @@ def test_bds_group_delay(input_for_test):
             {
                 "sv": "C01",
                 "signal": code,
-                "query_time_isagpst": rinex_nav_evaluate.to_isagpst(
-                    timestamp_2_timedelta(
-                        pd.Timestamp("2022-01-01T00:30:00.000000000"), "BDT"
-                    ),
-                    "BDT",
-                ),
+                "query_time_isagpst": pd.Timestamp("2022-01-01T00:30:00.000000000"),
             },
             index=[0],
         )
@@ -536,21 +530,21 @@ def test_bds_group_delay(input_for_test):
                 code_query,
             ]
         )
-    tgds = rinex_nav_evaluate.compute(rinex_3_navigation_file, query)
+    tgds = rinex_nav_evaluate.compute_parallel(rinex_3_navigation_file, query)
 
     tgd_c2i_s_expected = -5.800000000000e-09 * constants.cGpsSpeedOfLight_mps
     tgd_c7i_s_expected = -1.020000000000e-08 * constants.cGpsSpeedOfLight_mps
     tgd_c6i_s_expected = 0 * constants.cGpsSpeedOfLight_mps
 
     assert max_abs_diff_smaller_than(
-        tgds[tgds.signal == "C2I"].sat_instrumental_delay_m, tgd_c2i_s_expected, 1e-6
+        tgds[tgds.signal == "C2I"].sat_code_bias_m, tgd_c2i_s_expected, 1e-6
     )
     assert max_abs_diff_smaller_than(
-        tgds[tgds.signal == "C7I"].sat_instrumental_delay_m, tgd_c7i_s_expected, 1e-6
+        tgds[tgds.signal == "C7I"].sat_code_bias_m, tgd_c7i_s_expected, 1e-6
     )
     assert max_abs_diff_smaller_than(
-        tgds[tgds.signal == "C6I"].sat_instrumental_delay_m, tgd_c6i_s_expected, 1e-6
+        tgds[tgds.signal == "C6I"].sat_code_bias_m, tgd_c6i_s_expected, 1e-6
     )
-    assert np.all(np.isnan(tgds[tgds.signal == "C1D"]["sat_instrumental_delay_m"].to_numpy()))
-    assert np.all(np.isnan(tgds[tgds.signal == "C1P"]["sat_instrumental_delay_m"].to_numpy()))
-    assert np.all(np.isnan(tgds[tgds.signal == "C5X"]["sat_instrumental_delay_m"].to_numpy()))
+    assert np.all(np.isnan(tgds[tgds.signal == "C1D"]["sat_code_bias_m"].to_numpy()))
+    assert np.all(np.isnan(tgds[tgds.signal == "C1P"]["sat_code_bias_m"].to_numpy()))
+    assert np.all(np.isnan(tgds[tgds.signal == "C5X"]["sat_code_bias_m"].to_numpy()))

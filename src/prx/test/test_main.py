@@ -1,4 +1,3 @@
-
 import os
 from pathlib import Path
 import shutil
@@ -18,11 +17,9 @@ from prx.user import parse_prx_csv_file, spp_pt_lsq, spp_vt_lsq
 # and returns its path. The @pytest.fixture annotation allows us to pass the function as an input
 # to test functions. When running a test function, pytest will then first run this function, pass
 # whatever is passed to `yield` to the test function, and run the code after `yield` after the test,
-# even  if the test crashes.
+# even if the test crashes.
 @pytest.fixture
 def input_for_test():
-
-
     test_directory = Path(f"./tmp_test_directory_{__name__}").resolve()
     if test_directory.exists():
         # Make sure the expected file has not been generated before and is still on disk due to e.g. a previous
@@ -47,6 +44,44 @@ def input_for_test():
 
     yield test_file
     shutil.rmtree(test_file.parent)
+
+
+@pytest.fixture
+def input_for_test_with_first_epoch_at_midnight():
+    # Having a first epoch at midnight requires to have the NAV data from the previous day, because we are computing
+    # the time of emission as (time of reception - pseudorange/celerity)
+    test_directory = Path(f"./tmp_test_directory_{__name__}").resolve()
+    if test_directory.exists():
+        # Make sure the expected file has not been generated before and is still on disk due to e.g. a previous
+        # test run having crashed:
+        shutil.rmtree(test_directory)
+    os.makedirs(test_directory)
+
+    filepath_to_obs_file = "TLSE00FRA_R_20230010000_30M_30S_GO.crx.gz"
+    test_obs_file = test_directory.joinpath(filepath_to_obs_file)
+    shutil.copy(
+        Path(__file__).parent / f"datasets/TLSE_2023001/{filepath_to_obs_file}",
+        test_obs_file,
+    )
+    assert test_obs_file.exists()
+
+    # nav data from same day
+    shutil.copy(
+        Path(__file__).parent
+        / "datasets/TLSE_2023001/BRDC00IGS_R_20230010000_01D_MN.rnx.zip",
+        test_directory.joinpath("BRDC00IGS_R_20230010000_01D_MN.rnx.zip"),
+    )
+    # nav data from previous day
+    shutil.copy(
+        Path(__file__).parent
+        / "datasets/TLSE_2023001/BRDC00IGS_R_20223650000_01D_MN.rnx.gz",
+        test_directory.joinpath("BRDC00IGS_R_20223650000_01D_MN.rnx.gz"),
+    )
+
+    yield {
+        "obs_file": test_obs_file,
+    }
+    shutil.rmtree(test_directory)
 
 
 def test_prx_command_line_call_with_csv_output(input_for_test):
@@ -81,6 +116,17 @@ def test_prx_function_call_with_csv_output(input_for_test):
     ).abs().max() < 0.3
 
 
+def test_prx_function_call_for_obs_file_across_two_days(
+    input_for_test_with_first_epoch_at_midnight,
+):
+    test_file = input_for_test_with_first_epoch_at_midnight["obs_file"]
+    main.process(observation_file_path=test_file, output_format="csv")
+    expected_prx_file = Path(
+        str(test_file).replace("crx.gz", constants.cPrxCsvFileExtension)
+    )
+    assert expected_prx_file.exists()
+
+
 def run_rinex_through_prx(rinex_obs_file: Path):
     main.process(observation_file_path=rinex_obs_file, output_format="csv")
     expected_prx_file = Path(
@@ -91,33 +137,61 @@ def run_rinex_through_prx(rinex_obs_file: Path):
     records = pd.read_csv(expected_prx_file, comment="#")
     assert not records.empty
     assert metadata
-    records.sat_instrumental_delay_m = records.sat_instrumental_delay_m.fillna(0)
+    records.sat_code_bias_m = records.sat_code_bias_m.fillna(0)
     records = records[records.C_obs_m.notna() & records.sat_pos_x_m.notna()]
     return records, metadata
 
 
 def test_spp_lsq(input_for_test):
     df, metadata = run_rinex_through_prx(input_for_test)
+    df["sv"] = df["constellation"].astype(str) + df["prn"].astype(str)
     df_first_epoch = df[
         df.time_of_reception_in_receiver_time
         == df.time_of_reception_in_receiver_time.min()
     ]
-    for constellations_to_use in [("G", "E", "C"), ("G",), ("E",), ("C",)]:
+    for constellations_to_use in [("G", "E", "C"), ("G",), ("E",), ("C",), ("R",)]:
         obs = df_first_epoch[df.constellation.isin(constellations_to_use)]
         pt_lsq = spp_pt_lsq(obs)
         vt_lsq = spp_vt_lsq(obs, p_ecef_m=pt_lsq[0:3, :])
-        assert (
-            np.max(
-                np.abs(
-                    pt_lsq[0:3, :]
-                    - np.array(
-                        metadata["approximate_receiver_ecef_position_m"]
-                    ).reshape(-1, 1)
-                )
-            )
-            < 1e1
+        position_offset = pt_lsq[0:3, :] - np.array(
+            metadata["approximate_receiver_ecef_position_m"]
+        ).reshape(-1, 1)
+        # Static receiver, so:
+        velocity_offset = vt_lsq[0:3, :]
+        logging.info(
+            f"Using constellations: {constellations_to_use}, {len(obs.sv.unique())} SVs"
         )
-        assert np.max(np.abs(vt_lsq[0:3, :])) < 1e-1
+        logging.info(f"Position offset: {position_offset}")
+        logging.info(f"Velocity offset: {velocity_offset}")
+        assert np.max(np.abs(position_offset)) < 1e1
+        assert np.max(np.abs(velocity_offset)) < 1e-1
+
+
+def test_spp_lsq_for_obs_file_across_two_days(
+    input_for_test_with_first_epoch_at_midnight,
+):
+    df, metadata = run_rinex_through_prx(
+        input_for_test_with_first_epoch_at_midnight["obs_file"]
+    )
+    df_first_epoch = df[
+        df.time_of_reception_in_receiver_time
+        == df.time_of_reception_in_receiver_time.min()
+    ]
+    for constellations_to_use in [
+        ("G",),
+    ]:
+        obs = df_first_epoch[df.constellation.isin(constellations_to_use)]
+        pt_lsq = spp_pt_lsq(obs)
+        vt_lsq = spp_vt_lsq(obs, p_ecef_m=pt_lsq[0:3, :])
+        position_offset = pt_lsq[0:3, :] - np.array(
+            metadata["approximate_receiver_ecef_position_m"]
+        ).reshape(-1, 1)
+        # Static receiver, so:
+        velocity_offset = vt_lsq[0:3, :]
+        logging.info(f"Position offset: {position_offset}")
+        logging.info(f"Velocity offset: {velocity_offset}")
+        assert np.max(np.abs(position_offset)) < 1e1
+        assert np.max(np.abs(velocity_offset)) < 1e-1
 
 
 def test_csv_parameter_renaming(input_for_test):

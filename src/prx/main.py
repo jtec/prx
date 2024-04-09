@@ -37,7 +37,7 @@ def write_json_text_sequence_file(
         drop_columns = [
             "time_of_reception_in_receiver_time",
             "satellite",
-            "time_of_emission_in_satellite_time",
+            "time_of_emission_in_satellite_time_integer_second_aligned_to_receiver_time",
         ]
         for epoch in prx_records["time_of_reception_in_receiver_time"].unique():
             epoch = pd.Timestamp(epoch)
@@ -79,7 +79,7 @@ def write_csv_file(
     with open(output_file, "w", encoding="utf-8") as file:
         file.write(f"# {json.dumps(prx_header)}\n")
     flat_records["sat_elevation_deg"] = np.rad2deg(flat_records.elevation_rad.to_numpy())
-    flat_records["sat_azim_deg"] = np.rad2deg(flat_records.azimuth_rad.to_numpy())
+    flat_records["sat_azimuth_deg"] = np.rad2deg(flat_records.azimuth_rad.to_numpy())
     flat_records = flat_records.drop(columns=["elevation_rad", "azimuth_rad"])
     # Re-arrange records to have one  line per code observation, with the associated carrier phase and
     # Doppler observation, and auxiliary information such as satellite position, velocity, clock offset, etc.
@@ -116,9 +116,9 @@ def write_csv_file(
     records = records.drop(
         columns=[
             "satellite",
-            "time_of_emission_in_satellite_time",
+            "time_of_emission_in_satellite_time_integer_second_aligned_to_receiver_time",
             "time_of_emission_isagpst",
-            "time_of_emission_weeksecond_system_time",
+            "time_of_emission_weeksecond_isagpst",
         ]
     )
     records = records.sort_values(
@@ -138,6 +138,11 @@ def write_csv_file(
 
 
 def build_metadata(input_files):
+    # convert input_files to a list of files
+    files = []
+    files.append(input_files["obs_file"])
+    files.extend([file for file in input_files["nav_file"]])
+
     prx_metadata = {}
     obs_header = georinex.rinexheader(input_files["obs_file"])
     prx_metadata["approximate_receiver_ecef_position_m"] = (
@@ -148,7 +153,7 @@ def build_metadata(input_files):
             "name": file.name,
             "murmur3_hash": helpers.hash_of_file_content(file, use_sampling=False),
         }
-        for _, file in input_files.items()
+        for file in files
     ]
     prx_metadata["prx_git_commit_id"] = git.Repo(
         search_parent_directories=True
@@ -156,7 +161,9 @@ def build_metadata(input_files):
     return prx_metadata
 
 
-def check_assumptions(rinex_3_obs_file, rinex_3_nav_file):
+def check_assumptions(
+    rinex_3_obs_file,
+):
     obs_header = georinex.rinexheader(rinex_3_obs_file)
     if "RCV CLOCK OFFS APPL" in obs_header.keys():
         assert (
@@ -169,15 +176,17 @@ def check_assumptions(rinex_3_obs_file, rinex_3_nav_file):
 
 def build_records(
     rinex_3_obs_file,
-    rinex_3_ephemerides_file,
+    rinex_3_ephemerides_files,
     approximate_receiver_ecef_position_m,
 ):
     return _build_records_cached(
         rinex_3_obs_file,
         helpers.hash_of_file_content(rinex_3_obs_file),
-        rinex_3_ephemerides_file,
-        helpers.hash_of_file_content(rinex_3_ephemerides_file),
         # Use a tuple here as caching expects an immutable type
+        tuple(rinex_3_ephemerides_files),
+        "".join(
+            [helpers.hash_of_file_content(file) for file in rinex_3_ephemerides_files]
+        ),
         tuple(approximate_receiver_ecef_position_m),
     )
 
@@ -186,14 +195,14 @@ def build_records(
 def _build_records_cached(
     rinex_3_obs_file,
     rinex_3_obs_file_hash,
-    rinex_3_ephemerides_file,
+    rinex_3_ephemerides_files,
     rinex_3_ephemerides_file_hash,
     approximate_receiver_ecef_position_m,
 ):
     approximate_receiver_ecef_position_m = np.array(
         approximate_receiver_ecef_position_m
     )
-    check_assumptions(rinex_3_obs_file, rinex_3_ephemerides_file)
+    check_assumptions(rinex_3_obs_file)
     obs = helpers.parse_rinex_obs_file(rinex_3_obs_file)
 
     # Flatten the xarray DataSet into a pandas DataFrame:
@@ -233,7 +242,7 @@ def _build_records_cached(
         per_sat["satellite"].str[0].map(constants.constellation_2_system_time_scale)
     )
     per_sat["system_time_scale_epoch"] = per_sat["time_scale"].map(
-        constants.system_time_scale_2_rinex_utc_epoch
+        constants.system_time_scale_rinex_utc_epoch
     )
     # When calling georinex.load() with useindicators=True, there are additional ssi columns such as C1Cssi.
     # To exclude them, we check the length of the column name
@@ -244,31 +253,33 @@ def _build_records_cached(
     #  - time-of-flight: around 70 ms for MEO orbits. This includes small
     #  terms (up to tens of meters in units of distance, ten meters correspond to 34 nanoseconds)
     #  such as satellite code bias and atmospheric delays
-    #  - receiver clock offset w.r.t. the satellite's constellation time (GPST, GST, BDT etc.)
     #  - satellite clock offset w.r.t. its constellation time
-    # By subtracting it from the receiver time of reception, we get the time of emission in
-    # the satellite's constellation time frame, plus the satellite system time clock offset plus those small terms
-    # of a few tens of nanoseconds.
+    #  - the receiver clock offset w.r.t. the satellite's constellation time (GPST, GST, BDT etc.) modulo 1 second
+    # The integer seconds of the receiver clock offset w.r.t. the satellite's constellation time (GPST, GST, BDT etc.)
+    # are likely removed by the receiver to align all pseudoranges to the same order of magnitude.
+    # By subtracting the term from the receiver time of reception, we get the time of emission in
+    # the satellite's constellation time frame (integer-second aligned to the receiver time frame), plus the
+    # satellite clock offset plus those small terms of a few tens of nanoseconds
     tof_dtrx = pd.to_timedelta(
         per_sat[code_phase_columns]
         .mean(axis=1, skipna=True)
         .divide(constants.cGpsSpeedOfLight_mps),
         unit="s",
     )
-    per_sat["time_of_emission_in_satellite_time"] = (
-        per_sat["time_of_reception_in_receiver_time"]
-        - per_sat.system_time_scale_epoch
-        - tof_dtrx
+    per_sat[
+        "time_of_emission_in_satellite_time_integer_second_aligned_to_receiver_time"
+    ] = per_sat["time_of_reception_in_receiver_time"] - tof_dtrx
+    # As error terms are tens of nanoseconds here, and the receiver clock is integer-second aligned to GPST, we
+    # already have times-of-emission that are integer-second aligned GPST here.
+    per_sat["time_of_emission_isagpst"] = (
+        per_sat.time_of_emission_in_satellite_time_integer_second_aligned_to_receiver_time
     )
-    per_sat["time_of_emission_weeksecond_system_time"] = per_sat.apply(
+    per_sat["time_of_emission_weeksecond_isagpst"] = per_sat.apply(
         lambda row: helpers.timedelta_2_weeks_and_seconds(
-            row.time_of_emission_in_satellite_time
+            row.time_of_emission_isagpst
+            - constants.system_time_scale_rinex_utc_epoch["GPST"]
         )[1],
         axis=1,
-    )
-    per_sat["time_of_emission_isagpst"] = rinex_evaluate.to_isagpst(
-        per_sat.time_of_emission_in_satellite_time,
-        per_sat.time_scale,
     )
 
     flat_obs = flat_obs.merge(
@@ -276,9 +287,9 @@ def _build_records_cached(
             [
                 "time_of_reception_in_receiver_time",
                 "satellite",
-                "time_of_emission_in_satellite_time",
+                "time_of_emission_in_satellite_time_integer_second_aligned_to_receiver_time",
                 "time_of_emission_isagpst",
-                "time_of_emission_weeksecond_system_time",
+                "time_of_emission_weeksecond_isagpst",
             ]
         ],
         on=["time_of_reception_in_receiver_time", "satellite"],
@@ -290,10 +301,30 @@ def _build_records_cached(
         ["observation_type", "satellite", "time_of_emission_isagpst"]
     ]
 
-    sat_states = rinex_evaluate.compute(
-        rinex_3_ephemerides_file,
-        query,
-    )
+    sat_states_per_day = []
+    for file in rinex_3_ephemerides_files:
+        # get year and doy from NAV filename
+        year = int(file.name[12:16])
+        doy = int(file.name[16:19])
+        log.info(f"Computing satellite states for {year}-{doy:03d}")
+        sat_states_per_day.append(
+            rinex_evaluate.compute_parallel(
+                file,
+                query.loc[
+                    (
+                        query.query_time_isagpst
+                        >= pd.Timestamp(year=year, month=1, day=1)
+                        + pd.Timedelta(days=doy - 1)
+                    )
+                    & (
+                        query.query_time_isagpst
+                        < pd.Timestamp(year=year, month=1, day=1)
+                        + pd.Timedelta(days=doy)
+                    )
+                ],
+            )
+        )
+    sat_states = pd.concat(sat_states_per_day)
     sat_states = sat_states.rename(
         columns={
             "sv": "satellite",
@@ -379,61 +410,66 @@ def _build_records_cached(
         how="left",
     )
 
-    flat_obs.loc[flat_obs.satellite.str[0] != "R", "carrier_frequency_hz"] = (
-        flat_obs.apply(
-            lambda row: constants.carrier_frequencies_hz()[row.satellite[0]][
-                "L" + row.observation_type[1]
-            ],
-            axis=1,
+    def signal_2_carrier_frequency(row):
+        if np.isnan(row["frequency_slot"]):
+            return np.nan
+        return constants.carrier_frequencies_hz()[row.satellite[0]][
+            "L" + row.observation_type[1]
+        ][row["frequency_slot"]]
+
+    flat_obs.loc[:, "carrier_frequency_hz"] = flat_obs.apply(
+        signal_2_carrier_frequency, axis=1
+    )
+    # create a dictionary containing the headers of the different NAV files.
+    # The keys are the "YYYYDDD" (year and day of year) and are located at
+    # [12:19] of the file name using RINEX naming convention
+    nav_header_dict = {
+        file.name[12:19]: georinex.rinexheader(file)
+        for file in rinex_3_ephemerides_files
+    }
+
+    for file in rinex_3_ephemerides_files:
+        # get year and doy from NAV filename
+        year = int(file.name[12:16])
+        doy = int(file.name[16:19])
+        log.info(f"Computing iono delay for {year}-{doy:03d}")
+
+        # Selection criteria: time of emission belonging to the day of the current NAV file
+        mask = (
+            flat_obs.time_of_emission_isagpst
+            >= pd.Timestamp(year=year, month=1, day=1) + pd.Timedelta(days=doy - 1)
+        ) & (
+            flat_obs.time_of_emission_isagpst
+            < pd.Timestamp(year=year, month=1, day=1) + pd.Timedelta(days=doy)
         )
-    )
-    nav_header = georinex.rinexheader(rinex_3_ephemerides_file)
-    flat_obs.loc[
-        flat_obs.observation_type.str.startswith("C"), "iono_delay_m"
-    ] = -atmo.compute_klobuchar_l1_correction(
-        flat_obs[
-            flat_obs.observation_type.str.startswith("C")
-        ].time_of_emission_weeksecond_system_time.to_numpy(),
-        nav_header["IONOSPHERIC CORR"]["GPSA"],
-        nav_header["IONOSPHERIC CORR"]["GPSB"],
-        flat_obs[flat_obs.observation_type.str.startswith("C")].elevation_rad,
-        flat_obs[flat_obs.observation_type.str.startswith("C")].azimuth_rad,
-        latitude_user_rad,
-        longitude_user_rad,
-    ) * (
-        constants.carrier_frequencies_hz()["G"]["L1"] ** 2
-        / flat_obs[flat_obs.observation_type.str.startswith("C")].carrier_frequency_hz
-        ** 2
-    )
-    flat_obs.loc[
-        flat_obs.observation_type.str.startswith("L"), "carrier_iono_delay_klobuchar_m"
-    ] = atmo.compute_klobuchar_l1_correction(
-        flat_obs[
-            flat_obs.observation_type.str.startswith("L")
-        ].time_of_emission_weeksecond_system_time.to_numpy(),
-        nav_header["IONOSPHERIC CORR"]["GPSA"],
-        nav_header["IONOSPHERIC CORR"]["GPSB"],
-        flat_obs[flat_obs.observation_type.str.startswith("L")].elevation_rad,
-        flat_obs[flat_obs.observation_type.str.startswith("L")].azimuth_rad,
-        latitude_user_rad,
-        longitude_user_rad,
-    ) * (
-        constants.carrier_frequencies_hz()["G"]["L1"] ** 2
-        / flat_obs[flat_obs.observation_type.str.startswith("L")].carrier_frequency_hz
-        ** 2
-    )
+
+        flat_obs.loc[
+            mask,
+            "code_iono_delay_klobuchar_m",
+        ] = -atmo.compute_klobuchar_l1_correction(
+            flat_obs.loc[mask].time_of_emission_weeksecond_isagpst.to_numpy(),
+            nav_header_dict[f"{year:03d}" + f"{doy:03d}"]["IONOSPHERIC CORR"]["GPSA"],
+            nav_header_dict[f"{year:03d}" + f"{doy:03d}"]["IONOSPHERIC CORR"]["GPSB"],
+            flat_obs.loc[mask].elevation_rad,
+            flat_obs.loc[mask].azimuth_rad,
+            latitude_user_rad,
+            longitude_user_rad,
+        ) * (
+            constants.carrier_frequencies_hz()["G"]["L1"][1] ** 2
+            / flat_obs.loc[mask].carrier_frequency_hz ** 2
+        )
 
     return flat_obs
 
 
-def process(observation_file_path: Path, output_format="jsonseq"):
+def process(observation_file_path: Path, output_format="csv"):
     # We expect a Path, but might get a string here:
     observation_file_path = Path(observation_file_path)
     log.info(
         f"Starting processing {observation_file_path.name} (full path {observation_file_path})"
     )
     rinex_3_obs_file = converters.anything_to_rinex_3(observation_file_path)
-    prx_file = str(rinex_3_obs_file).replace(".rnx", "")
+    prx_file = rinex_3_obs_file.with_suffix("")
     aux_files = nav_file_discovery.discover_or_download_auxiliary_files(
         rinex_3_obs_file
     )
