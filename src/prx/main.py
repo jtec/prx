@@ -14,6 +14,7 @@ from prx.rinex_nav import evaluate as rinex_evaluate
 log = helpers.get_logger(__name__)
 
 
+@helpers.timeit
 def write_prx_file(
         prx_header: dict,
         prx_records: pd.DataFrame,
@@ -133,6 +134,8 @@ def write_csv_file(
         path_or_buf=output_file,
         index=False,
         mode="a",
+        float_format='%.6f',
+        date_format='%Y-%m-%d %H:%M:%S.%f'
     )
     log.info(f"Generated CSV prx file: {file}")
 
@@ -174,6 +177,7 @@ def check_assumptions(
     ), "Handling of observation files using time scales other than GPST not implemented yet."
 
 
+@helpers.timeit
 def build_records(
         rinex_3_obs_file,
         rinex_3_ephemerides_files,
@@ -315,7 +319,7 @@ def _build_records_cached(
             continue
         log.info(f"Computing satellite states for {year}-{doy:03d}")
         sat_states_per_day.append(
-            rinex_evaluate.compute(
+            rinex_evaluate.compute_parallel(
                 file,
                 day_query,
             )
@@ -458,6 +462,7 @@ def _build_records_cached(
     return flat_obs
 
 
+@helpers.timeit
 def process(observation_file_path: Path, output_format="csv"):
     # We expect a Path, but might get a string here:
     observation_file_path = Path(observation_file_path)
