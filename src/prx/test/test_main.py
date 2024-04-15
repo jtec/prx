@@ -1,3 +1,4 @@
+
 import os
 from pathlib import Path
 import shutil
@@ -194,7 +195,7 @@ def test_spp_lsq_for_obs_file_across_two_days(
         assert np.max(np.abs(velocity_offset)) < 1e-1
 
 
-def test_csv_parameter_renaming(input_for_test):
+def test_csv_column_names(input_for_test):
     test_file = input_for_test
     main.process(observation_file_path=test_file, output_format="csv")
     expected_prx_file = Path(
@@ -205,8 +206,8 @@ def test_csv_parameter_renaming(input_for_test):
     # Read the CSV file
     df = pd.read_csv(expected_prx_file, comment="#")
 
-    # Renamed parameters
-    renamed_parameters = {
+    # Expected CSV column names
+    expected_column_names = {
         'time_of_reception_in_receiver_time',
         'sat_clock_offset_m',
         'sat_clock_drift_mps',
@@ -219,12 +220,12 @@ def test_csv_parameter_renaming(input_for_test):
         'relativistic_clock_effect_m',
         'sagnac_effect_m',
         'tropo_delay_m',
-        'sat_instrumental_delay_m',
+        'sat_code_bias_m',
         'carrier_frequency_hz',
         'iono_delay_m',
         'carrier_iono_delay_klobuchar_m',
         'sat_elevation_deg',
-        'sat_azim_deg',
+        'sat_azimuth_deg',
         'rnx_obs_identifier',
         'C_obs_m',
         'D_obs_hz',
@@ -234,6 +235,6 @@ def test_csv_parameter_renaming(input_for_test):
         'prn'
     }
 
-    # Check if all renamed parameters exist in the dataframe columns
-    for parameter in renamed_parameters:
+    # Checking if all renamed parameters exist in the dataframe columns
+    for parameter in expected_column_names:
         assert parameter in df.columns

@@ -4,7 +4,7 @@ from pathlib import Path
 from prx.sp3 import evaluate as sp3_evaluate
 from prx.rinex_nav import evaluate as rinex_nav_evaluate
 from prx import constants, converters, helpers
-from prx.helpers import week_and_seconds_2_timedelta
+from prx.helpers import timestamp_2_timedelta, week_and_seconds_2_timedelta
 import shutil
 import pytest
 import os
@@ -455,12 +455,12 @@ def test_gal_group_delay(input_for_test):
         )
     tgds = rinex_nav_evaluate.compute_parallel(rinex_3_navigation_file, query)
     assert max_abs_diff_smaller_than(
-        tgds[tgds.signal == "C1C"]["group_delay_m"],
+        tgds[tgds.signal == "C1C"]["sat_code_bias_m"],
         4.889443516730e-09 * constants.cGpsSpeedOfLight_mps,
         1e-6,
     )
     assert max_abs_diff_smaller_than(
-        tgds[tgds.signal == "C5X"]["group_delay_m"],
+        tgds[tgds.signal == "C5X"]["sat_code_bias_m"],
         4.423782229424e-09
         * (
             constants.carrier_frequencies_hz()["E"]["L1"][1]

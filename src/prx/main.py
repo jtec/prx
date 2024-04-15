@@ -392,12 +392,12 @@ def _build_records_cached(
     #  the same satellite and the same time of emission
     sat_specific = sat_states[
         sat_states.columns.drop(
-            ["observation_type", "sat_instrumental_delay_m", "time_of_reception_in_receiver_time"]
+            ["observation_type", "sat_code_bias_m", "time_of_reception_in_receiver_time"]
         )
     ].drop_duplicates(subset=["satellite", "time_of_emission_isagpst"])
     # Group delays are signal-specific, so we merge them in separately
     code_specific = sat_states[
-        ["satellite", "observation_type", "time_of_emission_isagpst", "sat_instrumental_delay_m"]
+        ["satellite", "observation_type", "time_of_emission_isagpst", "sat_code_bias_m"]
     ].drop_duplicates(
         subset=["satellite", "observation_type", "time_of_emission_isagpst"]
     )
@@ -445,7 +445,7 @@ def _build_records_cached(
 
         flat_obs.loc[
             mask,
-            "code_iono_delay_klobuchar_m",
+            "iono_delay_m",
         ] = -atmo.compute_klobuchar_l1_correction(
             flat_obs.loc[mask].time_of_emission_weeksecond_isagpst.to_numpy(),
             nav_header_dict[f"{year:03d}" + f"{doy:03d}"]["IONOSPHERIC CORR"]["GPSA"],

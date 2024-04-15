@@ -55,7 +55,7 @@ def spp_pt_lsq(df, dx_convergence_l2=1e-6, max_iterations=10):
         - df.sagnac_effect_m
         - df.iono_delay_m
         - df.tropo_delay_m
-        - df.sat_instrumental_delay_m
+        - df.sat_code_bias_m
     )
     # Jacobian of pseudorange observation w.r.t. receiver clock offset w.r.t. constellation system clock
     H_clock = np.zeros(

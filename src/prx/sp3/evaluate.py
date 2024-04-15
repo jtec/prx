@@ -155,14 +155,14 @@ def compute(sp3_file_path, query):
             sat_pv = pd.DataFrame()
             sat_pv["gpst_s"] = [row.query_time_isagpst]
             sat_pv["sv"] = [row.sv]
-            sat_pv["x_m"] = [np.nan]
-            sat_pv["y_m"] = [np.nan]
-            sat_pv["z_m"] = [np.nan]
-            sat_pv["clock_m"] = [np.nan]
-            sat_pv["dx_mps"] = [np.nan]
-            sat_pv["dy_mps"] = [np.nan]
-            sat_pv["dz_mps"] = [np.nan]
-            sat_pv["dclock_mps"] = [np.nan]
+            sat_pv["sat_pos_x_m"] = [np.nan]
+            sat_pv["sat_pos_y_m"] = [np.nan]
+            sat_pv["sat_pos_z_m"] = [np.nan]
+            sat_pv["sat_clock_offset_m"] = [np.nan]
+            sat_pv["sat_vel_x_mps"] = [np.nan]
+            sat_pv["sat_vel_y_mps"] = [np.nan]
+            sat_pv["sat_vel_z_mps"] = [np.nan]
+            sat_pv["sat_clock_drift_mps"] = [np.nan]
         return pd.concat((row.drop("sv"), sat_pv.squeeze()))
 
     query = query.apply(interpolate_sat_states, axis=1).reset_index()

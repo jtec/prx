@@ -135,7 +135,8 @@ def glonass_orbit_position_and_velocity(df):
         fixed_integration_time_step = 60
         h = (t_query - t).clip(0, fixed_integration_time_step)
         if np.all(h == 0):
-            df[["x_m", "y_m", "z_m", "dx_mps", "dy_mps", "dz_mps"]] = pv
+            df[["sat_pos_x_m", "sat_pos_y_m", "sat_pos_z_m", "sat_vel_x_mps", "sat_vel_y_mps", "sat_vel_z_mps"]] = pv
+
             return df
         # One step of 4th order Runge-Kutta integration:
         glonass_xdot = glonass_xdot_rtklib
