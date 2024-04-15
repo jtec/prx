@@ -1,4 +1,5 @@
 import platform
+from functools import wraps
 from pathlib import Path
 import logging
 
@@ -379,3 +380,16 @@ def get_gpst_utc_leap_seconds_from_rinex_header(rinex_file: Path):
 
 def is_sorted(iterable):
     return all(iterable[i] <= iterable[i + 1] for i in range(len(iterable) - 1))
+
+
+def timeit(func):
+    @wraps(func)
+    def timeit_wrapper(*args, **kwargs):
+        start_time = pd.Timestamp.now()
+        result = func(*args, **kwargs)
+        end_time = pd.Timestamp.now()
+        total_time = end_time - start_time
+        log.debug(f"Function {func.__name__} took {total_time} to run.")
+        return result
+
+    return timeit_wrapper
