@@ -49,7 +49,11 @@ def parse_sp3_file(file_path: Path):
             )
         # Give some columns more pithy names
         df.rename(
-            columns={"position_x": "sat_pos_x_m", "position_y": "sat_pos_y_m", "position_z": "sat_pos_z_m"},
+            columns={
+                "position_x": "sat_pos_x_m",
+                "position_y": "sat_pos_y_m",
+                "position_z": "sat_pos_z_m",
+            },
             inplace=True,
         )
         df.rename(
@@ -99,7 +103,12 @@ def interpolate(df, query_time_gpst_s, plot_interpolation=False):
     assert (
         end_index < len(df.index)
     ), f"We need at least {n_samples_each_side} after the sample closest to the query time to interpolate"
-    columns_to_interpolate = ["sat_pos_x_m", "sat_pos_y_m", "sat_pos_z_m", "sat_clock_offset_m"]
+    columns_to_interpolate = [
+        "sat_pos_x_m",
+        "sat_pos_y_m",
+        "sat_pos_z_m",
+        "sat_clock_offset_m",
+    ]
     interpolated = df[closest_sample_index : closest_sample_index + 1]
     interpolated["gpst_s"] = query_time_gpst_s
     for col in columns_to_interpolate:

@@ -78,7 +78,9 @@ def write_csv_file(
     # write header
     with open(output_file, "w", encoding="utf-8") as file:
         file.write(f"# {json.dumps(prx_header)}\n")
-    flat_records["sat_elevation_deg"] = np.rad2deg(flat_records.elevation_rad.to_numpy())
+    flat_records["sat_elevation_deg"] = np.rad2deg(
+        flat_records.elevation_rad.to_numpy()
+    )
     flat_records["sat_azimuth_deg"] = np.rad2deg(flat_records.azimuth_rad.to_numpy())
     flat_records = flat_records.drop(columns=["elevation_rad", "azimuth_rad"])
     # Re-arrange records to have one  line per code observation, with the associated carrier phase and
@@ -392,7 +394,11 @@ def _build_records_cached(
     #  the same satellite and the same time of emission
     sat_specific = sat_states[
         sat_states.columns.drop(
-            ["observation_type", "sat_code_bias_m", "time_of_reception_in_receiver_time"]
+            [
+                "observation_type",
+                "sat_code_bias_m",
+                "time_of_reception_in_receiver_time",
+            ]
         )
     ].drop_duplicates(subset=["satellite", "time_of_emission_isagpst"])
     # Group delays are signal-specific, so we merge them in separately
