@@ -113,12 +113,12 @@ def test_prx_function_call_with_csv_output(input_for_test):
     assert helpers.is_sorted(df.time_of_reception_in_receiver_time)
     # Elevation sanity check
     assert (
-        df[(df.prn == 14) & (df.constellation == "C")].elevation_deg - 34.86
-    ).abs().max() < 0.3
+                   df[(df.prn == 14) & (df.constellation == "C")].elevation_deg - 34.86
+           ).abs().max() < 0.3
 
 
 def test_prx_function_call_for_obs_file_across_two_days(
-    input_for_test_with_first_epoch_at_midnight,
+        input_for_test_with_first_epoch_at_midnight,
 ):
     test_file = input_for_test_with_first_epoch_at_midnight["obs_file"]
     main.process(observation_file_path=test_file, output_format="csv")
@@ -149,7 +149,7 @@ def test_spp_lsq(input_for_test):
     df_first_epoch = df[
         df.time_of_reception_in_receiver_time
         == df.time_of_reception_in_receiver_time.min()
-    ]
+        ]
     for constellations_to_use in [("G", "E", "C"), ("G",), ("E",), ("C",), ("R",)]:
         obs = df_first_epoch[df.constellation.isin(constellations_to_use)]
         pt_lsq = spp_pt_lsq(obs)
@@ -169,7 +169,7 @@ def test_spp_lsq(input_for_test):
 
 
 def test_spp_lsq_for_obs_file_across_two_days(
-    input_for_test_with_first_epoch_at_midnight,
+        input_for_test_with_first_epoch_at_midnight,
 ):
     df, metadata = run_rinex_through_prx(
         input_for_test_with_first_epoch_at_midnight["obs_file"]
@@ -177,7 +177,7 @@ def test_spp_lsq_for_obs_file_across_two_days(
     df_first_epoch = df[
         df.time_of_reception_in_receiver_time
         == df.time_of_reception_in_receiver_time.min()
-    ]
+        ]
     for constellations_to_use in [
         ("G",),
     ]:

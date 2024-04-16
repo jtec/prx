@@ -1,5 +1,6 @@
 import argparse
 import json
+import sys
 from pathlib import Path
 import georinex
 import pandas as pd
@@ -82,7 +83,7 @@ def write_csv_file(
     flat_records["elevation_deg"] = np.rad2deg(flat_records.elevation_rad.to_numpy())
     flat_records["azimuth_deg"] = np.rad2deg(flat_records.azimuth_rad.to_numpy())
     flat_records = flat_records.drop(columns=["elevation_rad", "azimuth_rad"])
-    # Re-arrange records to have one  line per code observation, with the associated carrier phase and
+    # Re-arrange records to have one line per code observation, with the associated carrier phase and
     # Doppler observation, and auxiliary information such as satellite position, velocity, clock offset, etc.
     # write records
     # Start with code observations, as they have TGDs, and merge in other observation types one by one
@@ -130,6 +131,8 @@ def write_csv_file(
             "observation_code",
         ]
     )
+    # Keep only records with valid sat states
+    records = records[records.clock_m.notna()]
     records.to_csv(
         path_or_buf=output_file,
         index=False,
@@ -509,8 +512,10 @@ if __name__ == "__main__":
         default="csv",
     )
     args = parser.parse_args()
-    if (
-            args.observation_file_path is not None
-            and Path(args.observation_file_path).exists()
-    ):
-        process(Path(args.observation_file_path), args.output_format)
+    if args.observation_file_path is None:
+        log.error("No observation file path provided.")
+        sys.exit(1)
+    if not Path(args.observation_file_path).exists():
+        log.error(f"Observation file {args.observation_file_path} does not exist.")
+        sys.exit(1)
+    process(Path(args.observation_file_path), args.output_format)

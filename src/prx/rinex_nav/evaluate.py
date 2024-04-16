@@ -28,6 +28,7 @@ def parse_rinex_nav_file(rinex_file: Path):
             helpers.get_gpst_utc_leap_seconds_from_rinex_header(rinex_file)
         )
         df = convert_nav_dataset_to_dataframe(ds)
+        df["ephemeris_hash"] = pd.util.hash_pandas_object(df, index=False).astype(str)
         return df
 
     t0 = pd.Timestamp.now()
@@ -591,10 +592,10 @@ def compute_clock_offsets(df):
 
 
 def compute_parallel(rinex_nav_file_path, per_signal_query):
-    # Warm up nav file parser cache so that we son't parse the file multiple times
+    # Warm up nav file parser cache so that we don't parse the file multiple times
     _ = parse_rinex_nav_file(rinex_nav_file_path)
     parallel = Parallel(
-        n_jobs=round(multiprocessing.cpu_count() / 2), return_as="generator"
+        n_jobs=round(multiprocessing.cpu_count() / 2), return_as="list"
     )
     # split dataframe into `n_chunks` smaller dataframes
     n_chunks = min(len(per_signal_query.index), 4)
@@ -634,9 +635,11 @@ def compute(rinex_nav_file_path, per_signal_query):
             log.info(
                 f"Ephemeris evaluation not implemented or under development for constellation {sub_df['constellation'].iloc[0]}, skipping"
             )
+            sub_df[["x_m", "y_m", "z_m", "dx_mps", "dy_mps", "dz_mps"]] = np.nan
         return sub_df
 
     per_sat_query = per_sat_query.groupby("orbit_type").apply(evaluate_orbit)
+    per_sat_query = per_sat_query.reset_index(drop=True)
     columns_to_keep = [
         "sv",
         "x_m",
@@ -646,11 +649,12 @@ def compute(rinex_nav_file_path, per_signal_query):
         "dy_mps",
         "dz_mps",
         "query_time_isagpst",
+        "ephemeris_hash",
     ]
     per_sat_query = per_sat_query[columns_to_keep]
     # Expand the computed satellite states into the larger signal-specific query dataframe
     per_signal_query = per_signal_query.merge(
-        per_sat_query, on=["sv", "query_time_isagpst"]
+        per_sat_query, on=["sv", "query_time_isagpst", "ephemeris_hash"]
     )
     columns_to_keep = [
                           "clock_m",
