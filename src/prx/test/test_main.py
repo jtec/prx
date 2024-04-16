@@ -13,7 +13,7 @@ from prx import constants
 from prx import main
 from prx.user import parse_prx_csv_file, spp_pt_lsq, spp_vt_lsq
 
-
+log = helpers.get_logger(__name__)
 # This function sets up a temporary directory, copies a rinex observations file into that directory
 # and returns its path. The @pytest.fixture annotation allows us to pass the function as an input
 # to test functions. When running a test function, pytest will then first run this function, pass
@@ -159,11 +159,11 @@ def test_spp_lsq(input_for_test):
         ).reshape(-1, 1)
         # Static receiver, so:
         velocity_offset = vt_lsq[0:3, :]
-        logging.info(
+        log.info(
             f"Using constellations: {constellations_to_use}, {len(obs.sv.unique())} SVs"
         )
-        logging.info(f"Position offset: {position_offset}")
-        logging.info(f"Velocity offset: {velocity_offset}")
+        log.info(f"Position offset: {position_offset}")
+        log.info(f"Velocity offset: {velocity_offset}")
         assert np.max(np.abs(position_offset)) < 1e1
         assert np.max(np.abs(velocity_offset)) < 1e-1
 
@@ -189,8 +189,8 @@ def test_spp_lsq_for_obs_file_across_two_days(
         ).reshape(-1, 1)
         # Static receiver, so:
         velocity_offset = vt_lsq[0:3, :]
-        logging.info(f"Position offset: {position_offset}")
-        logging.info(f"Velocity offset: {velocity_offset}")
+        log.info(f"Position offset: {position_offset}")
+        log.info(f"Velocity offset: {velocity_offset}")
         assert np.max(np.abs(position_offset)) < 1e1
         assert np.max(np.abs(velocity_offset)) < 1e-1
 
@@ -223,7 +223,6 @@ def test_csv_column_names(input_for_test):
         'sat_code_bias_m',
         'carrier_frequency_hz',
         'iono_delay_m',
-        'carrier_iono_delay_klobuchar_m',
         'sat_elevation_deg',
         'sat_azimuth_deg',
         'rnx_obs_identifier',
