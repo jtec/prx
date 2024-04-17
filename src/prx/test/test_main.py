@@ -147,7 +147,6 @@ def run_rinex_through_prx(rinex_obs_file: Path):
 def test_spp_lsq(input_for_test):
     df, metadata = run_rinex_through_prx(input_for_test)
     df["sv"] = df["constellation"].astype(str) + df["prn"].astype(str)
-    df = df[df.sv != "S48"].reset_index(drop=True)
     df_first_epoch = df[
         df.time_of_reception_in_receiver_time
         == df.time_of_reception_in_receiver_time.min()

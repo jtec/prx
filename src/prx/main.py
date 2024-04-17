@@ -22,9 +22,7 @@ def write_prx_file(
 ):
     output_writers = {"jsonseq": write_json_text_sequence_file, "csv": write_csv_file}
     if output_format not in output_writers.keys():
-        assert (
-            False
-        ), f"Output format {output_format} not supported,  we can do {list(output_writers.keys())}"
+        assert False, f"Output format {output_format} not supported,  we can do {list(output_writers.keys())}"
     output_writers[output_format](prx_header, prx_records, file_name_without_extension)
 
 
@@ -272,12 +270,10 @@ def _build_records_cached(
     )
     per_sat[
         "time_of_emission_in_satellite_time_integer_second_aligned_to_receiver_time"
-    ] = (per_sat["time_of_reception_in_receiver_time"] - tof_dtrx)
+    ] = per_sat["time_of_reception_in_receiver_time"] - tof_dtrx
     # As error terms are tens of nanoseconds here, and the receiver clock is integer-second aligned to GPST, we
     # already have times-of-emission that are integer-second aligned GPST here.
-    per_sat[
-        "time_of_emission_isagpst"
-    ] = (
+    per_sat["time_of_emission_isagpst"] = (
         per_sat.time_of_emission_in_satellite_time_integer_second_aligned_to_receiver_time
     )
     per_sat["time_of_emission_weeksecond_isagpst"] = per_sat.apply(
@@ -351,11 +347,11 @@ def _build_records_cached(
         how="left",
     )
     # Compute anything else that is satellite-specific
-    sat_states[
-        "relativistic_clock_effect_m"
-    ] = helpers.compute_relativistic_clock_effect(
-        sat_states[["sat_pos_x_m", "sat_pos_y_m", "sat_pos_z_m"]].to_numpy(),
-        sat_states[["sat_vel_x_mps", "sat_vel_y_mps", "sat_vel_z_mps"]].to_numpy(),
+    sat_states["relativistic_clock_effect_m"] = (
+        helpers.compute_relativistic_clock_effect(
+            sat_states[["sat_pos_x_m", "sat_pos_y_m", "sat_pos_z_m"]].to_numpy(),
+            sat_states[["sat_vel_x_mps", "sat_vel_y_mps", "sat_vel_z_mps"]].to_numpy(),
+        )
     )
     sat_states["sagnac_effect_m"] = helpers.compute_sagnac_effect(
         sat_states[["sat_pos_x_m", "sat_pos_y_m", "sat_pos_z_m"]].to_numpy(),

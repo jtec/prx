@@ -100,8 +100,8 @@ def interpolate(df, query_time_gpst_s, plot_interpolation=False):
     assert (
         start_index >= 0
     ), f"We need at least {n_samples_each_side} before the sample closest to the query time to interpolate"
-    assert end_index < len(
-        df.index
+    assert (
+        end_index < len(df.index)
     ), f"We need at least {n_samples_each_side} after the sample closest to the query time to interpolate"
     columns_to_interpolate = [
         "sat_pos_x_m",
