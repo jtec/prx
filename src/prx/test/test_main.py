@@ -1,4 +1,3 @@
-
 import os
 from pathlib import Path
 import shutil
@@ -14,6 +13,8 @@ from prx import main
 from prx.user import parse_prx_csv_file, spp_pt_lsq, spp_vt_lsq
 
 log = helpers.get_logger(__name__)
+
+
 # This function sets up a temporary directory, copies a rinex observations file into that directory
 # and returns its path. The @pytest.fixture annotation allows us to pass the function as an input
 # to test functions. When running a test function, pytest will then first run this function, pass
@@ -208,30 +209,30 @@ def test_csv_column_names(input_for_test):
 
     # Expected CSV column names
     expected_column_names = {
-        'time_of_reception_in_receiver_time',
-        'sat_clock_offset_m',
-        'sat_clock_drift_mps',
-        'sat_pos_x_m',
-        'sat_pos_y_m',
-        'sat_pos_z_m',
-        'sat_vel_x_mps',
-        'sat_vel_y_mps',
-        'sat_vel_z_mps',
-        'relativistic_clock_effect_m',
-        'sagnac_effect_m',
-        'tropo_delay_m',
-        'sat_code_bias_m',
-        'carrier_frequency_hz',
-        'iono_delay_m',
-        'sat_elevation_deg',
-        'sat_azimuth_deg',
-        'rnx_obs_identifier',
-        'C_obs_m',
-        'D_obs_hz',
-        'L_obs_cycles',
-        'S_obs_dBHz',
-        'constellation',
-        'prn'
+        "time_of_reception_in_receiver_time",
+        "sat_clock_offset_m",
+        "sat_clock_drift_mps",
+        "sat_pos_x_m",
+        "sat_pos_y_m",
+        "sat_pos_z_m",
+        "sat_vel_x_mps",
+        "sat_vel_y_mps",
+        "sat_vel_z_mps",
+        "relativistic_clock_effect_m",
+        "sagnac_effect_m",
+        "tropo_delay_m",
+        "sat_code_bias_m",
+        "carrier_frequency_hz",
+        "iono_delay_m",
+        "sat_elevation_deg",
+        "sat_azimuth_deg",
+        "rnx_obs_identifier",
+        "C_obs_m",
+        "D_obs_hz",
+        "L_obs_cycles",
+        "S_obs_dBHz",
+        "constellation",
+        "prn",
     }
 
     # Checking if all renamed parameters exist in the dataframe columns

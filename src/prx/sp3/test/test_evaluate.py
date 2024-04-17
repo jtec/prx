@@ -58,7 +58,9 @@ def test_at_sample(input_for_test):
     # We then expect the satellite state to be close to the sample
     # PG01  13744.907145 -20823.122313   8309.113118    469.979467
     assert np.allclose(
-        sat_states[sat_states["sv"] == "G01"][["sat_pos_x_m", "sat_pos_y_m", "sat_pos_z_m"]].to_numpy(),
+        sat_states[sat_states["sv"] == "G01"][
+            ["sat_pos_x_m", "sat_pos_y_m", "sat_pos_z_m"]
+        ].to_numpy(),
         1e3 * np.array([13744.907145, -20823.122313, 8309.113118]),
         rtol=1e-5,
         atol=1e-3,
@@ -90,9 +92,9 @@ def test_between_samples(input_for_test):
     sat_states = compute(sp3_file, query)
     # We then expect the interpolated satellite state to be close to the removed sample
     # PG01  13624.009028 -20092.399598  10082.111937    469.973744
-    assert sat_states[sat_states["sv"] == "G01"][["sat_pos_x_m", "sat_pos_y_m", "sat_pos_z_m"]].to_numpy()[
-        0
-    ] == pytest.approx(
+    assert sat_states[sat_states["sv"] == "G01"][
+        ["sat_pos_x_m", "sat_pos_y_m", "sat_pos_z_m"]
+    ].to_numpy()[0] == pytest.approx(
         1e3 * np.array([13624.009028, -20092.399598, 10082.111937]), abs=1e-3
     )
     assert np.allclose(
