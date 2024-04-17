@@ -20,12 +20,16 @@ def spp_vt_lsq(df, p_ecef_m):
     df = df[df.D_obs_hz.notna()].reset_index(drop=True)
     df["D_obs_mps"] = -df.D_obs_hz * cGpsSpeedOfLight_mps / df.carrier_frequency_hz
     # Remove satellite velocity projected onto line of sight
-    rx_sat_vectors = df[["sat_pos_x_m", "sat_pos_y_m", "sat_pos_z_m"]].to_numpy() - p_ecef_m.T
+    rx_sat_vectors = (
+        df[["sat_pos_x_m", "sat_pos_y_m", "sat_pos_z_m"]].to_numpy() - p_ecef_m.T
+    )
     row_sums = np.linalg.norm(rx_sat_vectors, axis=1)
     unit_vectors = (rx_sat_vectors.T / row_sums).T
     # The next line computes the row-wise dot product of the two matrices
     df["satellite_los_velocities"] = np.sum(
-        unit_vectors * df[["sat_vel_x_mps", "sat_vel_y_mps", "sat_vel_z_mps"]].to_numpy(), axis=1
+        unit_vectors
+        * df[["sat_vel_x_mps", "sat_vel_y_mps", "sat_vel_z_mps"]].to_numpy(),
+        axis=1,
     ).reshape(-1, 1)
     df["D_obs_corrected_mps"] = (
         df.D_obs_mps.to_numpy().reshape(-1, 1)
@@ -74,14 +78,19 @@ def spp_pt_lsq(df, dx_convergence_l2=1e-6, max_iterations=10):
         # Compute predicted pseudo-range as geometric distance + receiver clock bias, predicted at x_linearization
         C_obs_m_predicted = (
             np.linalg.norm(
-                x_linearization[0:3].T - df[["sat_pos_x_m", "sat_pos_y_m", "sat_pos_z_m"]].to_numpy(), axis=1
+                x_linearization[0:3].T
+                - df[["sat_pos_x_m", "sat_pos_y_m", "sat_pos_z_m"]].to_numpy(),
+                axis=1,
             )
             + np.squeeze(  # geometric distance
                 H_clock @ x_linearization[3:]
             )
         )  # rx to constellation clock bias
         # compute jacobian matrix
-        rx_sat_vectors = df[["sat_pos_x_m", "sat_pos_y_m", "sat_pos_z_m"]].to_numpy() - x_linearization[:3].T
+        rx_sat_vectors = (
+            df[["sat_pos_x_m", "sat_pos_y_m", "sat_pos_z_m"]].to_numpy()
+            - x_linearization[:3].T
+        )
         row_sums = np.linalg.norm(rx_sat_vectors, axis=1)
         unit_vectors = (rx_sat_vectors.T / row_sums).T
         # One clock offset per constellation
