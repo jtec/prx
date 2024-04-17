@@ -30,9 +30,9 @@ def parse_rinex_nav_file(rinex_file: Path):
     @helpers.cache_call
     def cached_load(rinex_file: Path, file_hash: str):
         ds = cached_parse(rinex_file, file_hash)
-        ds.attrs[
-            "utc_gpst_leap_seconds"
-        ] = helpers.get_gpst_utc_leap_seconds_from_rinex_header(rinex_file)
+        ds.attrs["utc_gpst_leap_seconds"] = (
+            helpers.get_gpst_utc_leap_seconds_from_rinex_header(rinex_file)
+        )
         df = convert_nav_dataset_to_dataframe(ds)
         return df
 
@@ -101,13 +101,7 @@ def glonass_xdot_montenbruck(x, acc_sun_moon):
     r = np.linalg.norm(p.to_numpy(), axis=1)
     # How Montenbruck, 2017, Handbook of GNSS, section 3.3.3 computes it:
     c1 = -GM_e / r**3
-    c2 = (
-        -(3 / 2)
-        * J_2
-        * GM_e
-        * (R_e**2 / r**5)
-        * (1 - (5 * p.loc[:, "Z"] ** 2) / r**2)
-    )
+    c2 = -(3 / 2) * J_2 * GM_e * (R_e**2 / r**5) * (1 - (5 * p.loc[:, "Z"] ** 2) / r**2)
     xdot.loc[:, "dX"] = (
         c1 * p.loc[:, "X"]
         + c2 * p.loc[:, "X"]
@@ -440,12 +434,9 @@ def convert_nav_dataset_to_dataframe(nav_ds):
                 group[week_field[group_time_scale]] * constants.cSecondsPerWeek
                 + group["Toe"]
             )
-            group[
-                "ephemeris_reference_time_system_time"
-            ] = constants.system_time_scale_rinex_utc_epoch[
-                group_time_scale
-            ] + pd.to_timedelta(
-                full_seconds, unit="seconds"
+            group["ephemeris_reference_time_system_time"] = (
+                constants.system_time_scale_rinex_utc_epoch[group_time_scale]
+                + pd.to_timedelta(full_seconds, unit="seconds")
             )
         else:
             # For SBAS and GLONASS there are no separate ephemeris reference time fields
