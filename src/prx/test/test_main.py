@@ -1,4 +1,3 @@
-import logging
 import os
 from pathlib import Path
 import shutil
@@ -12,6 +11,8 @@ from prx import helpers
 from prx import constants
 from prx import main
 from prx.user import parse_prx_csv_file, spp_pt_lsq, spp_vt_lsq
+
+log = helpers.get_logger(__name__)
 
 
 # This function sets up a temporary directory, copies a rinex observations file into that directory
@@ -113,7 +114,7 @@ def test_prx_function_call_with_csv_output(input_for_test):
     assert helpers.is_sorted(df.time_of_reception_in_receiver_time)
     # Elevation sanity check
     assert (
-        df[(df.prn == 14) & (df.constellation == "C")].elevation_deg - 34.86
+        df[(df.prn == 14) & (df.constellation == "C")].sat_elevation_deg - 34.86
     ).abs().max() < 0.3
 
 
@@ -138,8 +139,8 @@ def run_rinex_through_prx(rinex_obs_file: Path):
     records = pd.read_csv(expected_prx_file, comment="#")
     assert not records.empty
     assert metadata
-    records.group_delay_m = records.group_delay_m.fillna(0)
-    records = records[records.C_obs.notna() & records.x_m.notna()]
+    records.sat_code_bias_m = records.sat_code_bias_m.fillna(0)
+    records = records[records.C_obs_m.notna() & records.sat_pos_x_m.notna()]
     return records, metadata
 
 
@@ -170,11 +171,11 @@ def test_spp_lsq(input_for_test):
         ).reshape(-1, 1)
         # Static receiver, so:
         velocity_offset = vt_lsq[0:3, :]
-        logging.info(
+        log.info(
             f"Using constellations: {constellations_to_use}, {len(obs.sv.unique())} SVs"
         )
-        logging.info(f"Position offset: {position_offset}")
-        logging.info(f"Velocity offset: {velocity_offset}")
+        log.info(f"Position offset: {position_offset}")
+        log.info(f"Velocity offset: {velocity_offset}")
         assert np.max(np.abs(position_offset)) < 1e1
         assert np.max(np.abs(velocity_offset)) < 1e-1
 
@@ -200,7 +201,51 @@ def test_spp_lsq_for_obs_file_across_two_days(
         ).reshape(-1, 1)
         # Static receiver, so:
         velocity_offset = vt_lsq[0:3, :]
-        logging.info(f"Position offset: {position_offset}")
-        logging.info(f"Velocity offset: {velocity_offset}")
+        log.info(f"Position offset: {position_offset}")
+        log.info(f"Velocity offset: {velocity_offset}")
         assert np.max(np.abs(position_offset)) < 1e1
         assert np.max(np.abs(velocity_offset)) < 1e-1
+
+
+def test_csv_column_names(input_for_test):
+    test_file = input_for_test
+    main.process(observation_file_path=test_file, output_format="csv")
+    expected_prx_file = Path(
+        str(test_file).replace("crx.gz", constants.cPrxCsvFileExtension)
+    )
+    assert expected_prx_file.exists()
+
+    # Read the CSV file
+    df = pd.read_csv(expected_prx_file, comment="#")
+
+    # Expected CSV column names
+    expected_column_names = {
+        "time_of_reception_in_receiver_time",
+        "sat_clock_offset_m",
+        "sat_clock_drift_mps",
+        "sat_pos_x_m",
+        "sat_pos_y_m",
+        "sat_pos_z_m",
+        "sat_vel_x_mps",
+        "sat_vel_y_mps",
+        "sat_vel_z_mps",
+        "relativistic_clock_effect_m",
+        "sagnac_effect_m",
+        "tropo_delay_m",
+        "sat_code_bias_m",
+        "carrier_frequency_hz",
+        "iono_delay_m",
+        "sat_elevation_deg",
+        "sat_azimuth_deg",
+        "rnx_obs_identifier",
+        "C_obs_m",
+        "D_obs_hz",
+        "L_obs_cycles",
+        "S_obs_dBHz",
+        "constellation",
+        "prn",
+    }
+
+    # Checking if all renamed parameters exist in the dataframe columns
+    for parameter in expected_column_names:
+        assert parameter in df.columns

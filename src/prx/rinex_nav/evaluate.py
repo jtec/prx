@@ -156,7 +156,17 @@ def glonass_orbit_position_and_velocity(df):
         fixed_integration_time_step = 60
         h = (t_query - t).clip(0, fixed_integration_time_step)
         if np.all(h == 0):
-            df[["x_m", "y_m", "z_m", "dx_mps", "dy_mps", "dz_mps"]] = pv
+            df[
+                [
+                    "sat_pos_x_m",
+                    "sat_pos_y_m",
+                    "sat_pos_z_m",
+                    "sat_vel_x_mps",
+                    "sat_vel_y_mps",
+                    "sat_vel_z_mps",
+                ]
+            ] = pv
+
             return df
         # One step of 4th order Runge-Kutta integration:
         glonass_xdot = glonass_xdot_rtklib
@@ -382,12 +392,12 @@ def kepler_orbit_position_and_velocity(eph):
     handle_bds_geos(eph)
     eph.rename(
         columns={
-            "X_k": "x_m",
-            "Y_k": "y_m",
-            "Z_k": "z_m",
-            "dX_k": "dx_mps",
-            "dY_k": "dy_mps",
-            "dZ_k": "dz_mps",
+            "X_k": "sat_pos_x_m",
+            "Y_k": "sat_pos_y_m",
+            "Z_k": "sat_pos_z_m",
+            "dX_k": "sat_vel_x_mps",
+            "dY_k": "sat_vel_y_mps",
+            "dZ_k": "sat_vel_z_mps",
         },
         inplace=True,
     )
@@ -612,12 +622,12 @@ def select_ephemerides(df, query):
 
 
 def compute_clock_offsets(df):
-    df["clock_m"] = constants.cGpsSpeedOfLight_mps * (
+    df["sat_clock_offset_m"] = constants.cGpsSpeedOfLight_mps * (
         df["SVclockBias"]
         + df["SVclockDrift"] * df["query_time_wrt_clock_reference_time_s"]
         + df["SVclockDriftRate"] * df["query_time_wrt_clock_reference_time_s"] ** 2
     )
-    df["dclock_mps"] = constants.cGpsSpeedOfLight_mps * (
+    df["sat_clock_drift_mps"] = constants.cGpsSpeedOfLight_mps * (
         df["SVclockDrift"]
         + 2 * df["SVclockDriftRate"] * df["query_time_wrt_clock_reference_time_s"]
     )
@@ -652,7 +662,9 @@ def compute(rinex_nav_file_path, per_signal_query):
     per_sat_query = (
         per_signal_query.groupby(["sv", "query_time_isagpst"]).first().reset_index()
     )
-    per_sat_query = per_sat_query.drop(columns=["clock_m", "dclock_mps"])
+    per_sat_query = per_sat_query.drop(
+        columns=["sat_clock_offset_m", "sat_clock_drift_mps"]
+    )
 
     def evaluate_orbit(sub_df):
         orbit_type = sub_df["orbit_type"].iloc[0]
@@ -671,12 +683,12 @@ def compute(rinex_nav_file_path, per_signal_query):
     per_sat_query = per_sat_query.groupby("orbit_type").apply(evaluate_orbit)
     columns_to_keep = [
         "sv",
-        "x_m",
-        "y_m",
-        "z_m",
-        "dx_mps",
-        "dy_mps",
-        "dz_mps",
+        "sat_pos_x_m",
+        "sat_pos_y_m",
+        "sat_pos_z_m",
+        "sat_vel_x_mps",
+        "sat_vel_y_mps",
+        "sat_vel_z_mps",
         "query_time_isagpst",
     ]
     per_sat_query = per_sat_query[columns_to_keep]
@@ -685,13 +697,13 @@ def compute(rinex_nav_file_path, per_signal_query):
         per_sat_query, on=["sv", "query_time_isagpst"]
     )
     columns_to_keep = [
-        "clock_m",
-        "dclock_mps",
+        "sat_clock_offset_m",
+        "sat_clock_drift_mps",
     ] + columns_to_keep
     per_signal_query = compute_total_group_delays(per_signal_query)
 
     if "signal" in per_signal_query.columns:
-        columns_to_keep = ["signal", "group_delay_m"] + columns_to_keep
+        columns_to_keep = ["signal", "sat_code_bias_m"] + columns_to_keep
     columns_to_keep.append("frequency_slot")
     per_signal_query = per_signal_query[columns_to_keep].reset_index(drop=True)
     return per_signal_query
@@ -770,7 +782,7 @@ def compute_total_group_delays(
                         df.tgd = df.TGD2.values[0]
                     case "C6I":  # called B3I in Beidou ICD
                         df.tgd = 0
-        df["group_delay_m"] = df.tgd * df.gamma * df.speedOfLightIcd_mps
+        df["sat_code_bias_m"] = df.tgd * df.gamma * df.speedOfLightIcd_mps
         return df
 
     query = query.groupby(["signal", "constellation"]).apply(compute_tgds)

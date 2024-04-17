@@ -15,10 +15,10 @@ log = helpers.get_logger(__name__)
 
 
 def write_prx_file(
-    prx_header: dict,
-    prx_records: pd.DataFrame,
-    file_name_without_extension: Path,
-    output_format: str,
+        prx_header: dict,
+        prx_records: pd.DataFrame,
+        file_name_without_extension: Path,
+        output_format: str,
 ):
     output_writers = {"jsonseq": write_json_text_sequence_file, "csv": write_csv_file}
     if output_format not in output_writers.keys():
@@ -29,7 +29,7 @@ def write_prx_file(
 
 
 def write_json_text_sequence_file(
-    prx_header: dict, prx_records: pd.DataFrame, file_name_without_extension: Path
+        prx_header: dict, prx_records: pd.DataFrame, file_name_without_extension: Path
 ):
     output_file = Path(
         f"{str(file_name_without_extension)}.{constants.cPrxJsonTextSequenceFileExtension}"
@@ -45,7 +45,7 @@ def write_json_text_sequence_file(
             epoch = pd.Timestamp(epoch)
             epoch_obs = prx_records[
                 prx_records["time_of_reception_in_receiver_time"] == epoch
-            ]
+                ]
             record = {
                 "time_of_reception_in_receiver_time": epoch.strftime(
                     "%Y:%m:%dT%H:%M:%S.%f"
@@ -72,7 +72,7 @@ def write_json_text_sequence_file(
 
 
 def write_csv_file(
-    prx_header: dict, flat_records: pd.DataFrame, file_name_without_extension: Path
+        prx_header: dict, flat_records: pd.DataFrame, file_name_without_extension: Path
 ):
     output_file = Path(
         f"{str(file_name_without_extension)}.{constants.cPrxCsvFileExtension}"
@@ -80,8 +80,10 @@ def write_csv_file(
     # write header
     with open(output_file, "w", encoding="utf-8") as file:
         file.write(f"# {json.dumps(prx_header)}\n")
-    flat_records["elevation_deg"] = np.rad2deg(flat_records.elevation_rad.to_numpy())
-    flat_records["azimuth_deg"] = np.rad2deg(flat_records.azimuth_rad.to_numpy())
+    flat_records["sat_elevation_deg"] = np.rad2deg(
+        flat_records.elevation_rad.to_numpy()
+    )
+    flat_records["sat_azimuth_deg"] = np.rad2deg(flat_records.azimuth_rad.to_numpy())
     flat_records = flat_records.drop(columns=["elevation_rad", "azimuth_rad"])
     # Re-arrange records to have one  line per code observation, with the associated carrier phase and
     # Doppler observation, and auxiliary information such as satellite position, velocity, clock offset, etc.
@@ -89,7 +91,7 @@ def write_csv_file(
     # Start with code observations, as they have TGDs, and merge in other observation types one by one
     flat_records["tracking_id"] = flat_records.observation_type.str[1:3]
     records = flat_records.loc[flat_records.observation_type.str.startswith("C")]
-    records["C_obs"] = records.observation_value
+    records["C_obs_m"] = records.observation_value
     records = records.drop(columns=["observation_value", "observation_type"])
     type_2_unit = {"D": "hz", "L": "cycles", "S": "dBHz", "C": "m"}
     for obs_type in ["D", "L", "S"]:
@@ -114,7 +116,7 @@ def write_csv_file(
         )
     records["constellation"] = records.satellite.str[0]
     records["prn"] = records.satellite.str[1:]
-    records = records.rename(columns={"tracking_id": "observation_code"})
+    records = records.rename(columns={"tracking_id": "rnx_obs_identifier"})
     records = records.drop(
         columns=[
             "satellite",
@@ -128,7 +130,7 @@ def write_csv_file(
             "time_of_reception_in_receiver_time",
             "constellation",
             "prn",
-            "observation_code",
+            "rnx_obs_identifier",
         ]
     )
     records.to_csv(
@@ -164,22 +166,22 @@ def build_metadata(input_files):
 
 
 def check_assumptions(
-    rinex_3_obs_file,
+        rinex_3_obs_file,
 ):
     obs_header = georinex.rinexheader(rinex_3_obs_file)
     if "RCV CLOCK OFFS APPL" in obs_header.keys():
         assert (
-            obs_header["RCV CLOCK OFFS APPL"].strip() == "0"
+                obs_header["RCV CLOCK OFFS APPL"].strip() == "0"
         ), "Handling of 'RCV CLOCK OFFS APPL' != 0 not implemented yet."
     assert (
-        obs_header["TIME OF FIRST OBS"].split()[-1].strip() == "GPS"
+            obs_header["TIME OF FIRST OBS"].split()[-1].strip() == "GPS"
     ), "Handling of observation files using time scales other than GPST not implemented yet."
 
 
 def build_records(
-    rinex_3_obs_file,
-    rinex_3_ephemerides_files,
-    approximate_receiver_ecef_position_m,
+        rinex_3_obs_file,
+        rinex_3_ephemerides_files,
+        approximate_receiver_ecef_position_m,
 ):
     return _build_records_cached(
         rinex_3_obs_file,
@@ -195,11 +197,11 @@ def build_records(
 
 @helpers.cache_call
 def _build_records_cached(
-    rinex_3_obs_file,
-    rinex_3_obs_file_hash,
-    rinex_3_ephemerides_files,
-    rinex_3_ephemerides_file_hash,
-    approximate_receiver_ecef_position_m,
+        rinex_3_obs_file,
+        rinex_3_obs_file_hash,
+        rinex_3_ephemerides_files,
+        rinex_3_ephemerides_file_hash,
+        approximate_receiver_ecef_position_m,
 ):
     approximate_receiver_ecef_position_m = np.array(
         approximate_receiver_ecef_position_m
@@ -316,16 +318,16 @@ def _build_records_cached(
                 file,
                 query.loc[
                     (
-                        query.query_time_isagpst
-                        >= pd.Timestamp(year=year, month=1, day=1)
-                        + pd.Timedelta(days=doy - 1)
+                            query.query_time_isagpst
+                            >= pd.Timestamp(year=year, month=1, day=1)
+                            + pd.Timedelta(days=doy - 1)
                     )
                     & (
-                        query.query_time_isagpst
-                        < pd.Timestamp(year=year, month=1, day=1)
-                        + pd.Timedelta(days=doy)
+                            query.query_time_isagpst
+                            < pd.Timestamp(year=year, month=1, day=1)
+                            + pd.Timedelta(days=doy)
                     )
-                ],
+                    ],
             )
         )
     sat_states = pd.concat(sat_states_per_day)
@@ -349,14 +351,14 @@ def _build_records_cached(
         how="left",
     )
     # Compute anything else that is satellite-specific
-    sat_states[
-        "relativistic_clock_effect_m"
-    ] = helpers.compute_relativistic_clock_effect(
-        sat_states[["x_m", "y_m", "z_m"]].to_numpy(),
-        sat_states[["dx_mps", "dy_mps", "dz_mps"]].to_numpy(),
+    sat_states["relativistic_clock_effect_m"] = (
+        helpers.compute_relativistic_clock_effect(
+            sat_states[["sat_pos_x_m", "sat_pos_y_m", "sat_pos_z_m"]].to_numpy(),
+            sat_states[["sat_vel_x_mps", "sat_vel_y_mps", "sat_vel_z_mps"]].to_numpy(),
+        )
     )
     sat_states["sagnac_effect_m"] = helpers.compute_sagnac_effect(
-        sat_states[["x_m", "y_m", "z_m"]].to_numpy(),
+        sat_states[["sat_pos_x_m", "sat_pos_y_m", "sat_pos_z_m"]].to_numpy(),
         approximate_receiver_ecef_position_m,
     )
     [latitude_user_rad, longitude_user_rad, height_user_m] = helpers.ecef_2_geodetic(
@@ -371,7 +373,7 @@ def _build_records_cached(
         sat_states["elevation_rad"],
         sat_states["azimuth_rad"],
     ) = helpers.compute_satellite_elevation_and_azimuth(
-        sat_states[["x_m", "y_m", "z_m"]].to_numpy(),
+        sat_states[["sat_pos_x_m", "sat_pos_y_m", "sat_pos_z_m"]].to_numpy(),
         approximate_receiver_ecef_position_m,
     )
     (
@@ -396,12 +398,16 @@ def _build_records_cached(
     #  the same satellite and the same time of emission
     sat_specific = sat_states[
         sat_states.columns.drop(
-            ["observation_type", "group_delay_m", "time_of_reception_in_receiver_time"]
+            [
+                "observation_type",
+                "sat_code_bias_m",
+                "time_of_reception_in_receiver_time",
+            ]
         )
     ].drop_duplicates(subset=["satellite", "time_of_emission_isagpst"])
     # Group delays are signal-specific, so we merge them in separately
     code_specific = sat_states[
-        ["satellite", "observation_type", "time_of_emission_isagpst", "group_delay_m"]
+        ["satellite", "observation_type", "time_of_emission_isagpst", "sat_code_bias_m"]
     ].drop_duplicates(
         subset=["satellite", "observation_type", "time_of_emission_isagpst"]
     )
@@ -419,7 +425,7 @@ def _build_records_cached(
             return np.nan
         return constants.carrier_frequencies_hz()[row.satellite[0]][
             "L" + row.observation_type[1]
-        ][row["frequency_slot"]]
+            ][row["frequency_slot"]]
 
     flat_obs.loc[:, "carrier_frequency_hz"] = flat_obs.apply(
         signal_2_carrier_frequency, axis=1
@@ -440,16 +446,16 @@ def _build_records_cached(
 
         # Selection criteria: time of emission belonging to the day of the current NAV file
         mask = (
-            flat_obs.time_of_emission_isagpst
-            >= pd.Timestamp(year=year, month=1, day=1) + pd.Timedelta(days=doy - 1)
-        ) & (
-            flat_obs.time_of_emission_isagpst
-            < pd.Timestamp(year=year, month=1, day=1) + pd.Timedelta(days=doy)
-        )
+                       flat_obs.time_of_emission_isagpst
+                       >= pd.Timestamp(year=year, month=1, day=1) + pd.Timedelta(days=doy - 1)
+               ) & (
+                       flat_obs.time_of_emission_isagpst
+                       < pd.Timestamp(year=year, month=1, day=1) + pd.Timedelta(days=doy)
+               )
 
         flat_obs.loc[
             mask,
-            "code_iono_delay_klobuchar_m",
+            "iono_delay_m",
         ] = -atmo.compute_klobuchar_l1_correction(
             flat_obs.loc[mask].time_of_emission_weeksecond_isagpst.to_numpy(),
             nav_header_dict[f"{year:03d}" + f"{doy:03d}"]["IONOSPHERIC CORR"]["GPSA"],
@@ -459,9 +465,9 @@ def _build_records_cached(
             latitude_user_rad,
             longitude_user_rad,
         ) * (
-            constants.carrier_frequencies_hz()["G"]["L1"][1] ** 2
-            / flat_obs.loc[mask].carrier_frequency_hz ** 2
-        )
+                    constants.carrier_frequencies_hz()["G"]["L1"][1] ** 2
+                    / flat_obs.loc[mask].carrier_frequency_hz ** 2
+            )
 
     return flat_obs
 
@@ -497,7 +503,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         prog="prx",
         description="prx processes RINEX observations, computes a few useful things such as satellite position, "
-        "relativistic effects etc. and outputs everything to a text file in a convenient format.",
+                    "relativistic effects etc. and outputs everything to a text file in a convenient format.",
         epilog="P.S. GNSS rules!",
     )
     parser.add_argument(
@@ -512,7 +518,7 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
     if (
-        args.observation_file_path is not None
-        and Path(args.observation_file_path).exists()
+            args.observation_file_path is not None
+            and Path(args.observation_file_path).exists()
     ):
         process(Path(args.observation_file_path), args.output_format)
