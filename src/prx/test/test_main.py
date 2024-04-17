@@ -146,11 +146,22 @@ def run_rinex_through_prx(rinex_obs_file: Path):
 def test_spp_lsq(input_for_test):
     df, metadata = run_rinex_through_prx(input_for_test)
     df["sv"] = df["constellation"].astype(str) + df["prn"].astype(str)
+    df = df[df.sv != "S48"].reset_index(drop=True)
     df_first_epoch = df[
         df.time_of_reception_in_receiver_time
         == df.time_of_reception_in_receiver_time.min()
     ]
-    for constellations_to_use in [("G", "E", "C"), ("G",), ("E",), ("C",), ("R",)]:
+    for constellations_to_use in [
+        (
+            "G",
+            "E",
+            "C",
+        ),
+        ("G",),
+        ("E",),
+        ("C",),
+        ("R",),
+    ]:
         obs = df_first_epoch[df.constellation.isin(constellations_to_use)]
         pt_lsq = spp_pt_lsq(obs)
         vt_lsq = spp_vt_lsq(obs, p_ecef_m=pt_lsq[0:3, :])
