@@ -244,14 +244,25 @@ def test_sbas(input_for_test):
     assert not rinex_sat_states.empty
     assert (
         not rinex_sat_states[
-            ["clock_m", "dclock_mps", "x_m", "y_m", "z_m", "dx_mps", "dy_mps", "dz_mps"]
+            [
+                "sat_clock_offset_m",
+                "sat_clock_drift_mps",
+                "sat_pos_x_m",
+                "sat_pos_y_m",
+                "sat_pos_z_m",
+                "sat_vel_x_mps",
+                "sat_vel_y_mps",
+                "sat_vel_z_mps",
+            ]
         ]
         .isna()
         .values.any()
     )
     rGeoStationaryOrbit = 42164e3
     assert (
-        rinex_sat_states[["x_m", "y_m", "z_m"]].apply(np.linalg.norm, axis=1)
+        rinex_sat_states[["sat_pos_x_m", "sat_pos_y_m", "sat_pos_z_m"]].apply(
+            np.linalg.norm, axis=1
+        )
         - rGeoStationaryOrbit
     ).abs().max() < 2e3
 
