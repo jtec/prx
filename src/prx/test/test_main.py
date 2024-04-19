@@ -114,8 +114,8 @@ def input_for_test_with_first_epoch_at_midnight():
     shutil.rmtree(test_directory)
 
 
-def test_prx_command_line_call_with_csv_output(input_for_test):
-    test_file = input_for_test
+def test_prx_command_line_call_with_csv_output(input_for_test_tlse):
+    test_file = input_for_test_tlse
     prx_path = helpers.prx_repository_root() / "src/prx/main.py"
     command = (
         f"python {prx_path} --observation_file_path {test_file} --output_format csv"
@@ -130,8 +130,8 @@ def test_prx_command_line_call_with_csv_output(input_for_test):
     assert expected_prx_file.exists()
 
 
-def test_prx_function_call_with_csv_output(input_for_test):
-    test_file = input_for_test
+def test_prx_function_call_with_csv_output(input_for_test_tlse):
+    test_file = input_for_test_tlse
     main.process(observation_file_path=test_file, output_format="csv")
     expected_prx_file = Path(
         str(test_file).replace("crx.gz", constants.cPrxCsvFileExtension)
@@ -273,8 +273,8 @@ def test_spp_lsq_for_obs_file_across_two_days(
         assert np.max(np.abs(velocity_offset)) < 1e-1
 
 
-def test_csv_column_names(input_for_test):
-    test_file = input_for_test
+def test_csv_column_names(input_for_test_tlse):
+    test_file = input_for_test_tlse
     main.process(observation_file_path=test_file, output_format="csv")
     expected_prx_file = Path(
         str(test_file).replace("crx.gz", constants.cPrxCsvFileExtension)
