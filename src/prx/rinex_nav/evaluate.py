@@ -125,12 +125,12 @@ def glonass_xdot_montenbruck(x, acc_sun_moon):
 def sbas_orbit_position_and_velocity(df):
     # Based on Montenbruck, 2017, Handbook of GNSS, section 3.3.3, eq. 3.59
     t_query = df["query_time_wrt_ephemeris_reference_time_s"].values.reshape(-1, 1)
-    df[["x_m", "y_m", "z_m"]] = (
+    df[["sat_pos_x_m", "sat_pos_y_m", "sat_pos_z_m"]] = (
         df[["X", "Y", "Z"]].values
         + df[["dX", "dY", "dZ"]].mul(t_query, axis=0).values
         + 0.5 * df[["dX2", "dY2", "dZ2"]].mul(t_query**2, axis=0).values
     )
-    df[["dx_mps", "dy_mps", "dz_mps"]] = (
+    df[["sat_vel_x_mps", "sat_vel_y_mps", "sat_vel_z_mps"]] = (
         df[["dX", "dY", "dZ"]].values
         + df[["dX2", "dY2", "dZ2"]].mul(t_query, axis=0).values
     )
