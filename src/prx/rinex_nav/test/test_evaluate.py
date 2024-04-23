@@ -163,12 +163,12 @@ def generate_sat_query(sat_state_query_time_isagpst):
             },
             # Two SBAS satellites
             {
-                "sv": "S36",
+                "sv": "S31",
                 "signal": "C1C",
                 "query_time_isagpst": sat_state_query_time_isagpst,
             },
             {
-                "sv": "S23",
+                "sv": "S33",
                 "signal": "C1C",
                 "query_time_isagpst": sat_state_query_time_isagpst,
             },
