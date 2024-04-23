@@ -223,7 +223,7 @@ def test_spp_lsq_tlse(input_for_test_tlse):
             "E",
             "C",
         ),
-        # ("G", "S"), # test does not pass with SBAS georanges, probably due to approximate SBAS position (e.g. sat_pos_z_m = 0...)
+        ("G", "S"),
         ("G",),
         ("E",),
         ("C",),
