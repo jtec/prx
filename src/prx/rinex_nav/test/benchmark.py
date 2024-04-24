@@ -35,7 +35,7 @@ def generate_query(n_epochs=1):
 
 
 def benchmark(query, rinex_nav_file):
-    return rinex_nav_evaluate.compute_parallel(rinex_nav_file, query)
+    return rinex_nav_evaluate.compute(rinex_nav_file, query)
 
 
 if __name__ == "__main__":
