@@ -25,7 +25,6 @@ def generate_query(n_epochs=1):
             "sv": sats,
             "signal": "C1C",
             "query_time_isagpst": pd.Timestamp("2022-01-01T01:10:00.000000000")
-            - constants.cGpstUtcEpoch,
         }
     )
     query = query_template.copy()
