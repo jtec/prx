@@ -89,6 +89,9 @@ def timestamp_2_timedelta(timestamp: pd.Timestamp, time_scale):
 
 
 def timedelta_2_weeks_and_seconds(time_delta: pd.Timedelta):
+    if pd.isnull(time_delta):
+        return np.nan, np.nan
+
     assert type(time_delta) == pd.Timedelta, "time_delta must be of type pd.Timedelta"
     in_nanoseconds = time_delta / pd.Timedelta(1, "ns")
     weeks = math.floor(in_nanoseconds / constants.cNanoSecondsPerWeek)
