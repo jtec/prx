@@ -475,6 +475,7 @@ def process(observation_file_path: Path, output_format="csv"):
         f"Starting processing {observation_file_path.name} (full path {observation_file_path})"
     )
     rinex_3_obs_file = converters.anything_to_rinex_3(observation_file_path)
+    rinex_3_obs_file = helpers.repair_with_gfzrnx(rinex_3_obs_file)
     prx_file = rinex_3_obs_file.with_suffix("")
     aux_files = nav_file_discovery.discover_or_download_auxiliary_files(
         rinex_3_obs_file
