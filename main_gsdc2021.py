@@ -1,16 +1,14 @@
-from glob import glob
-import platform
-import subprocess
 from pathlib import Path
 import os
 import shutil
 import gzip
 import src.prx.main as prx
 import src.prx.helpers as helpers
-import src.prx.constants as constants
 
 log = helpers.get_logger(__name__)
-remote_dataset_filepath = Path("C:/Users/paul/OneDrive - enac.fr/DataCollect_GoogleSDC_2021")
+remote_dataset_filepath = Path(
+    "C:/Users/paul/OneDrive - enac.fr/DataCollect_GoogleSDC_2021"
+)
 
 if __name__ == "__main__":
     """
@@ -27,11 +25,13 @@ if __name__ == "__main__":
     print(f"{len(remote_rinex_list)} RINEX files discovered")
 
     # iterate over rinex files
-    local_dataset_directory = Path(f"./GSDC2021").resolve()
+    local_dataset_directory = Path("./GSDC2021").resolve()
     local_gz_list = []
     for file in remote_rinex_list:
         print(file)
-        relative_path = os.path.relpath(Path(f"{str(file)}.gz"), remote_dataset_filepath)
+        relative_path = os.path.relpath(
+            Path(f"{str(file)}.gz"), remote_dataset_filepath
+        )
         new_path = local_dataset_directory.joinpath(relative_path)
         if not new_path.exists():
             # gunzip rnx file
