@@ -297,3 +297,47 @@ def test_row_wise_dot_product():
     B = np.array([[10, 20], [30, 40], [50, 60]])
     row_wise_dot = np.sum(A * B, axis=1).reshape(-1, 1)
     assert (row_wise_dot == np.array([[10 + 40], [120 + 200], [350 + 480]])).all()
+
+
+def test_timedelta_2_weeks_and_seconds():
+    tested_timestamps = [
+        pd.Timestamp("1981-01-21T06:00:00"),
+        pd.Timestamp("1981-01-21T06:10:00"),
+        pd.Timestamp("1999-09-01T16:10:00"),  # after first week number rollover
+        pd.Timestamp("2019-04-10T12:00:00"),  # after 2nd week number rollover
+        pd.Timestamp(""),  # yiels a NaT
+    ]
+
+    week_computed = []
+    seconds_of_week_computed = []
+    for timestamp in tested_timestamps:
+        tested_timedelta = (
+            timestamp - constants.system_time_scale_rinex_utc_epoch["GPST"]
+        )
+        w, s = helpers.timedelta_2_weeks_and_seconds(tested_timedelta)
+        week_computed.append(w)
+        seconds_of_week_computed.append(s)
+
+    # expected values come from https://gnsscalc.com/
+    week_expected = [54, 54, 1025, 2048, np.nan]
+    seconds_of_week_expected = [280800, 281400, 317400, 302400, np.nan]
+
+    assert week_expected == week_computed
+    assert seconds_of_week_expected == seconds_of_week_expected
+
+
+def test_compute_gps_leap_seconds():
+    # expected GPS lepqp second come from https://gnsscalc.com/
+    test_cases = [
+        (1982, 181, 2),  # year, doy (corresponds to 01-Jul), expected leap seconds
+        (1989, 181, 5),
+        (1992, 182, 8),
+        (2008, 182, 14),
+        (2016, 182, 17),
+        (2022, 181, 18),
+        (1979, 1, np.nan),
+    ]
+    for year, doy, expected_leap_second in test_cases:
+        np.testing.assert_equal(
+            helpers.compute_gps_leap_seconds(year, doy), expected_leap_second
+        )

@@ -24,12 +24,9 @@ def parse_rinex_nav_file(rinex_file: Path):
     @helpers.disk_cache.cache
     def cached_load(rinex_file: Path, file_hash: str):
         ds = cached_parse(rinex_file, file_hash)
-        try:
-            ds.attrs["utc_gpst_leap_seconds"] = (
-                    helpers.get_gpst_utc_leap_seconds_from_rinex_header(rinex_file)
-            )
-        except:
-            ds.attrs["utc_gpst_leap_seconds"] = 18
+        ds.attrs["utc_gpst_leap_seconds"] = (
+                helpers.get_gpst_utc_leap_seconds_from_rinex_header(rinex_file)
+        )
         df = convert_nav_dataset_to_dataframe(ds)
         df["ephemeris_hash"] = pd.util.hash_pandas_object(df, index=False).astype(str)
         return df
