@@ -54,7 +54,7 @@ def time_scale_integer_second_offset_wrt_gpst(time_scale, utc_gpst_leap_seconds=
     if time_scale == "GLONASST":
         assert (
             utc_gpst_leap_seconds is not None
-        ), "Need GPST-UTC leap seconds to compute GLONASST intger second offset w.r.t. GPST"
+        ), "Need GPST-UTC leap seconds to compute GLONASST integer second offset w.r.t. GPST"
         return pd.Timedelta(seconds=-utc_gpst_leap_seconds)
     assert False, f"Unexpected time scale: {time_scale}"
 
@@ -120,6 +120,21 @@ def glonass_xdot_montenbruck(x, acc_sun_moon):
         c1 * p.loc[:, "Z"] + c2 * p.loc[:, "Z"] + acc_sun_moon.loc[:, "dZ2"]
     )
     return xdot
+
+
+def sbas_orbit_position_and_velocity(df):
+    # Based on Montenbruck, 2017, Handbook of GNSS, section 3.3.3, eq. 3.59
+    t_query = df["query_time_wrt_ephemeris_reference_time_s"].values.reshape(-1, 1)
+    df[["sat_pos_x_m", "sat_pos_y_m", "sat_pos_z_m"]] = (
+        df[["X", "Y", "Z"]].values
+        + df[["dX", "dY", "dZ"]].mul(t_query, axis=0).values
+        + 0.5 * df[["dX2", "dY2", "dZ2"]].mul(t_query**2, axis=0).values
+    )
+    df[["sat_vel_x_mps", "sat_vel_y_mps", "sat_vel_z_mps"]] = (
+        df[["dX", "dY", "dZ"]].values
+        + df[["dX2", "dY2", "dZ2"]].mul(t_query, axis=0).values
+    )
+    return df
 
 
 def glonass_orbit_position_and_velocity(df):
@@ -399,6 +414,10 @@ def convert_nav_dataset_to_dataframe(nav_ds):
         constants.constellation_2_system_time_scale
     )
 
+    # Keep only SBAS ephemerides with low URA, these are based on SBAS message type 9, while those with large URA are
+    # based on message type 17 which only contains almanac-like coarse satellite position estimates.
+    df = df[~((df.sv.str.startswith("S")) & (df.URA >= constants.cSbasURALimit))]
+
     def compute_ephemeris_and_clock_offset_reference_times(group):
         week_field = {
             "GPST": "GPSWeek",
@@ -608,7 +627,7 @@ def compute_clock_offsets(df):
 
 
 def compute_parallel(rinex_nav_file_path, per_signal_query):
-    parallel = Parallel(n_jobs=multiprocessing.cpu_count(), return_as="generator")
+    parallel = Parallel(n_jobs=multiprocessing.cpu_count(), return_as="list")
     # split dataframe into `n_chunks` smaller dataframes
     n_chunks = min(len(per_signal_query.index), 4)
     chunk_length = floor(len(per_signal_query) / n_chunks)
@@ -645,6 +664,8 @@ def compute(rinex_nav_file_path, per_signal_query):
             sub_df = kepler_orbit_position_and_velocity(sub_df)
         elif orbit_type == "glonass":
             sub_df = glonass_orbit_position_and_velocity(sub_df)
+        elif orbit_type == "sbas":
+            sub_df = sbas_orbit_position_and_velocity(sub_df)
         else:
             log.info(
                 f"Ephemeris evaluation not implemented or under development for constellation {sub_df['constellation'].iloc[0]}, skipping"
