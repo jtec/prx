@@ -1,13 +1,13 @@
 name: Python package
 
-on: [push]
+on: [ push ]
 
 jobs:
   linux-ci:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.10.8"]
+        python-version: [ "3.12.1" ]
     steps:
       - uses: actions/checkout@v3
       - name: Set up Python ${{ matrix.python-version }}
@@ -29,16 +29,16 @@ jobs:
           poetry install
       - name: Run ruff
         run: |
-         poetry run ruff check --exit-non-zero-on-fix
-         poetry run ruff format --check
+          poetry run ruff check --exit-non-zero-on-fix
+          poetry run ruff format --check
       - name: Test with pytest
         run: |
-         poetry run pytest -n auto --dist=loadfile --durations=10
+          poetry run pytest -n auto --dist=loadfile --durations=10
   windows-ci:
     runs-on: windows-latest
     strategy:
       matrix:
-        python-version: [ "3.10.8" ]
+        python-version: [ "3.12.1" ]
     steps:
       - uses: actions/checkout@v3
       - name: Set up Python ${{ matrix.python-version }}
@@ -65,7 +65,7 @@ jobs:
     runs-on: macos-latest
     strategy:
       matrix:
-        python-version: [ "3.10.8" ]
+        python-version: [ "3.12.1" ]
     steps:
       - uses: actions/checkout@v3
       - name: Set up Python ${{ matrix.python-version }}
