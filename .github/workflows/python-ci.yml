@@ -63,6 +63,8 @@ jobs:
           poetry run pytest -n auto --dist=loadfile --durations=10
   macos-ci:
     runs-on: macos-latest
+    with:
+    architecture: 'x64'
     strategy:
       matrix:
         python-version: [ "3.10.8" ]
