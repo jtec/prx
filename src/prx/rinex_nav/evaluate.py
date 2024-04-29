@@ -552,16 +552,17 @@ def to_isagpst(time, timescale, gpst_utc_leapseconds):
 def select_ephemerides(df, query):
     def find_ephemeris_index(row, df):
         # For each query, find the ephemeris whose time of reference is closest, but before the query time
+        # filter dataframe to keep only sv of interest
+        df2 = df[df.sv == row.sv]
         query_time_wrt_ephemeris_reference_time = (
-            row.query_time_isagpst
-            - df[df.sv == row.sv]["ephemeris_reference_time_isagpst"]
+            row.query_time_isagpst - df2.ephemeris_reference_time_isagpst
         )
-        eligible_ephemerides = df.sv == row.sv
+        eligible_ephemerides = pd.Series(data=True, index=df2.index)
         # For Galileo, select the FNAV ephemeris for E5b signals, and INAV for other signals
         if row["sv"][0] == "E" and row["signal"][1] == "5":
-            eligible_ephemerides = df.fnav_or_inav == "fnav"
+            eligible_ephemerides = df2.fnav_or_inav == "fnav"
         if row["sv"][0] == "E" and row["signal"][1] != "5":
-            eligible_ephemerides = df.fnav_or_inav == "inav"
+            eligible_ephemerides = df2.fnav_or_inav == "inav"
         delta_time = query_time_wrt_ephemeris_reference_time[
             eligible_ephemerides
             & (query_time_wrt_ephemeris_reference_time >= pd.Timedelta(seconds=0))
