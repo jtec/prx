@@ -44,6 +44,8 @@ cQzssOmegaDotEarth_rps = 7.2921151467e-5
 # Heuristic: demand micrometer precision in computations involving distances
 cPrxPrecision_m = 1e-6
 cMaxOrbitalSpeedOfAnyGnssSatellite_mps = 1e4
+# SBAS URA limit: used to discard SBAS supposed to have inactive georanging capabilities
+cSbasURALimit = 14
 
 cPrxJsonTextSequenceFileExtension = "jsonseq"
 cPrxCsvFileExtension = "csv"

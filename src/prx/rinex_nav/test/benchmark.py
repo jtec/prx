@@ -1,7 +1,6 @@
 import pandas as pd
 from pathlib import Path
 from prx.rinex_nav import evaluate as rinex_nav_evaluate
-from prx import constants
 from prx import converters
 import cProfile
 
@@ -24,8 +23,7 @@ def generate_query(n_epochs=1):
         {
             "sv": sats,
             "signal": "C1C",
-            "query_time_isagpst": pd.Timestamp("2022-01-01T01:10:00.000000000")
-            - constants.cGpstUtcEpoch,
+            "query_time_isagpst": pd.Timestamp("2022-01-01T01:10:00.000000000"),
         }
     )
     query = query_template.copy()
