@@ -134,7 +134,7 @@ def write_csv_file(
         ]
     )
     # Keep only records with valid sat states
-    records = records[records.clock_m.notna()]
+    records = records[records.sat_clock_offset_m.notna()]
     records.to_csv(
         path_or_buf=output_file,
         index=False,
@@ -212,7 +212,7 @@ def _build_records_cached(
         approximate_receiver_ecef_position_m
     )
     check_assumptions(rinex_3_obs_file)
-    obs = helpers.parse_rinex_obs_file(rinex_3_obs_file)
+    obs = helpers.parse_rinex_file(rinex_3_obs_file)
 
     # Flatten the xarray DataSet into a pandas DataFrame:
     log.info("Converting Dataset into flat Dataframe of observations")
