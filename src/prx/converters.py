@@ -50,7 +50,7 @@ def compact_rinex_obs_file_to_rinex_obs_file(file: Path):
     )
     assert len(crx2rnx_binaries) > 0, "Could not find any CRX2RNX binary"
     for crx2rnx_binary in crx2rnx_binaries:
-        command = f" {crx2rnx_binary} {file}"
+        command = f" {crx2rnx_binary} -f {file}"
         result = subprocess.run(command, capture_output=True, shell=True)
         if result.returncode == 0:
             expanded_file = Path(str(file).replace(".crx", ".rnx"))

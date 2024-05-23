@@ -13,27 +13,22 @@ from prx import constants
 
 log = helpers.get_logger(__name__)
 
-consts = {
-    "MU_EARTH": constants.cGpsMuEarth_m3ps2,
-    "OMEGA_E_DOT": constants.cGpsOmegaDotEarth_rps,
-}
-
 
 def parse_rinex_nav_file(rinex_file: Path):
-    @helpers.cache_call
+    @helpers.disk_cache.cache
     def cached_parse(rinex_file: Path, file_hash: str):
-        log.info(f"Parsing {rinex_file} ...")
-        helpers.repair_with_gfzrnx(rinex_file)
+        log.info(f"Parsing {rinex_file} (hash: {file_hash}) ...")
         ds = georinex.load(rinex_file)
         return ds
 
-    @helpers.cache_call
+    @helpers.disk_cache.cache
     def cached_load(rinex_file: Path, file_hash: str):
         ds = cached_parse(rinex_file, file_hash)
         ds.attrs["utc_gpst_leap_seconds"] = (
             helpers.get_gpst_utc_leap_seconds_from_rinex_header(rinex_file)
         )
         df = convert_nav_dataset_to_dataframe(ds)
+        df["ephemeris_hash"] = pd.util.hash_pandas_object(df, index=False).astype(str)
         return df
 
     t0 = pd.Timestamp.now()
@@ -627,7 +622,9 @@ def compute_clock_offsets(df):
 
 
 def compute_parallel(rinex_nav_file_path, per_signal_query):
-    parallel = Parallel(n_jobs=multiprocessing.cpu_count(), return_as="list")
+    # Warm up nav file parser cache so that we don't parse the file multiple times
+    _ = parse_rinex_nav_file(rinex_nav_file_path)
+    parallel = Parallel(n_jobs=round(multiprocessing.cpu_count() / 2), return_as="list")
     # split dataframe into `n_chunks` smaller dataframes
     n_chunks = min(len(per_signal_query.index), 4)
     chunk_length = floor(len(per_signal_query) / n_chunks)
@@ -670,9 +667,11 @@ def compute(rinex_nav_file_path, per_signal_query):
             log.info(
                 f"Ephemeris evaluation not implemented or under development for constellation {sub_df['constellation'].iloc[0]}, skipping"
             )
+            sub_df[["x_m", "y_m", "z_m", "dx_mps", "dy_mps", "dz_mps"]] = np.nan
         return sub_df
 
     per_sat_query = per_sat_query.groupby("orbit_type").apply(evaluate_orbit)
+    per_sat_query = per_sat_query.reset_index(drop=True)
     columns_to_keep = [
         "sv",
         "sat_pos_x_m",
@@ -682,11 +681,12 @@ def compute(rinex_nav_file_path, per_signal_query):
         "sat_vel_y_mps",
         "sat_vel_z_mps",
         "query_time_isagpst",
+        "ephemeris_hash",
     ]
     per_sat_query = per_sat_query[columns_to_keep]
     # Expand the computed satellite states into the larger signal-specific query dataframe
     per_signal_query = per_signal_query.merge(
-        per_sat_query, on=["sv", "query_time_isagpst"]
+        per_sat_query, on=["sv", "query_time_isagpst", "ephemeris_hash"]
     )
     columns_to_keep = [
         "sat_clock_offset_m",

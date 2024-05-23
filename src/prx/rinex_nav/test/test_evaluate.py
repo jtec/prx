@@ -189,7 +189,15 @@ def test_compare_to_sp3(input_for_test):
         rinex_sat_states.sort_values(by=["sv", "query_time_isagpst"])
         .sort_index(axis=1)
         .reset_index()
-        .drop(columns=["index", "signal", "sat_code_bias_m", "frequency_slot"])
+        .drop(
+            columns=[
+                "index",
+                "signal",
+                "sat_code_bias_m",
+                "frequency_slot",
+                "ephemeris_hash",
+            ]
+        )
     )
 
     sp3_sat_states = sp3_evaluate.compute(
@@ -212,7 +220,7 @@ def test_compare_to_sp3(input_for_test):
     )
     # Verify that sorting columns worked as expected
     assert sp3_sat_states.columns.equals(rinex_sat_states.columns)
-    diff = rinex_sat_states.drop(columns="sv") - sp3_sat_states.drop(columns="sv")
+    diff = rinex_sat_states.drop(columns=["sv"]) - sp3_sat_states.drop(columns="sv")
     diff = pd.concat((rinex_sat_states["sv"], diff), axis=1)
     diff["diff_xyz_l2_m"] = np.linalg.norm(
         diff[["sat_pos_x_m", "sat_pos_y_m", "sat_pos_z_m"]].to_numpy(), axis=1
@@ -313,7 +321,15 @@ def test_2023_beidou_c27(set_up_test_2023):
     ), "Was expecting only one row, make sure to sort before comparing to sp3 with more than one row"
     rinex_sat_states = (
         rinex_sat_states.reset_index()
-        .drop(columns=["index", "signal", "sat_code_bias_m", "frequency_slot"])
+        .drop(
+            columns=[
+                "index",
+                "signal",
+                "sat_code_bias_m",
+                "frequency_slot",
+                "ephemeris_hash",
+            ]
+        )
         .sort_index(axis="columns")
     )
     sp3_sat_states = (
