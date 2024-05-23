@@ -13,9 +13,9 @@ log = helpers.get_logger(__name__)
 
 
 def parse_sp3_file(file_path: Path):
-    @helpers.cache_call
+    @helpers.disk_cache.cache
     def cached_load(file_path: Path, file_hash: str):
-        log.info(f"Parsing {file_path} ...")
+        log.info(f"Parsing {file_path} (hash {file_hash}) ...")
         parsed = georinex.load(file_path)
         assert parsed is not None
         df = parsed.to_dataframe().reset_index()

@@ -15,6 +15,19 @@ time_of_reception_in_receiver_time,clock_m,dclock_mps,x_m,y_m,z_m,dx_mps,dy_mps,
 
 In addition to the observation values extracted from the RINEX file, the rows of the CSV contain the corresponding satellite position and speed at the time of transmission as well as relativistic effects, broadcast group delays, broadcast ionosphere delays etc.
 
+## Running prx
+From the `prx` repository root, run
+
+```
+poetry env use 3.12
+poetry install
+poetry shell
+python src/prx/main.py --observation_file_path <path_to_rinex_file> 
+```
+
+You might have to add `<path to prx root>/src/prx` to your `PYTHONPATH` environment variable if you run 
+into import errors.
+
 ## How we manage python version and dependencies
 We use `poetry` to make sure every developer and user of prx runs the same python version
 and the same set of dependencies such as `numpy` and `pandas`. Poetry reads `pyproject.toml`, 

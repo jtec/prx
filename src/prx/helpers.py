@@ -1,6 +1,10 @@
 import platform
+from functools import wraps
 from pathlib import Path
 import logging
+
+from imohash import imohash
+
 from prx import constants
 import numpy as np
 import pandas as pd
@@ -8,8 +12,6 @@ import subprocess
 import math
 import joblib
 import georinex
-import imohash
-from functools import lru_cache
 import os
 
 logging.basicConfig(
@@ -30,10 +32,10 @@ def parse_boolean_env_variable(env_variable_name: str, value_if_not_set: bool):
     return var_string in ("True", "true", "1")
 
 
-disable_caching = parse_boolean_env_variable("PRX_NO_CACHING", False)
-if disable_caching:
-    log.debug("Caching disabled by environment variable PRX_NO_CACHING")
 disk_cache = joblib.Memory(Path(__file__).parent.joinpath("diskcache"), verbose=0)
+if parse_boolean_env_variable("PRX_NO_CACHING", False):
+    log.debug("Caching disabled by environment variable PRX_NO_CACHING, purging cache.")
+    disk_cache.clear()
 
 
 def get_logger(label):
@@ -46,7 +48,7 @@ def prx_repository_root() -> Path:
 
 def hash_of_file_content(file: Path, use_sampling: bool = False):
     assert file.exists(), f"Looks like {file} does not exist."
-    sample_threshhold = imohash.imohash.SAMPLE_THRESHOLD
+    sample_threshhold = imohash.SAMPLE_THRESHOLD
     if not use_sampling:
         sample_threshhold = math.inf
     t0 = pd.Timestamp.now()
@@ -136,6 +138,10 @@ def rinex_header_time_string_2_timestamp_ns(time_string: str) -> pd.Timestamp:
 
 
 def repair_with_gfzrnx(file):
+    with open(file) as f:
+        if "gfzrnx" in f.read():
+            logging.warning(f"File {file} already contains 'gfzrnx', skipping repair.")
+            return file
     path_folder_gfzrnx = prx_repository_root().joinpath("tools", "gfzrnx")
     path_binary = path_folder_gfzrnx.joinpath(
         constants.gfzrnx_binary[platform.system()]
@@ -336,10 +342,10 @@ def ecef_2_geodetic(pos_ecef):
     return [latitude_rad, longitude_rad, altitude_m]
 
 
-def parse_rinex_obs_file(rinex_file: Path):
-    @cache_call
+def parse_rinex_file(rinex_file: Path):
+    @disk_cache.cache()
     def cached_load(rinex_file: Path, file_hash: str):
-        log.info(f"Parsing {rinex_file} ...")
+        log.info(f"Parsing {rinex_file} (hash {file_hash}) ...")
         repair_with_gfzrnx(rinex_file)
         parsed = georinex.load(rinex_file)
         return parsed
@@ -377,15 +383,14 @@ def is_sorted(iterable):
     return all(iterable[i] <= iterable[i + 1] for i in range(len(iterable) - 1))
 
 
-def cache_call(func):
-    @lru_cache
-    @disk_cache.cache
-    def wrapper_cached_call(*args, **kwargs):
-        return func(*args, **kwargs)
+def timeit(func):
+    @wraps(func)
+    def timeit_wrapper(*args, **kwargs):
+        start_time = pd.Timestamp.now()
+        result = func(*args, **kwargs)
+        end_time = pd.Timestamp.now()
+        total_time = end_time - start_time
+        log.debug(f"Function {func.__name__} took {total_time} to run.")
+        return result
 
-    def wrapper_uncached_call(*args, **kwargs):
-        return func(*args, **kwargs)
-
-    if disable_caching:
-        return wrapper_uncached_call
-    return wrapper_cached_call
+    return timeit_wrapper
