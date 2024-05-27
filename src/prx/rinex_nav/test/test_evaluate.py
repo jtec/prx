@@ -161,6 +161,17 @@ def generate_sat_query(sat_state_query_time_isagpst):
                 "signal": "C1C",
                 "query_time_isagpst": sat_state_query_time_isagpst,
             },
+            # Two SBAS satellites
+            {
+                "sv": "S31",
+                "signal": "C1C",
+                "query_time_isagpst": sat_state_query_time_isagpst,
+            },
+            {
+                "sv": "S33",
+                "signal": "C1C",
+                "query_time_isagpst": sat_state_query_time_isagpst,
+            },
         ]
     )
     return query
@@ -171,13 +182,22 @@ def test_compare_to_sp3(input_for_test):
         input_for_test["rinex_nav_file"]
     )
     query = generate_sat_query(pd.Timestamp("2022-01-01T01:10:00.000000000"))
-    query = query[query.sv.str[0] == "R"]
+    # We have no SP3 reference solutions for SBAS satellites, so remove them from the query
+    query = query[~query.sv.str.startswith("S")]
     rinex_sat_states = rinex_nav_evaluate.compute_parallel(rinex_nav_file, query.copy())
     rinex_sat_states = (
         rinex_sat_states.sort_values(by=["sv", "query_time_isagpst"])
         .sort_index(axis=1)
         .reset_index()
-        .drop(columns=["index", "signal", "sat_code_bias_m", "frequency_slot"])
+        .drop(
+            columns=[
+                "index",
+                "signal",
+                "sat_code_bias_m",
+                "frequency_slot",
+                "ephemeris_hash",
+            ]
+        )
     )
 
     sp3_sat_states = sp3_evaluate.compute(
@@ -200,9 +220,8 @@ def test_compare_to_sp3(input_for_test):
     )
     # Verify that sorting columns worked as expected
     assert sp3_sat_states.columns.equals(rinex_sat_states.columns)
-    diff = rinex_sat_states.drop(columns="sv") - sp3_sat_states.drop(columns="sv")
+    diff = rinex_sat_states.drop(columns=["sv"]) - sp3_sat_states.drop(columns="sv")
     diff = pd.concat((rinex_sat_states["sv"], diff), axis=1)
-    diff = diff.dropna()
     diff["diff_xyz_l2_m"] = np.linalg.norm(
         diff[["sat_pos_x_m", "sat_pos_y_m", "sat_pos_z_m"]].to_numpy(), axis=1
     )
@@ -219,6 +238,41 @@ def test_compare_to_sp3(input_for_test):
         assert (
             diff[column].max() < expected_max_difference
         ), f"Expected maximum difference {expected_max_difference} for column {column}, but got {diff[column].max()}"
+
+
+def test_sbas(input_for_test):
+    rinex_nav_file = converters.compressed_to_uncompressed(
+        input_for_test["rinex_nav_file"]
+    )
+    query = generate_sat_query(pd.Timestamp("2022-01-01T01:10:00.000000000"))
+    # We have no SP3 reference solutions for SBAS satellites, so we only test that reasonable broadcast
+    # satellite states are computed here.
+    query = query[query.sv.str.startswith("S")]
+    rinex_sat_states = rinex_nav_evaluate.compute(rinex_nav_file, query.copy())
+    assert not rinex_sat_states.empty
+    assert (
+        not rinex_sat_states[
+            [
+                "sat_clock_offset_m",
+                "sat_clock_drift_mps",
+                "sat_pos_x_m",
+                "sat_pos_y_m",
+                "sat_pos_z_m",
+                "sat_vel_x_mps",
+                "sat_vel_y_mps",
+                "sat_vel_z_mps",
+            ]
+        ]
+        .isna()
+        .values.any()
+    )
+    rGeoStationaryOrbit = 42164e3
+    assert (
+        rinex_sat_states[["sat_pos_x_m", "sat_pos_y_m", "sat_pos_z_m"]].apply(
+            np.linalg.norm, axis=1
+        )
+        - rGeoStationaryOrbit
+    ).abs().max() < 2e3
 
 
 @pytest.fixture
@@ -267,7 +321,15 @@ def test_2023_beidou_c27(set_up_test_2023):
     ), "Was expecting only one row, make sure to sort before comparing to sp3 with more than one row"
     rinex_sat_states = (
         rinex_sat_states.reset_index()
-        .drop(columns=["index", "signal", "sat_code_bias_m", "frequency_slot"])
+        .drop(
+            columns=[
+                "index",
+                "signal",
+                "sat_code_bias_m",
+                "frequency_slot",
+                "ephemeris_hash",
+            ]
+        )
         .sort_index(axis="columns")
     )
     sp3_sat_states = (

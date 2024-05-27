@@ -13,27 +13,22 @@ from prx import constants
 
 log = helpers.get_logger(__name__)
 
-consts = {
-    "MU_EARTH": constants.cGpsMuEarth_m3ps2,
-    "OMEGA_E_DOT": constants.cGpsOmegaDotEarth_rps,
-}
-
 
 def parse_rinex_nav_file(rinex_file: Path):
-    @helpers.cache_call
+    @helpers.disk_cache.cache
     def cached_parse(rinex_file: Path, file_hash: str):
-        log.info(f"Parsing {rinex_file} ...")
-        helpers.repair_with_gfzrnx(rinex_file)
+        log.info(f"Parsing {rinex_file} (hash: {file_hash}) ...")
         ds = georinex.load(rinex_file)
         return ds
 
-    @helpers.cache_call
+    @helpers.disk_cache.cache
     def cached_load(rinex_file: Path, file_hash: str):
         ds = cached_parse(rinex_file, file_hash)
         ds.attrs["utc_gpst_leap_seconds"] = (
             helpers.get_gpst_utc_leap_seconds_from_rinex_header(rinex_file)
         )
         df = convert_nav_dataset_to_dataframe(ds)
+        df["ephemeris_hash"] = pd.util.hash_pandas_object(df, index=False).astype(str)
         return df
 
     t0 = pd.Timestamp.now()
@@ -54,7 +49,7 @@ def time_scale_integer_second_offset_wrt_gpst(time_scale, utc_gpst_leap_seconds=
     if time_scale == "GLONASST":
         assert (
             utc_gpst_leap_seconds is not None
-        ), "Need GPST-UTC leap seconds to compute GLONASST intger second offset w.r.t. GPST"
+        ), "Need GPST-UTC leap seconds to compute GLONASST integer second offset w.r.t. GPST"
         return pd.Timedelta(seconds=-utc_gpst_leap_seconds)
     assert False, f"Unexpected time scale: {time_scale}"
 
@@ -120,6 +115,21 @@ def glonass_xdot_montenbruck(x, acc_sun_moon):
         c1 * p.loc[:, "Z"] + c2 * p.loc[:, "Z"] + acc_sun_moon.loc[:, "dZ2"]
     )
     return xdot
+
+
+def sbas_orbit_position_and_velocity(df):
+    # Based on Montenbruck, 2017, Handbook of GNSS, section 3.3.3, eq. 3.59
+    t_query = df["query_time_wrt_ephemeris_reference_time_s"].values.reshape(-1, 1)
+    df[["sat_pos_x_m", "sat_pos_y_m", "sat_pos_z_m"]] = (
+        df[["X", "Y", "Z"]].values
+        + df[["dX", "dY", "dZ"]].mul(t_query, axis=0).values
+        + 0.5 * df[["dX2", "dY2", "dZ2"]].mul(t_query**2, axis=0).values
+    )
+    df[["sat_vel_x_mps", "sat_vel_y_mps", "sat_vel_z_mps"]] = (
+        df[["dX", "dY", "dZ"]].values
+        + df[["dX2", "dY2", "dZ2"]].mul(t_query, axis=0).values
+    )
+    return df
 
 
 def glonass_orbit_position_and_velocity(df):
@@ -399,6 +409,10 @@ def convert_nav_dataset_to_dataframe(nav_ds):
         constants.constellation_2_system_time_scale
     )
 
+    # Keep only SBAS ephemerides with low URA, these are based on SBAS message type 9, while those with large URA are
+    # based on message type 17 which only contains almanac-like coarse satellite position estimates.
+    df = df[~((df.sv.str.startswith("S")) & (df.URA >= constants.cSbasURALimit))]
+
     def compute_ephemeris_and_clock_offset_reference_times(group):
         week_field = {
             "GPST": "GPSWeek",
@@ -608,7 +622,9 @@ def compute_clock_offsets(df):
 
 
 def compute_parallel(rinex_nav_file_path, per_signal_query):
-    parallel = Parallel(n_jobs=multiprocessing.cpu_count(), return_as="generator")
+    # Warm up nav file parser cache so that we don't parse the file multiple times
+    _ = parse_rinex_nav_file(rinex_nav_file_path)
+    parallel = Parallel(n_jobs=round(multiprocessing.cpu_count() / 2), return_as="list")
     # split dataframe into `n_chunks` smaller dataframes
     n_chunks = min(len(per_signal_query.index), 4)
     chunk_length = floor(len(per_signal_query) / n_chunks)
@@ -645,13 +661,17 @@ def compute(rinex_nav_file_path, per_signal_query):
             sub_df = kepler_orbit_position_and_velocity(sub_df)
         elif orbit_type == "glonass":
             sub_df = glonass_orbit_position_and_velocity(sub_df)
+        elif orbit_type == "sbas":
+            sub_df = sbas_orbit_position_and_velocity(sub_df)
         else:
             log.info(
                 f"Ephemeris evaluation not implemented or under development for constellation {sub_df['constellation'].iloc[0]}, skipping"
             )
+            sub_df[["x_m", "y_m", "z_m", "dx_mps", "dy_mps", "dz_mps"]] = np.nan
         return sub_df
 
     per_sat_query = per_sat_query.groupby("orbit_type").apply(evaluate_orbit)
+    per_sat_query = per_sat_query.reset_index(drop=True)
     columns_to_keep = [
         "sv",
         "sat_pos_x_m",
@@ -661,11 +681,12 @@ def compute(rinex_nav_file_path, per_signal_query):
         "sat_vel_y_mps",
         "sat_vel_z_mps",
         "query_time_isagpst",
+        "ephemeris_hash",
     ]
     per_sat_query = per_sat_query[columns_to_keep]
     # Expand the computed satellite states into the larger signal-specific query dataframe
     per_signal_query = per_signal_query.merge(
-        per_sat_query, on=["sv", "query_time_isagpst"]
+        per_sat_query, on=["sv", "query_time_isagpst", "ephemeris_hash"]
     )
     columns_to_keep = [
         "sat_clock_offset_m",

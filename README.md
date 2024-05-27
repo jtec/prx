@@ -1,6 +1,32 @@
 # prx
 
-Making GNSS positioning a bit more accessible.
+prx reads a RINEX 3.05 observation file and outputs a CSV file of the following format
+
+
+```
+# {"approximate_receiver_ecef_position_m": [4627852.5264, 119640.514, 4372994.8358], "input_files": [{"name": "TLSE00FRA_R_20240011200_15M_01S_MO.rnx", "murmur3_hash": "f9fbd80567dac9c5f55586521385b067"}, {"name": "BRDC00IGS_R_20240010000_01D_MN.rnx", "murmur3_hash": "f7df97045419097c85cae76bb9324ccb"}], "prx_git_commit_id": "82aae81874c5dd81973720397c42d0305456a2e9"}
+time_of_reception_in_receiver_time,clock_m,dclock_mps,x_m,y_m,z_m,dx_mps,dy_mps,dz_mps,ephemeris_hash,frequency_slot,relativistic_clock_effect_m,sagnac_effect_m,tropo_delay_m,group_delay_m,carrier_frequency_hz,code_iono_delay_klobuchar_m,elevation_deg,azimuth_deg,observation_code,C_obs,D_obs_hz,L_obs_cycles,S_obs_dBHz,constellation,prn
+2024-01-01 12:00:00.000000,57153.224736,-0.018397,21838606.222023,36012172.441686,-1479022.231769,-3.184508,4.675864,-0.920381,2168809070289459030,1.000000,-0.668490,-39.902407,10.053189,0.029979,1561098000.000000,-15.044328,13.082414,115.281248,2I,40176280.391000,-14.730000,209208378.723000,35.400000,C,05
+2024-01-01 12:00:00.000000,57153.224736,-0.018397,21838606.222023,36012172.441686,-1479022.231769,-3.184508,4.675864,-0.920381,2168809070289459030,1.000000,-0.668490,-39.902407,10.053189,0.000000,1268520000.000000,-22.784446,13.082414,115.281248,6I,40176273.273000,-11.969000,169998932.830000,36.900000,C,05
+2024-01-01 12:00:00.000000,57153.224736,-0.018397,21838606.222023,36012172.441686,-1479022.231769,-3.184508,4.675864,-0.920381,2168809070289459030,1.000000,-0.668490,-39.902407,10.053189,-2.728111,1207140000.000000,-25.160417,13.082414,115.281248,7I,40176276.934000,-11.391000,161773185.396000,38.400000,C,05
+
+...
+```
+
+In addition to the observation values extracted from the RINEX file, the rows of the CSV contain the corresponding satellite position and speed at the time of transmission as well as relativistic effects, broadcast group delays, broadcast ionosphere delays etc.
+
+## Running prx
+From the `prx` repository root, run
+
+```
+poetry env use 3.12
+poetry install
+poetry shell
+python src/prx/main.py --observation_file_path <path_to_rinex_file> 
+```
+
+You might have to add `<path to prx root>/src/prx` to your `PYTHONPATH` environment variable if you run 
+into import errors.
 
 ## How we manage python version and dependencies
 We use `poetry` to make sure every developer and user of prx runs the same python version

@@ -65,7 +65,6 @@ def try_downloading_ephemerides(t_start: pd.Timestamp, t_end, folder: Path):
         local_file = try_downloading_ephemerides_ftp(time, folder)
     assert local_file, f"Could not download broadcast ephemerides for {time}"
 
-    local_file = helpers.repair_with_gfzrnx(local_file)
     files.append(local_file)
     if len(files) == 0:
         return None
@@ -86,28 +85,34 @@ def rinex_3_ephemerides_file_coverage_time(ephemerides_file: Path):
 
 
 def discover_local_ephemerides(
-    # This function returns a list of paths, in case the observation file spans over several days
+    # This function returns a list of paths, in case the observation file spans several days
     t_start: pd.Timestamp,
     t_end: pd.Timestamp,
     folder: Path,
 ):
     candidates = glob.glob(str(folder.joinpath("**.rnx**")), recursive=True)
     nav_files = []
-    start_end_end_times = []
     for candidate in candidates:
         nav_file = converters.anything_to_rinex_3(Path(candidate))
         if nav_file is None:
             continue
         if not is_rinex_3_mixed_mgex_broadcast_ephemerides_file(nav_file):
             continue
-        nav_files.append(nav_file)
-        start_end_end_times.extend(rinex_3_ephemerides_file_coverage_time(nav_file))
-    if len(nav_files) == 0:
+        nav_files.append(
+            {
+                "file": nav_file,
+                "start_time": rinex_3_ephemerides_file_coverage_time(nav_file)[0],
+                "end_time": rinex_3_ephemerides_file_coverage_time(nav_file)[1],
+            }
+        )
+    df = pd.DataFrame(nav_files)
+    df = df.drop_duplicates(subset=["start_time", "end_time"])
+    if len(df.index) == 0:
         return None
-    if min(start_end_end_times) > t_start or max(start_end_end_times) < t_end:
+    if min(df.start_time) > t_start or max(df.end_time) < t_end:
         return None
-    log.info(f"Found broadcast ephemeris files on disk: {[str(f) for f in nav_files]}")
-    return nav_files
+    log.info(f"Found broadcast ephemeris files on disk: {[str(f) for f in df.file]}")
+    return df.file.tolist()
 
 
 def discover_or_download_ephemerides(
@@ -117,7 +122,11 @@ def discover_or_download_ephemerides(
     for source in sources:
         ephemerides_files = source(t_start, t_end, folder)
         if ephemerides_files is not None:
+            ephemerides_files = [
+                helpers.repair_with_gfzrnx(f) for f in ephemerides_files
+            ]
             return ephemerides_files
+    return None
 
 
 def discover_or_download_auxiliary_files(observation_file_path=Path()):
@@ -136,7 +145,7 @@ def discover_or_download_auxiliary_files(observation_file_path=Path()):
         rinex_3_obs_file.parent,
         list(header["fields"].keys()),
     )
-    # Note that ephs may be a list of paths, in case the observation file spans over several days
+    # Note that ephs may be a list of paths, in case the observation file spans several days
     return {"broadcast_ephemerides": ephs}
 
 
