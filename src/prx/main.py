@@ -163,7 +163,7 @@ def build_metadata(input_files):
         prx_metadata["approximate_receiver_ecef_position_m"] = user.first_position_from_georinex(
             input_files["obs_file"],
             input_files["nav_file"],
-        )
+        ).tolist()
 
     prx_metadata["input_files"] = [
         {
@@ -450,7 +450,6 @@ def _build_records_cached(
         # get year and doy from NAV filename
         year = int(file.name[12:16])
         doy = int(file.name[16:19])
-        log.info(f"Computing iono delay for {year}-{doy:03d}")
 
         # Selection criteria: time of emission belonging to the day of the current NAV file
         mask = (
@@ -460,22 +459,29 @@ def _build_records_cached(
                        flat_obs.time_of_emission_isagpst
                        < pd.Timestamp(year=year, month=1, day=1) + pd.Timedelta(days=doy)
                )
-
-        flat_obs.loc[
-            mask,
-            "iono_delay_m",
-        ] = -atmo.compute_klobuchar_l1_correction(
-            flat_obs.loc[mask].time_of_emission_weeksecond_isagpst.to_numpy(),
-            nav_header_dict[f"{year:03d}" + f"{doy:03d}"]["IONOSPHERIC CORR"]["GPSA"],
-            nav_header_dict[f"{year:03d}" + f"{doy:03d}"]["IONOSPHERIC CORR"]["GPSB"],
-            flat_obs.loc[mask].elevation_rad,
-            flat_obs.loc[mask].azimuth_rad,
-            latitude_user_rad,
-            longitude_user_rad,
-        ) * (
-                    constants.carrier_frequencies_hz()["G"]["L1"][1] ** 2
-                    / flat_obs.loc[mask].carrier_frequency_hz ** 2
-            )
+        if "IONOSPHERIC CORR" in nav_header_dict[f"{year:03d}" + f"{doy:03d}"]:
+            log.info(f"Computing iono delay for {year}-{doy:03d}")
+            flat_obs.loc[
+                mask,
+                "iono_delay_m",
+            ] = -atmo.compute_klobuchar_l1_correction(
+                flat_obs.loc[mask].time_of_emission_weeksecond_isagpst.to_numpy(),
+                nav_header_dict[f"{year:03d}" + f"{doy:03d}"]["IONOSPHERIC CORR"]["GPSA"],
+                nav_header_dict[f"{year:03d}" + f"{doy:03d}"]["IONOSPHERIC CORR"]["GPSB"],
+                flat_obs.loc[mask].elevation_rad,
+                flat_obs.loc[mask].azimuth_rad,
+                latitude_user_rad,
+                longitude_user_rad,
+            ) * (
+                        constants.carrier_frequencies_hz()["G"]["L1"][1] ** 2
+                        / flat_obs.loc[mask].carrier_frequency_hz ** 2
+                )
+        else:
+            logging.warning(f"Missing iono model parameters for day {doy:03d}")
+            flat_obs.loc[
+                mask,
+                "iono_delay_m",
+            ] = 0
 
     return flat_obs
 
