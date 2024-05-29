@@ -7,7 +7,7 @@ import src.prx.helpers as helpers
 
 log = helpers.get_logger(__name__)
 remote_dataset_filepath = Path(
-    "C:/Users/paul/OneDrive - enac.fr/DataCollect_GoogleSDC_2021"
+    "C:/Users/paul/backup_hard_drive/DataCollect_GoogleSDC_2021"
 )
 
 if __name__ == "__main__":
@@ -44,8 +44,11 @@ if __name__ == "__main__":
             shutil.move(Path(file_gz.name), new_path)
         local_gz_list.append(new_path)
 
-    # process single file with prx
-    prx.process(
-        observation_file_path=local_gz_list[0],
-        output_format="csv",
-    )
+    # process all files with prx
+    for i, file in enumerate(local_gz_list):
+        log.info(f"===== Processing file #{i} =====")
+        prx.process(
+            observation_file_path=file,
+            output_format="csv",
+        )
+
