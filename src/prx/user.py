@@ -127,6 +127,7 @@ def first_position_from_georinex(filepath_obs, filepath_nav):
                       tlim=[first_epoch.isoformat(), (first_epoch + pd.Timedelta(seconds=1)).isoformat()],
                       use={"G"},
                       meas=["C1C"])
+        obs = obs.where(obs.C1C.notnull(),drop=True)
         n_obs = len(obs.sv.values)
         first_epoch = first_epoch + pd.Timedelta(seconds=1)
 
