@@ -21,7 +21,7 @@ def parse_prx_csv_file(prx_file: Path):
 
 
 def spp_vt_lsq(df, p_ecef_m):
-    df = df[df.D_obs_hz.notna()].reset_index(drop=True)
+    df = df[df.D_obs_hz.notna() & df.sat_clock_drift_mps.notna()].reset_index(drop=True)
     df["D_obs_mps"] = -df.D_obs_hz * cGpsSpeedOfLight_mps / df.carrier_frequency_hz
     # Remove satellite velocity projected onto line of sight
     rx_sat_vectors = (
@@ -50,12 +50,12 @@ def spp_vt_lsq(df, p_ecef_m):
     for i, constellation in enumerate(df.constellation.unique()):
         H_dclock[df.constellation == constellation, i] = 1
     H = np.hstack((-unit_vectors, H_dclock))
-    x_lsq, residuals, _, _ = np.linalg.lstsq(H, df.D_obs_corrected_mps, rcond="warn")
+    x_lsq, residuals, _, _ = np.linalg.lstsq(H, df.D_obs_corrected_mps, rcond=None)
     return x_lsq.reshape(-1, 1)
 
 
 def spp_pt_lsq(df, dx_convergence_l2=1e-6, max_iterations=10):
-    df = df[df.C_obs_m.notna()]
+    df = df[df.C_obs_m.notna() & df.sat_clock_offset_m.notna()]
     df["C_obs_m_corrected"] = (
             df.C_obs_m
             + df.sat_clock_offset_m
@@ -100,7 +100,7 @@ def spp_pt_lsq(df, dx_convergence_l2=1e-6, max_iterations=10):
         # One clock offset per constellation
         H = np.hstack((-unit_vectors, H_clock))
         x_lsq, residuals, _, _ = np.linalg.lstsq(
-            H, df.C_obs_m_corrected - C_obs_m_predicted, rcond="warn"
+            H, df.C_obs_m_corrected - C_obs_m_predicted, rcond=None
         )
         x_lsq = x_lsq.reshape(-1, 1)
         solution_increment_l2 = np.linalg.norm(x_lsq)
