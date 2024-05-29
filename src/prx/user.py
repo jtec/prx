@@ -25,7 +25,7 @@ def spp_vt_lsq(df, p_ecef_m):
     df["D_obs_mps"] = -df.D_obs_hz * cGpsSpeedOfLight_mps / df.carrier_frequency_hz
     # Remove satellite velocity projected onto line of sight
     rx_sat_vectors = (
-            df[["sat_pos_x_m", "sat_pos_y_m", "sat_pos_z_m"]].to_numpy() - p_ecef_m.T
+        df[["sat_pos_x_m", "sat_pos_y_m", "sat_pos_z_m"]].to_numpy() - p_ecef_m.T
     )
     row_sums = np.linalg.norm(rx_sat_vectors, axis=1)
     unit_vectors = (rx_sat_vectors.T / row_sums).T
@@ -36,9 +36,9 @@ def spp_vt_lsq(df, p_ecef_m):
         axis=1,
     ).reshape(-1, 1)
     df["D_obs_corrected_mps"] = (
-            df.D_obs_mps.to_numpy().reshape(-1, 1)
-            + df.sat_clock_drift_mps.to_numpy().reshape(-1, 1)
-            - df["satellite_los_velocities"].to_numpy().reshape(-1, 1)
+        df.D_obs_mps.to_numpy().reshape(-1, 1)
+        + df.sat_clock_drift_mps.to_numpy().reshape(-1, 1)
+        - df["satellite_los_velocities"].to_numpy().reshape(-1, 1)
     )
     # Jacobian of Doppler observation w.r.t. receiver clock offset drift w.r.t. constellation system clock
     H_dclock = np.zeros(
@@ -57,13 +57,13 @@ def spp_vt_lsq(df, p_ecef_m):
 def spp_pt_lsq(df, dx_convergence_l2=1e-6, max_iterations=10):
     df = df[df.C_obs_m.notna() & df.sat_clock_offset_m.notna()]
     df["C_obs_m_corrected"] = (
-            df.C_obs_m
-            + df.sat_clock_offset_m
-            + df.relativistic_clock_effect_m
-            - df.sagnac_effect_m
-            - df.iono_delay_m
-            - df.tropo_delay_m
-            - df.sat_code_bias_m
+        df.C_obs_m
+        + df.sat_clock_offset_m
+        + df.relativistic_clock_effect_m
+        - df.sagnac_effect_m
+        - df.iono_delay_m
+        - df.tropo_delay_m
+        - df.sat_code_bias_m
     )
     # Jacobian of pseudorange observation w.r.t. receiver clock offset w.r.t. constellation system clock
     H_clock = np.zeros(
@@ -81,19 +81,17 @@ def spp_pt_lsq(df, dx_convergence_l2=1e-6, max_iterations=10):
     while solution_increment_l2 > dx_convergence_l2:
         # Compute predicted pseudo-range as geometric distance + receiver clock bias, predicted at x_linearization
         C_obs_m_predicted = (
-                np.linalg.norm(
-                    x_linearization[0:3].T
-                    - df[["sat_pos_x_m", "sat_pos_y_m", "sat_pos_z_m"]].to_numpy(),
-                    axis=1,
-                )  # geometric distance
-                + np.squeeze(
-            H_clock @ x_linearization[3:]
-        )
+            np.linalg.norm(
+                x_linearization[0:3].T
+                - df[["sat_pos_x_m", "sat_pos_y_m", "sat_pos_z_m"]].to_numpy(),
+                axis=1,
+            )  # geometric distance
+            + np.squeeze(H_clock @ x_linearization[3:])
         )  # rx to constellation clock bias
         # compute jacobian matrix
         rx_sat_vectors = (
-                df[["sat_pos_x_m", "sat_pos_y_m", "sat_pos_z_m"]].to_numpy()
-                - x_linearization[:3].T
+            df[["sat_pos_x_m", "sat_pos_y_m", "sat_pos_z_m"]].to_numpy()
+            - x_linearization[:3].T
         )
         row_sums = np.linalg.norm(rx_sat_vectors, axis=1)
         unit_vectors = (rx_sat_vectors.T / row_sums).T
@@ -107,7 +105,7 @@ def spp_pt_lsq(df, dx_convergence_l2=1e-6, max_iterations=10):
         x_linearization += x_lsq
         n_iterations += 1
         assert (
-                n_iterations <= max_iterations
+            n_iterations <= max_iterations
         ), "LSQ did not converge in allowed number of iterations"
     return x_linearization
 
@@ -123,46 +121,63 @@ def first_position_from_georinex(filepath_obs, filepath_nav):
     # select GPS C1C for first epoch
     n_obs = 0
     while n_obs < 4:  # loop until 4 observations are available
-        obs = gr.load(filepath_obs,
-                      tlim=[first_epoch.isoformat(), (first_epoch + pd.Timedelta(seconds=1)).isoformat()],
-                      use={"G"},
-                      meas=["C1C"])
+        obs = gr.load(
+            filepath_obs,
+            tlim=[
+                first_epoch.isoformat(),
+                (first_epoch + pd.Timedelta(seconds=1)).isoformat(),
+            ],
+            use={"G"},
+            meas=["C1C"],
+        )
 
-        if "C1C" in obs: # check if there is at least one GPS L1C/A observation
+        if "C1C" in obs:  # check if there is at least one GPS L1C/A observation
             obs = obs.isel(time=[0]).where(obs.isel(time=[0]).C1C.notnull(), drop=True)
             n_obs = len(obs.sv.values)
         else:
             n_obs = 0
         first_epoch = first_epoch + pd.Timedelta(seconds=1)
 
-    time_of_flight = [pd.Timedelta(float(obs.C1C.isel(time=0, sv=i)) / prx.constants.cGpsSpeedOfLight_mps, unit="s") for
-                      i
-                      in range(len(obs.sv))]
-    time_of_emission = [obs.time.values[0] - time_of_flight[i] for i in range(len(obs.sv))]
+    time_of_flight = [
+        pd.Timedelta(
+            float(obs.C1C.isel(time=0, sv=i)) / prx.constants.cGpsSpeedOfLight_mps,
+            unit="s",
+        )
+        for i in range(len(obs.sv))
+    ]
+    time_of_emission = [
+        obs.time.values[0] - time_of_flight[i] for i in range(len(obs.sv))
+    ]
 
     # build query df
     query = pd.DataFrame(
         data={
-            'time_of_reception_in_receiver_time': obs.time.values[0],
-            'satellite': obs.sv.values,
-            'observation_value': obs.isel(time=0).C1C.values,
-            'observation_type': "C1C",
-            'time_of_emission_in_satellite_time_integer_second_aligned_to_receiver_time': time_of_emission,
-            'time_of_emission_isagpst': time_of_emission,
-            'time_of_emission_weeksecond_isagpst': [prx.helpers.timedelta_2_weeks_and_seconds(
-                prx.helpers.timestamp_2_timedelta(
-                    time_of_emission[i],
-                    time_scale="GPST"))[1] for i in range(len(obs.sv))],
-            'signal': "C1C",
-            'sv': obs.sv.values,
-            'query_time_isagpst': time_of_emission,
+            "time_of_reception_in_receiver_time": obs.time.values[0],
+            "satellite": obs.sv.values,
+            "observation_value": obs.isel(time=0).C1C.values,
+            "observation_type": "C1C",
+            "time_of_emission_in_satellite_time_integer_second_aligned_to_receiver_time": time_of_emission,
+            "time_of_emission_isagpst": time_of_emission,
+            "time_of_emission_weeksecond_isagpst": [
+                prx.helpers.timedelta_2_weeks_and_seconds(
+                    prx.helpers.timestamp_2_timedelta(
+                        time_of_emission[i], time_scale="GPST"
+                    )
+                )[1]
+                for i in range(len(obs.sv))
+            ],
+            "signal": "C1C",
+            "sv": obs.sv.values,
+            "query_time_isagpst": time_of_emission,
         }
     )
 
     # compute satellite states
     # TODO find correct ephemeris file in list
     current_nav_file_index = 0
-    sat_states = prx.rinex_nav.evaluate.compute(filepath_nav[current_nav_file_index], query)
+    sat_states = prx.rinex_nav.evaluate.compute(
+        filepath_nav[current_nav_file_index], query
+    )
     sat_states = sat_states.rename(
         columns={
             "sv": "satellite",
@@ -178,29 +193,50 @@ def first_position_from_georinex(filepath_obs, filepath_nav):
     )
 
     # create obs df by merging query and sat_states
-    obs_df = query[['time_of_reception_in_receiver_time', 'satellite', 'observation_value', ]].merge(
-        sat_states[[
-            'sat_code_bias_m', 'sat_clock_offset_m',
-            'sat_clock_drift_mps', 'satellite', 'sat_pos_x_m', 'sat_pos_y_m',
-            'sat_pos_z_m', 'sat_vel_x_mps', 'sat_vel_y_mps', 'sat_vel_z_mps',
-            'relativistic_clock_effect_m'
-        ]],
+    obs_df = query[
+        [
+            "time_of_reception_in_receiver_time",
+            "satellite",
+            "observation_value",
+        ]
+    ].merge(
+        sat_states[
+            [
+                "sat_code_bias_m",
+                "sat_clock_offset_m",
+                "sat_clock_drift_mps",
+                "satellite",
+                "sat_pos_x_m",
+                "sat_pos_y_m",
+                "sat_pos_z_m",
+                "sat_vel_x_mps",
+                "sat_vel_y_mps",
+                "sat_vel_z_mps",
+                "relativistic_clock_effect_m",
+            ]
+        ],
         how="left",
         on="satellite",
     )
-    obs_df = obs_df.rename(columns={'observation_value': 'C_obs_m'})
+    obs_df = obs_df.rename(columns={"observation_value": "C_obs_m"})
     # add missing columns with 0 value, since approximate position is unknown
     obs_df = pd.concat(
-        [obs_df,
-         pd.DataFrame({
-            "sagnac_effect_m":np.zeros(len(obs.sv)),
-             "iono_delay_m":np.zeros(len(obs.sv)),
-             "tropo_delay_m":np.zeros(len(obs.sv)),
-             "constellation":"G",
-         })],
+        [
+            obs_df,
+            pd.DataFrame(
+                {
+                    "sagnac_effect_m": np.zeros(len(obs.sv)),
+                    "iono_delay_m": np.zeros(len(obs.sv)),
+                    "tropo_delay_m": np.zeros(len(obs.sv)),
+                    "constellation": "G",
+                }
+            ),
+        ],
         axis=1,
     )
 
-    solution = spp_pt_lsq(obs_df,)
+    solution = spp_pt_lsq(
+        obs_df,
+    )
 
     return solution[0:3].squeeze()

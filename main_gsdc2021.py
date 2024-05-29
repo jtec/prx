@@ -51,4 +51,3 @@ if __name__ == "__main__":
             observation_file_path=file,
             output_format="csv",
         )
-

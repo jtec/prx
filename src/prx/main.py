@@ -18,10 +18,10 @@ log = helpers.get_logger(__name__)
 
 @helpers.timeit
 def write_prx_file(
-        prx_header: dict,
-        prx_records: pd.DataFrame,
-        file_name_without_extension: Path,
-        output_format: str,
+    prx_header: dict,
+    prx_records: pd.DataFrame,
+    file_name_without_extension: Path,
+    output_format: str,
 ):
     output_writers = {"jsonseq": write_json_text_sequence_file, "csv": write_csv_file}
     if output_format not in output_writers.keys():
@@ -30,7 +30,7 @@ def write_prx_file(
 
 
 def write_json_text_sequence_file(
-        prx_header: dict, prx_records: pd.DataFrame, file_name_without_extension: Path
+    prx_header: dict, prx_records: pd.DataFrame, file_name_without_extension: Path
 ):
     output_file = Path(
         f"{str(file_name_without_extension)}.{constants.cPrxJsonTextSequenceFileExtension}"
@@ -46,7 +46,7 @@ def write_json_text_sequence_file(
             epoch = pd.Timestamp(epoch)
             epoch_obs = prx_records[
                 prx_records["time_of_reception_in_receiver_time"] == epoch
-                ]
+            ]
             record = {
                 "time_of_reception_in_receiver_time": epoch.strftime(
                     "%Y:%m:%dT%H:%M:%S.%f"
@@ -73,7 +73,7 @@ def write_json_text_sequence_file(
 
 
 def write_csv_file(
-        prx_header: dict, flat_records: pd.DataFrame, file_name_without_extension: Path
+    prx_header: dict, flat_records: pd.DataFrame, file_name_without_extension: Path
 ):
     output_file = Path(
         f"{str(file_name_without_extension)}.{constants.cPrxCsvFileExtension}"
@@ -159,11 +159,15 @@ def build_metadata(input_files):
     ).tolist()
     if prx_metadata["approximate_receiver_ecef_position_m"] == [0, 0, 0]:
         # compute position with first epoch
-        logging.info("Compute approximate position from first epoch with at least 4 GPS satellites")
-        prx_metadata["approximate_receiver_ecef_position_m"] = user.first_position_from_georinex(
-            input_files["obs_file"],
-            input_files["nav_file"],
-        ).tolist()
+        logging.info(
+            "Compute approximate position from first epoch with at least 4 GPS satellites"
+        )
+        prx_metadata["approximate_receiver_ecef_position_m"] = (
+            user.first_position_from_georinex(
+                input_files["obs_file"],
+                input_files["nav_file"],
+            ).tolist()
+        )
 
     prx_metadata["input_files"] = [
         {
@@ -179,23 +183,23 @@ def build_metadata(input_files):
 
 
 def check_assumptions(
-        rinex_3_obs_file,
+    rinex_3_obs_file,
 ):
     obs_header = georinex.rinexheader(rinex_3_obs_file)
     if "RCV CLOCK OFFS APPL" in obs_header.keys():
         assert (
-                obs_header["RCV CLOCK OFFS APPL"].strip() == "0"
+            obs_header["RCV CLOCK OFFS APPL"].strip() == "0"
         ), "Handling of 'RCV CLOCK OFFS APPL' != 0 not implemented yet."
     assert (
-            obs_header["TIME OF FIRST OBS"].split()[-1].strip() == "GPS"
+        obs_header["TIME OF FIRST OBS"].split()[-1].strip() == "GPS"
     ), "Handling of observation files using time scales other than GPST not implemented yet."
 
 
 @helpers.timeit
 def build_records(
-        rinex_3_obs_file,
-        rinex_3_ephemerides_files,
-        approximate_receiver_ecef_position_m,
+    rinex_3_obs_file,
+    rinex_3_ephemerides_files,
+    approximate_receiver_ecef_position_m,
 ):
     return _build_records_cached(
         rinex_3_obs_file,
@@ -211,11 +215,11 @@ def build_records(
 
 @helpers.disk_cache.cache
 def _build_records_cached(
-        rinex_3_obs_file,
-        rinex_3_obs_file_hash,
-        rinex_3_ephemerides_files,
-        rinex_3_ephemerides_file_hash,
-        approximate_receiver_ecef_position_m,
+    rinex_3_obs_file,
+    rinex_3_obs_file_hash,
+    rinex_3_ephemerides_files,
+    rinex_3_ephemerides_file_hash,
+    approximate_receiver_ecef_position_m,
 ):
     approximate_receiver_ecef_position_m = np.array(
         approximate_receiver_ecef_position_m
@@ -321,14 +325,14 @@ def _build_records_cached(
         doy = int(file.name[16:19])
         day_query = query.loc[
             (
-                    query.query_time_isagpst
-                    >= pd.Timestamp(year=year, month=1, day=1) + pd.Timedelta(days=doy - 1)
+                query.query_time_isagpst
+                >= pd.Timestamp(year=year, month=1, day=1) + pd.Timedelta(days=doy - 1)
             )
             & (
-                    query.query_time_isagpst
-                    < pd.Timestamp(year=year, month=1, day=1) + pd.Timedelta(days=doy)
+                query.query_time_isagpst
+                < pd.Timestamp(year=year, month=1, day=1) + pd.Timedelta(days=doy)
             )
-            ]
+        ]
         if day_query.empty:
             continue
         log.info(f"Computing satellite states for {year}-{doy:03d}")
@@ -433,7 +437,7 @@ def _build_records_cached(
             return np.nan
         return constants.carrier_frequencies_hz()[row.satellite[0]][
             "L" + row.observation_type[1]
-            ][row["frequency_slot"]]
+        ][row["frequency_slot"]]
 
     flat_obs.loc[:, "carrier_frequency_hz"] = flat_obs.apply(
         signal_2_carrier_frequency, axis=1
@@ -453,12 +457,12 @@ def _build_records_cached(
 
         # Selection criteria: time of emission belonging to the day of the current NAV file
         mask = (
-                       flat_obs.time_of_emission_isagpst
-                       >= pd.Timestamp(year=year, month=1, day=1) + pd.Timedelta(days=doy - 1)
-               ) & (
-                       flat_obs.time_of_emission_isagpst
-                       < pd.Timestamp(year=year, month=1, day=1) + pd.Timedelta(days=doy)
-               )
+            flat_obs.time_of_emission_isagpst
+            >= pd.Timestamp(year=year, month=1, day=1) + pd.Timedelta(days=doy - 1)
+        ) & (
+            flat_obs.time_of_emission_isagpst
+            < pd.Timestamp(year=year, month=1, day=1) + pd.Timedelta(days=doy)
+        )
         if "IONOSPHERIC CORR" in nav_header_dict[f"{year:03d}" + f"{doy:03d}"]:
             log.info(f"Computing iono delay for {year}-{doy:03d}")
             flat_obs.loc[
@@ -466,16 +470,20 @@ def _build_records_cached(
                 "iono_delay_m",
             ] = -atmo.compute_klobuchar_l1_correction(
                 flat_obs.loc[mask].time_of_emission_weeksecond_isagpst.to_numpy(),
-                nav_header_dict[f"{year:03d}" + f"{doy:03d}"]["IONOSPHERIC CORR"]["GPSA"],
-                nav_header_dict[f"{year:03d}" + f"{doy:03d}"]["IONOSPHERIC CORR"]["GPSB"],
+                nav_header_dict[f"{year:03d}" + f"{doy:03d}"]["IONOSPHERIC CORR"][
+                    "GPSA"
+                ],
+                nav_header_dict[f"{year:03d}" + f"{doy:03d}"]["IONOSPHERIC CORR"][
+                    "GPSB"
+                ],
                 flat_obs.loc[mask].elevation_rad,
                 flat_obs.loc[mask].azimuth_rad,
                 latitude_user_rad,
                 longitude_user_rad,
             ) * (
-                        constants.carrier_frequencies_hz()["G"]["L1"][1] ** 2
-                        / flat_obs.loc[mask].carrier_frequency_hz ** 2
-                )
+                constants.carrier_frequencies_hz()["G"]["L1"][1] ** 2
+                / flat_obs.loc[mask].carrier_frequency_hz ** 2
+            )
         else:
             logging.warning(f"Missing iono model parameters for day {doy:03d}")
             flat_obs.loc[
@@ -520,7 +528,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         prog="prx",
         description="prx processes RINEX observations, computes a few useful things such as satellite position, "
-                    "relativistic effects etc. and outputs everything to a text file in a convenient format.",
+        "relativistic effects etc. and outputs everything to a text file in a convenient format.",
         epilog="P.S. GNSS rules!",
     )
     parser.add_argument(
