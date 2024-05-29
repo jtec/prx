@@ -129,7 +129,7 @@ def first_position_from_georinex(filepath_obs, filepath_nav):
                       meas=["C1C"])
 
         if "C1C" in obs: # check if there is at least one GPS L1C/A observation
-            obs = obs.where(obs.C1C.notnull(),drop=True)
+            obs = obs.isel(time=[0]).where(obs.isel(time=[0]).C1C.notnull(), drop=True)
             n_obs = len(obs.sv.values)
         else:
             n_obs = 0
