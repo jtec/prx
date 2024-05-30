@@ -24,9 +24,12 @@ def parse_rinex_nav_file(rinex_file: Path):
     @helpers.disk_cache.cache
     def cached_load(rinex_file: Path, file_hash: str):
         ds = cached_parse(rinex_file, file_hash)
-        ds.attrs["utc_gpst_leap_seconds"] = (
-            helpers.get_gpst_utc_leap_seconds_from_rinex_header(rinex_file)
-        )
+        try:
+            ds.attrs["utc_gpst_leap_seconds"] = (
+                    helpers.get_gpst_utc_leap_seconds_from_rinex_header(rinex_file)
+            )
+        except:
+            ds.attrs["utc_gpst_leap_seconds"] = 18
         df = convert_nav_dataset_to_dataframe(ds)
         df["ephemeris_hash"] = pd.util.hash_pandas_object(df, index=False).astype(str)
         return df
@@ -411,7 +414,8 @@ def convert_nav_dataset_to_dataframe(nav_ds):
 
     # Keep only SBAS ephemerides with low URA, these are based on SBAS message type 9, while those with large URA are
     # based on message type 17 which only contains almanac-like coarse satellite position estimates.
-    df = df[~((df.sv.str.startswith("S")) & (df.URA >= constants.cSbasURALimit))]
+    if 'URA' in df.columns:
+        df = df[~((df.sv.str.startswith("S")) & (df.URA >= constants.cSbasURALimit))]
 
     def compute_ephemeris_and_clock_offset_reference_times(group):
         week_field = {
@@ -496,11 +500,13 @@ def convert_nav_dataset_to_dataframe(nav_ds):
         }
     )
     df = df.reset_index(drop=True)
-    df = compute_gal_inav_fnav_indicators(df)
+    if (df.sv.str[0] == "E").any():
+        df = compute_gal_inav_fnav_indicators(df)
     df["frequency_slot"] = int(1)
-    df.loc[df.sv.str[0] == "R", "frequency_slot"] = df.loc[
-        df.sv.str[0] == "R", "FreqNum"
-    ].astype(int)
+    if (df.sv.str[0] == "R").any():
+        df.loc[df.sv.str[0] == "R", "frequency_slot"] = df.loc[
+            df.sv.str[0] == "R", "FreqNum"
+        ].astype(int)
     return df
 
 
@@ -513,6 +519,7 @@ def compute_gal_inav_fnav_indicators(df):
     df.loc[is_gal, "fnav_or_inav_indicator"] = np.bitwise_and(
         df[is_gal].DataSrc.astype(np.uint).to_numpy(), 0b111
     )
+    df = df[~(is_gal & (df.fnav_or_inav_indicator == 0))]  # Remove records where fnav_or_inav_indicator == 0
     # We expect only the following navigation message types for Galileo:
     indicators = set(df[is_gal].fnav_or_inav_indicator.unique())
     assert len(indicators.intersection({1, 2, 4, 5})) == len(
@@ -554,10 +561,11 @@ def select_ephemerides(df, query):
         )
         eligible_ephemerides = pd.Series(data=True, index=df2.index)
         # For Galileo, select the FNAV ephemeris for E5b signals, and INAV for other signals
-        if row["sv"][0] == "E" and row["signal"][1] == "5":
-            eligible_ephemerides = df2.fnav_or_inav == "fnav"
-        if row["sv"][0] == "E" and row["signal"][1] != "5":
-            eligible_ephemerides = df2.fnav_or_inav == "inav"
+        if (df.sv.str[0] == "E").any():
+            if row["sv"][0] == "E" and row["signal"][1] == "5":
+                eligible_ephemerides = df2.fnav_or_inav == "fnav"
+            if row["sv"][0] == "E" and row["signal"][1] != "5":
+                eligible_ephemerides = df2.fnav_or_inav == "inav"
         delta_time = query_time_wrt_ephemeris_reference_time[
             eligible_ephemerides
             & (query_time_wrt_ephemeris_reference_time >= pd.Timedelta(seconds=0))
@@ -599,6 +607,7 @@ def select_ephemerides(df, query):
     # For Galileo satellites we can have both F/NAV and I/NAV ephemerides for the same satellite and time, keep
     # only one
     # Compute times w.r.t. orbit and clock reference times used by downstream computations
+    query = query[query["ephemeris_reference_time_isagpst"].notna() & (query["ephemeris_reference_time_isagpst"] != '')]
     query["query_time_wrt_ephemeris_reference_time_s"] = (
         query["query_time_isagpst"] - query["ephemeris_reference_time_isagpst"]
     ).apply(helpers.timedelta_2_seconds)
