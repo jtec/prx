@@ -520,6 +520,8 @@ def compute_gal_inav_fnav_indicators(df):
         df[is_gal].DataSrc.astype(np.uint).to_numpy(), 0b111
     )
     df = df[~(is_gal & (df.fnav_or_inav_indicator == 0))]  # Remove records where fnav_or_inav_indicator == 0
+    if not df[is_gal].fnav_or_inav_indicator.any():
+        return df
     # We expect only the following navigation message types for Galileo:
     indicators = set(df[is_gal].fnav_or_inav_indicator.unique())
     assert len(indicators.intersection({1, 2, 4, 5})) == len(
@@ -599,7 +601,8 @@ def select_ephemerides(df, query):
     df = df.reset_index(drop=True)
     df["ephemeris_index"] = df.index
 
-    query[query.ephemeris_index.isna()]["ephemeris_index"] = df.index[len(df) - 1]
+    # Use .loc to set the values in the query DataFrame to solve SettingWithCopyWarning
+    query.loc[query.ephemeris_index.isna(), "ephemeris_index"] = df.index[len(df) - 1]
     # Copy ephemerides into query dataframe
     # We are doing it this way around because the same satellite might show up multiple times in the query dataframe,
     # e.g. with different query times
