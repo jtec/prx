@@ -10,7 +10,13 @@ import pytest
 from prx import helpers
 from prx import constants
 from prx import main
-from prx.user import parse_prx_csv_file, spp_pt_lsq, spp_vt_lsq
+from prx.user import (
+    parse_prx_csv_file,
+    spp_pt_lsq,
+    spp_vt_lsq,
+    first_position_from_georinex,
+)
+from prx.rinex_nav import nav_file_discovery
 
 log = helpers.get_logger(__name__)
 
@@ -315,3 +321,33 @@ def test_csv_column_names(input_for_test_tlse):
     # Checking if all renamed parameters exist in the dataframe columns
     for parameter in expected_column_names:
         assert parameter in df.columns
+
+
+def test_first_position_from_georinex(input_for_test_tlse):
+    # Download RNX NAV file
+    aux_files = nav_file_discovery.discover_or_download_auxiliary_files(
+        input_for_test_tlse
+    )
+
+    # Compute solution from first epoch with more than 4 GPS L1C/A observations, without minimum corrections
+    solution = first_position_from_georinex(
+        input_for_test_tlse, aux_files["broadcast_ephemerides"]
+    )
+
+    # Retrieve approximate position from RINEX OBS header
+    metadata = main.build_metadata(
+        {
+            "obs_file": input_for_test_tlse,
+            "nav_file": aux_files["broadcast_ephemerides"],
+        }
+    )
+
+    # Compute position error
+    position_error_ecef_m = (
+        solution[0:3] - metadata["approximate_receiver_ecef_position_m"]
+    )
+
+    # Verify position error magnitude
+    # A tolerance of 100 m is accepted due to missing corrections (no atmospheric corrections, Sagnac effect)
+    # and the use of only one constellation and signal
+    assert np.linalg.norm(position_error_ecef_m) < 100
