@@ -9,6 +9,7 @@ import shutil
 import pytest
 import os
 import itertools
+import logging
 from dotmap import DotMap
 
 # The following thresholds are the achieved maximum difference between broadcast and
@@ -52,6 +53,30 @@ def input_for_test():
     yield test_files
     shutil.rmtree(test_directory)
 
+
+@pytest.fixture
+def input_for_incomplete_test():
+    test_directory = (
+        Path(__file__).parent.joinpath(f"./tmp_test_directory_{__name__}").resolve()
+    )
+    if test_directory.exists():
+        # Start from empty directory, might avoid hiding some subtle bugs, e.g.
+        # file decompression not working properly
+        shutil.rmtree(test_directory)
+    os.makedirs(test_directory)
+    test_files = {
+        "ABMF_nav_file": test_directory / "ABMF00GLP_R_20241460600_01H_MN.rnx.gz",
+        "LICC_nav_file": test_directory / "LICC00GBR_R_20241460600_01H_MN.rnx.gz",
+        "WTZZ_nav_file": test_directory / "WTZZ00DEU_R_20241460600_01H_MN.rnx.gz",
+    }
+    for key, test_file_path in test_files.items():
+        shutil.copy(
+            Path(__file__).parent.joinpath("datasets", "nasa_hourly", test_file_path.name),
+            test_file_path,
+        )
+        assert test_file_path.exists()
+    yield test_files
+    shutil.rmtree(test_directory)
 
 def test_compare_rnx3_gps_sat_pos_with_magnitude(input_for_test):
     """Loads a RNX3 nav file, computes broadcast position for a GPS satellite and compares to
@@ -610,3 +635,9 @@ def test_bds_group_delay(input_for_test):
     assert np.all(np.isnan(tgds[tgds.signal == "C1D"]["sat_code_bias_m"].to_numpy()))
     assert np.all(np.isnan(tgds[tgds.signal == "C1P"]["sat_code_bias_m"].to_numpy()))
     assert np.all(np.isnan(tgds[tgds.signal == "C5X"]["sat_code_bias_m"].to_numpy()))
+
+
+def test_incomplete_nav_file(input_for_incomplete_test):
+    for file in input_for_incomplete_test.values():
+        rinex_nav_evaluate.parse_rinex_nav_file(Path(file))
+        logging.info(f"Successfully parsed file {file}")
