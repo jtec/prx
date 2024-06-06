@@ -398,6 +398,7 @@ def get_gpst_utc_leap_seconds(rinex_file: Path):
 
     return leap_seconds_astropy
 
+
 def is_sorted(iterable):
     return all(iterable[i] <= iterable[i + 1] for i in range(len(iterable) - 1))
 

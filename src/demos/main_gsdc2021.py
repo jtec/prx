@@ -2,8 +2,12 @@ from pathlib import Path
 import os
 import shutil
 import gzip
-import src.prx.main as prx
-import src.prx.helpers as helpers
+import argparse
+import sys
+
+from prx import helpers, main
+
+log = helpers.get_logger(__name__)
 
 
 @helpers.timeit
@@ -44,8 +48,8 @@ def process_gsdc2021_dataset(path_dataset: Path):
         len(local_gz_list) == 121
     ), "Something wrong went with the local copy of the GSDC2021 database"
 
-    for i, file in enumerate(local_gz_list):
-        prx.process(
+    for i, file in enumerate(local_gz_list[:]):
+        main.process(
             observation_file_path=file,
             output_format="csv",
         )
@@ -62,8 +66,32 @@ def process_gsdc2021_dataset(path_dataset: Path):
 
 
 if __name__ == "__main__":
-    remote_dataset_filepath = Path(
-        "C:/Users/paul/backup_hard_drive/DataCollect_GoogleSDC_2021"
+    """Run this script with the following command lines in a terminal:
+    > poetry env use 3.12
+    > poetry install
+    > poetry shell
+    > python src\demos\main_gsdc2021.py --gsdc2021_folder_path "<PATH_TO_GSDC2021_FOLDER>"
+    """
+
+    parser = argparse.ArgumentParser(
+        prog="prx",
+        description="prx processes RINEX observations, computes a few useful things such as satellite position, "
+        "relativistic effects etc. and outputs everything to a text file in a convenient format.",
+        epilog="P.S. GNSS rules!",
     )
-    assert remote_dataset_filepath.exists(), "GSDC2021 dataset folder does not exist"
-    process_gsdc2021_dataset(remote_dataset_filepath)
+    parser.add_argument(
+        "--gsdc2021_folder_path",
+        type=str,
+        help="GSDC2021 folder path after download from Kaggle",
+        default=None,
+    )
+    args = parser.parse_args()
+    if args.gsdc2021_folder_path is None:
+        log.error("GSDC2021 dataset folder does not exist.")
+        sys.exit(1)
+
+    process_gsdc2021_dataset(Path(args.gsdc2021_folder_path))
+
+    # # To launch this script manually, use the following lines
+    # remote_dataset_filepath = Path("C:/Users/paul/backup_hard_drive/DataCollect_GoogleSDC_2021")
+    # process_gsdc2021_dataset(remote_dataset_filepath)
