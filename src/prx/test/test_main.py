@@ -14,7 +14,7 @@ from prx.user import (
     parse_prx_csv_file,
     spp_pt_lsq,
     spp_vt_lsq,
-    first_position_from_georinex,
+    bootstrap_coarse_receiver_position,
 )
 from prx.rinex_nav import nav_file_discovery
 
@@ -330,7 +330,7 @@ def test_first_position_from_georinex(input_for_test_tlse):
     )
 
     # Compute solution from first epoch with more than 4 GPS L1C/A observations, without minimum corrections
-    solution = first_position_from_georinex(
+    solution = bootstrap_coarse_receiver_position(
         input_for_test_tlse, aux_files["broadcast_ephemerides"]
     )
 

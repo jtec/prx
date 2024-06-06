@@ -110,7 +110,7 @@ def spp_pt_lsq(df, dx_convergence_l2=1e-6, max_iterations=10):
     return x_linearization
 
 
-def first_position_from_georinex(filepath_obs, filepath_nav):
+def bootstrap_coarse_receiver_position(filepath_obs, filepath_nav):
     """Computes a position from the first epoch of a RNX OBS file
 
     This is useful if no APPROX POSITION XYZ field is present in the header.

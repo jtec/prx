@@ -163,9 +163,8 @@ def build_metadata(input_files):
             "Compute approximate position from first epoch with at least 4 GPS satellites"
         )
         prx_metadata["approximate_receiver_ecef_position_m"] = (
-            user.first_position_from_georinex(
-                input_files["obs_file"],
-                input_files["nav_file"],
+            user.bootstrap_coarse_receiver_position(
+                input_files["obs_file"], input_files["nav_file"]
             ).tolist()
         )
 

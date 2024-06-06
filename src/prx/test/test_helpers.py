@@ -305,7 +305,7 @@ def test_timedelta_2_weeks_and_seconds():
         pd.Timestamp("1981-01-21T06:10:00"),
         pd.Timestamp("1999-09-01T16:10:00"),  # after first week number rollover
         pd.Timestamp("2019-04-10T12:00:00"),  # after 2nd week number rollover
-        pd.Timestamp(""),  # yiels a NaT
+        pd.Timestamp(""),  # yields a NaT
     ]
 
     week_computed = []
@@ -327,7 +327,7 @@ def test_timedelta_2_weeks_and_seconds():
 
 
 def test_compute_gps_leap_seconds():
-    # expected GPS lepqp second come from https://gnsscalc.com/
+    # expected GPS leap second come from https://gnsscalc.com/
     test_cases = [
         (1982, 181, 2),  # year, doy (corresponds to 01-Jul), expected leap seconds
         (1989, 181, 5),
