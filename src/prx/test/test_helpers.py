@@ -331,7 +331,7 @@ def test_compute_gps_leap_seconds():
     test_cases = [
         (1982, 181, 2),  # year, doy (corresponds to 01-Jul), expected leap seconds
         (1989, 181, 5),
-        (1992, 182, 8),
+        (1992, 182, 8),  # leap year, still corresponds to 01-Jul
         (2008, 182, 14),
         (2016, 182, 17),
         (2022, 181, 18),
@@ -339,5 +339,5 @@ def test_compute_gps_leap_seconds():
     ]
     for year, doy, expected_leap_second in test_cases:
         np.testing.assert_equal(
-            helpers.compute_gps_leap_seconds(year, doy), expected_leap_second
+            helpers.compute_gps_utc_leap_seconds(year, doy), expected_leap_second
         )
