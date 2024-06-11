@@ -323,7 +323,7 @@ def test_csv_column_names(input_for_test_tlse):
         assert parameter in df.columns
 
 
-def test_first_position_from_georinex(input_for_test_tlse):
+def test_bootstrap_coarse_receiver_position(input_for_test_tlse):
     # Download RNX NAV file
     aux_files = nav_file_discovery.discover_or_download_auxiliary_files(
         input_for_test_tlse
