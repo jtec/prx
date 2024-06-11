@@ -2,8 +2,12 @@ import json
 from pathlib import Path
 import numpy as np
 import pandas as pd
+import georinex as gr
 
 from prx.constants import cGpsSpeedOfLight_mps
+import prx.constants
+import prx.rinex_nav.evaluate
+import prx.helpers
 
 
 def parse_prx_csv_file_metadata(prx_file: Path):
@@ -17,7 +21,7 @@ def parse_prx_csv_file(prx_file: Path):
 
 
 def spp_vt_lsq(df, p_ecef_m):
-    df = df[df.D_obs_hz.notna()].reset_index(drop=True)
+    df = df[df.D_obs_hz.notna() & df.sat_clock_drift_mps.notna()].reset_index(drop=True)
     df["D_obs_mps"] = -df.D_obs_hz * cGpsSpeedOfLight_mps / df.carrier_frequency_hz
     # Remove satellite velocity projected onto line of sight
     rx_sat_vectors = (
@@ -46,12 +50,12 @@ def spp_vt_lsq(df, p_ecef_m):
     for i, constellation in enumerate(df.constellation.unique()):
         H_dclock[df.constellation == constellation, i] = 1
     H = np.hstack((-unit_vectors, H_dclock))
-    x_lsq, residuals, _, _ = np.linalg.lstsq(H, df.D_obs_corrected_mps, rcond="warn")
+    x_lsq, residuals, _, _ = np.linalg.lstsq(H, df.D_obs_corrected_mps, rcond=None)
     return x_lsq.reshape(-1, 1)
 
 
 def spp_pt_lsq(df, dx_convergence_l2=1e-6, max_iterations=10):
-    df = df[df.C_obs_m.notna()]
+    df = df[df.C_obs_m.notna() & df.sat_clock_offset_m.notna()]
     df["C_obs_m_corrected"] = (
         df.C_obs_m
         + df.sat_clock_offset_m
@@ -81,10 +85,8 @@ def spp_pt_lsq(df, dx_convergence_l2=1e-6, max_iterations=10):
                 x_linearization[0:3].T
                 - df[["sat_pos_x_m", "sat_pos_y_m", "sat_pos_z_m"]].to_numpy(),
                 axis=1,
-            )
-            + np.squeeze(  # geometric distance
-                H_clock @ x_linearization[3:]
-            )
+            )  # geometric distance
+            + np.squeeze(H_clock @ x_linearization[3:])
         )  # rx to constellation clock bias
         # compute jacobian matrix
         rx_sat_vectors = (
@@ -96,7 +98,7 @@ def spp_pt_lsq(df, dx_convergence_l2=1e-6, max_iterations=10):
         # One clock offset per constellation
         H = np.hstack((-unit_vectors, H_clock))
         x_lsq, residuals, _, _ = np.linalg.lstsq(
-            H, df.C_obs_m_corrected - C_obs_m_predicted, rcond="warn"
+            H, df.C_obs_m_corrected - C_obs_m_predicted, rcond=None
         )
         x_lsq = x_lsq.reshape(-1, 1)
         solution_increment_l2 = np.linalg.norm(x_lsq)
@@ -106,3 +108,135 @@ def spp_pt_lsq(df, dx_convergence_l2=1e-6, max_iterations=10):
             n_iterations <= max_iterations
         ), "LSQ did not converge in allowed number of iterations"
     return x_linearization
+
+
+def bootstrap_coarse_receiver_position(filepath_obs, filepath_nav):
+    """Computes a position from the first epoch of a RNX OBS file
+
+    This is useful if no APPROX POSITION XYZ field is present in the header.
+    The function builds a minimal DataFrame with the required columns to call spp_pt_lsq
+    All corrections involving positions are set to 0.
+    """
+    first_epoch = pd.Timestamp(gr.gettime(filepath_obs)[0])
+    # select GPS C1C for first epoch
+    n_obs = 0
+    while n_obs < 4:  # loop until 4 observations are available
+        obs = gr.load(
+            filepath_obs,
+            tlim=[
+                first_epoch.isoformat(),
+                (first_epoch + pd.Timedelta(seconds=1)).isoformat(),
+            ],
+            use={"G"},
+            meas=["C1C"],
+        )
+
+        if "C1C" in obs:  # check if there is at least one GPS L1C/A observation
+            obs = obs.isel(time=[0]).where(obs.isel(time=[0]).C1C.notnull(), drop=True)
+            n_obs = len(obs.sv.values)
+        else:
+            n_obs = 0
+        first_epoch = first_epoch + pd.Timedelta(seconds=1)
+
+    time_of_flight = [
+        pd.Timedelta(
+            float(obs.C1C.isel(time=0, sv=i)) / prx.constants.cGpsSpeedOfLight_mps,
+            unit="s",
+        )
+        for i in range(len(obs.sv))
+    ]
+    time_of_emission = [
+        obs.time.values[0] - time_of_flight[i] for i in range(len(obs.sv))
+    ]
+
+    # build query df
+    query = pd.DataFrame(
+        data={
+            "time_of_reception_in_receiver_time": obs.time.values[0],
+            "satellite": obs.sv.values,
+            "observation_value": obs.isel(time=0).C1C.values,
+            "observation_type": "C1C",
+            "time_of_emission_in_satellite_time_integer_second_aligned_to_receiver_time": time_of_emission,
+            "time_of_emission_isagpst": time_of_emission,
+            "time_of_emission_weeksecond_isagpst": [
+                prx.helpers.timedelta_2_weeks_and_seconds(
+                    prx.helpers.timestamp_2_timedelta(
+                        time_of_emission[i], time_scale="GPST"
+                    )
+                )[1]
+                for i in range(len(obs.sv))
+            ],
+            "signal": "C1C",
+            "sv": obs.sv.values,
+            "query_time_isagpst": time_of_emission,
+        }
+    )
+
+    # compute satellite states
+    # TODO find correct ephemeris file in list
+    current_nav_file_index = 0
+    sat_states = prx.rinex_nav.evaluate.compute(
+        filepath_nav[current_nav_file_index], query
+    )
+    sat_states = sat_states.rename(
+        columns={
+            "sv": "satellite",
+            "signal": "observation_type",
+            "query_time_isagpst": "time_of_emission_isagpst",
+        }
+    )
+    sat_states["relativistic_clock_effect_m"] = (
+        prx.helpers.compute_relativistic_clock_effect(
+            sat_states[["sat_pos_x_m", "sat_pos_y_m", "sat_pos_z_m"]].to_numpy(),
+            sat_states[["sat_vel_x_mps", "sat_vel_y_mps", "sat_vel_z_mps"]].to_numpy(),
+        )
+    )
+
+    # create obs df by merging query and sat_states
+    obs_df = query[
+        [
+            "time_of_reception_in_receiver_time",
+            "satellite",
+            "observation_value",
+        ]
+    ].merge(
+        sat_states[
+            [
+                "sat_code_bias_m",
+                "sat_clock_offset_m",
+                "sat_clock_drift_mps",
+                "satellite",
+                "sat_pos_x_m",
+                "sat_pos_y_m",
+                "sat_pos_z_m",
+                "sat_vel_x_mps",
+                "sat_vel_y_mps",
+                "sat_vel_z_mps",
+                "relativistic_clock_effect_m",
+            ]
+        ],
+        how="left",
+        on="satellite",
+    )
+    obs_df = obs_df.rename(columns={"observation_value": "C_obs_m"})
+    # add missing columns with 0 value, since approximate position is unknown
+    obs_df = pd.concat(
+        [
+            obs_df,
+            pd.DataFrame(
+                {
+                    "sagnac_effect_m": np.zeros(len(obs.sv)),
+                    "iono_delay_m": np.zeros(len(obs.sv)),
+                    "tropo_delay_m": np.zeros(len(obs.sv)),
+                    "constellation": "G",
+                }
+            ),
+        ],
+        axis=1,
+    )
+
+    solution = spp_pt_lsq(
+        obs_df,
+    )
+
+    return solution[0:3].squeeze()

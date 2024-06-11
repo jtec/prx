@@ -22,6 +22,8 @@ matplotlib = "^3.8.2"
 pytest-xdist = "^3.5.0"
 ruff = "^0.3.3"
 snakeviz = "^2.2.0"
+astropy = "^6.0.1"
+setuptools = "^70.0.0"
 
 
 [build-system]

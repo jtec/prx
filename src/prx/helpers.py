@@ -13,6 +13,9 @@ import math
 import joblib
 import georinex
 import os
+from astropy.utils import iers
+from astropy import time as astrotime
+
 
 logging.basicConfig(
     format="%(asctime)s,%(msecs)03d %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s",
@@ -91,6 +94,9 @@ def timestamp_2_timedelta(timestamp: pd.Timestamp, time_scale):
 
 
 def timedelta_2_weeks_and_seconds(time_delta: pd.Timedelta):
+    if pd.isnull(time_delta):
+        return np.nan, np.nan
+
     assert type(time_delta) == pd.Timedelta, "time_delta must be of type pd.Timedelta"
     in_nanoseconds = time_delta / pd.Timedelta(1, "ns")
     weeks = math.floor(in_nanoseconds / constants.cNanoSecondsPerWeek)
@@ -360,23 +366,37 @@ def parse_rinex_file(rinex_file: Path):
     return cached_load(rinex_file, file_content_hash)
 
 
-def get_gpst_utc_leap_seconds_from_rinex_header(rinex_file: Path):
+def get_gpst_utc_leap_seconds(rinex_file: Path):
+    leap_seconds_astropy = compute_gps_utc_leap_seconds(
+        yyyy=int(rinex_file.name[12:16]), doy=int(rinex_file.name[16:19])
+    )
+
+    # sanity check if leap second information is in the header of the RNX NAV file
+    # compare astropy leap and RNX NAV leap seconds
     header = georinex.rinexheader(rinex_file)
-    assert "LEAP SECONDS" in header, "LEAP SECONDS not found in RINEX header"
-    ls_before = header["LEAP SECONDS"][0:6].strip()
-    assert (
-        len(ls_before) > 0 and len(ls_before) < 3
-    ), f"Unexpected leap seconds {ls_before} in {rinex_file}"
-    ls_after = header["LEAP SECONDS"][6:12].strip()
-    if ls_after == "":
-        return int(ls_before)
-    assert (
-        len(ls_after) > 0 and len(ls_after) < 3
-    ), f"Unexpected leap seconds {ls_after} in {rinex_file}"
-    assert (
-        ls_after == ls_before
-    ), f"Leap second change annoucement in {rinex_file}, this case is not tested, aborting."
-    return int(ls_before)
+    if "LEAP SECONDS" in header:
+        ls_before = header["LEAP SECONDS"][0:6].strip()
+        assert (
+            0 < len(ls_before) < 3
+        ), f"Unexpected leap seconds {ls_before} in {rinex_file}"
+
+        ls_after = header["LEAP SECONDS"][6:12].strip()
+        if ls_after == "":
+            return int(ls_before)
+        assert (
+            0 < len(ls_after) < 3
+        ), f"Unexpected leap seconds {ls_after} in {rinex_file}"
+
+        assert (
+            ls_after == ls_before
+        ), f"Leap second change announcement in {rinex_file}, this case is not tested, aborting."
+
+        leap_seconds_rnx = int(ls_before)
+        assert (
+            leap_seconds_rnx == leap_seconds_astropy
+        ), "leap second computed from astropy is different from RINEX NAV header"
+
+    return leap_seconds_astropy
 
 
 def is_sorted(iterable):
@@ -394,3 +414,19 @@ def timeit(func):
         return result
 
     return timeit_wrapper
+
+
+def compute_gps_utc_leap_seconds(yyyy: int, doy: int):
+    timestamp = pd.Timestamp(year=yyyy, month=1, day=1) + pd.Timedelta(days=doy)
+    if timestamp < constants.cGpstUtcEpoch:
+        return np.nan
+    ls_table = iers.LeapSeconds().auto_open()
+    mjd_current = astrotime.Time(timestamp).mjd
+    # check the ls_table in reverse order until mjd is lower than current mjd
+    ls = np.nan
+    for ind in range(len(ls_table) - 1, 0, -1):
+        if ls_table[ind]["mjd"] - mjd_current <= 0:
+            ls = ls_table[ind]["tai_utc"] - 19  # -19 to go back to GPS ref
+            break
+    assert ~np.isnan(ls), "GPS leap second could not be retrieved"
+    return ls
