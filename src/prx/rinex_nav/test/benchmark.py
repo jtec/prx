@@ -37,11 +37,14 @@ def generate_query(n_epochs=1):
 def benchmark_parallel(query, rinex_nav_file):
     return rinex_nav_evaluate.compute_parallel(rinex_nav_file, query)
 
+
 def benchmark(query, rinex_nav_file):
     return rinex_nav_evaluate.compute(rinex_nav_file, query)
 
+
 def benchmark_dask(query, rinex_nav_file):
     return rinex_nav_evaluate.compute_dask(rinex_nav_file, query)
+
 
 if __name__ == "__main__":
     rinex_nav_file = converters.compressed_to_uncompressed(

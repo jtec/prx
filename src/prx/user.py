@@ -167,7 +167,7 @@ def bootstrap_coarse_receiver_position(filepath_obs, filepath_nav):
             #     for i in range(len(obs.sv))
             # ],
             "signal": "C1C",
-            "sv": obs.sv.values, # duplicate of 'satellite', but used in
+            "sv": obs.sv.values,  # duplicate of 'satellite', but used in
             "query_time_isagpst": time_of_emission,
         }
     )
@@ -183,7 +183,8 @@ def bootstrap_coarse_receiver_position(filepath_obs, filepath_nav):
             # "sv": "satellite",
             "signal": "observation_type",
             "query_time_isagpst": "time_of_emission_isagpst",
-        }, inplace=True
+        },
+        inplace=True,
     )
     sat_states["relativistic_clock_effect_m"] = (
         prx.helpers.compute_relativistic_clock_effect(
@@ -218,7 +219,7 @@ def bootstrap_coarse_receiver_position(filepath_obs, filepath_nav):
         how="left",
         on="sv",
     )
-    obs_df.rename(columns={"observation_value": "C_obs_m"},inplace=True)
+    obs_df.rename(columns={"observation_value": "C_obs_m"}, inplace=True)
     # add missing columns with 0 value, since approximate position is unknown
     obs_df = pd.concat(
         [
