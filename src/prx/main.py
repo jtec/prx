@@ -40,7 +40,6 @@ def write_json_text_sequence_file(
         drop_columns = [
             "time_of_reception_in_receiver_time",
             "satellite",
-            "time_of_emission_in_satellite_time_integer_second_aligned_to_receiver_time",
         ]
         for epoch in prx_records["time_of_reception_in_receiver_time"].unique():
             epoch = pd.Timestamp(epoch)
@@ -121,9 +120,7 @@ def write_csv_file(
     records = records.drop(
         columns=[
             "satellite",
-            "time_of_emission_in_satellite_time_integer_second_aligned_to_receiver_time",
             "time_of_emission_isagpst",
-            "time_of_emission_weeksecond_isagpst",
         ]
     )
     records = records.sort_values(
@@ -283,28 +280,18 @@ def _build_records_cached(
         .divide(constants.cGpsSpeedOfLight_mps),
         unit="s",
     )
-    # per_sat[
-    #     "time_of_emission_in_satellite_time_integer_second_aligned_to_receiver_time"
-    # ] = per_sat["time_of_reception_in_receiver_time"] - tof_dtrx
     # As error terms are tens of nanoseconds here, and the receiver clock is integer-second aligned to GPST, we
     # already have times-of-emission that are integer-second aligned GPST here.
-    per_sat["time_of_emission_isagpst"] = per_sat["time_of_reception_in_receiver_time"] - tof_dtrx
-    # per_sat["time_of_emission_weeksecond_isagpst"] = per_sat.apply(
-    #     lambda row: helpers.timedelta_2_weeks_and_seconds(
-    #         row.time_of_emission_isagpst
-    #         - constants.system_time_scale_rinex_utc_epoch["GPST"]
-    #     )[1],
-    #     axis=1,
-    # )
+    per_sat["time_of_emission_isagpst"] = (
+        per_sat["time_of_reception_in_receiver_time"] - tof_dtrx
+    )
 
     flat_obs = flat_obs.merge(
         per_sat[
             [
                 "time_of_reception_in_receiver_time",
                 "satellite",
-                # "time_of_emission_in_satellite_time_integer_second_aligned_to_receiver_time",
                 "time_of_emission_isagpst",
-                # "time_of_emission_weeksecond_isagpst",
             ]
         ],
         on=["time_of_reception_in_receiver_time", "satellite"],
@@ -312,14 +299,14 @@ def _build_records_cached(
 
     # Compute broadcast position, velocity, clock offset, clock offset rate and TGDs
     query = flat_obs[flat_obs["observation_type"].str.startswith("C")]
-    # query[["signal", "sv", "query_time_isagpst"]] = query[
-    #     ["observation_type", "satellite", "time_of_emission_isagpst"]
-    # ]
-    query.rename(columns={"observation_type": "signal",
-                  "satellite": "sv",
-                  "time_of_emission_isagpst": "query_time_isagpst"},
-                  inplace=True,
-                 )
+    query.rename(
+        columns={
+            "observation_type": "signal",
+            "satellite": "sv",
+            "time_of_emission_isagpst": "query_time_isagpst",
+        },
+        inplace=True,
+    )
 
     sat_states_per_day = []
     for file in rinex_3_ephemerides_files:
@@ -352,7 +339,7 @@ def _build_records_cached(
             "signal": "observation_type",
             "query_time_isagpst": "time_of_emission_isagpst",
         },
-        inplace=True
+        inplace=True,
     )
     # We need Timestamps to compute tropo delays
     sat_states = sat_states.merge(
@@ -469,11 +456,23 @@ def _build_records_cached(
         )
         if "IONOSPHERIC CORR" in nav_header_dict[f"{year:03d}" + f"{doy:03d}"]:
             log.info(f"Computing iono delay for {year}-{doy:03d}")
+            time_of_emission_weeksecond_isagpst = (
+                flat_obs.loc[mask]
+                .apply(
+                    lambda row: helpers.timedelta_2_weeks_and_seconds(
+                        row.time_of_emission_isagpst
+                        - constants.system_time_scale_rinex_utc_epoch["GPST"]
+                    )[1],
+                    axis=1,
+                )
+                .to_numpy()
+            )
+
             flat_obs.loc[
                 mask,
                 "iono_delay_m",
             ] = -atmo.compute_klobuchar_l1_correction(
-                flat_obs.loc[mask].time_of_emission_weeksecond_isagpst.to_numpy(),
+                time_of_emission_weeksecond_isagpst,
                 nav_header_dict[f"{year:03d}" + f"{doy:03d}"]["IONOSPHERIC CORR"][
                     "GPSA"
                 ],
