@@ -599,12 +599,7 @@ def compute_parallel(rinex_nav_file_path, per_signal_query):
 def compute(rinex_nav_file_path, per_signal_query):
     # per_signal_query is a pd.DataFrame with the following columns
     #   - time_of_reception_in_receiver_time
-    #   - satellite
     #   - observation_value
-    #   - observation_type
-    #   - time_of_emission_in_satellite_time_integer_second_aligned_to_receiver_time
-    #   - time_of_emission_isagpst
-    #   - time_of_emission_weeksecond_isagpst
     #   - signal
     #   - sv
     #   - query_time_isagpst
