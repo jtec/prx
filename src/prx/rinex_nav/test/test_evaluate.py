@@ -66,8 +66,10 @@ def input_for_incomplete_test():
     os.makedirs(test_directory)
     test_files = {
         "ABMF_nav_file": test_directory / "ABMF00GLP_R_20241460600_01H_MN.rnx.gz",
-        "LICC_nav_file": test_directory / "LICC00GBR_R_20241460600_01H_MN.rnx.gz",
-        "WTZZ_nav_file": test_directory / "WTZZ00DEU_R_20241460600_01H_MN.rnx.gz",
+        "LICC_nav_file": test_directory / "LICC00GBR_R_20241460600_01H_MN.rnx.gz", # AssertionError: Unexpected Galileo navigation message type: {0.0}
+        "WTZZ_nav_file": test_directory / "WTZZ00DEU_R_20241460600_01H_MN.rnx.gz", # AssertionError: Unexpected Galileo navigation message type: {0.0, 1.0, 2.0}
+        "ALIC_nav_file": test_directory / "ALIC00AUS_R_20241460600_01H_MN.rnx.gz", # ValueError: System I NAV data is not the same length as the number of fields.
+        "JPDR_nav_file": test_directory / "JDPR00IND_R_20241460600_01H_30S_MN.rnx.gz", # ValueError: System I NAV data is not the same length as the number of fields.
     }
     for key, test_file_path in test_files.items():
         shutil.copy(
