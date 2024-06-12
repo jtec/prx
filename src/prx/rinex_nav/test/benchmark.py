@@ -34,9 +34,14 @@ def generate_query(n_epochs=1):
     return query
 
 
-def benchmark(query, rinex_nav_file):
+def benchmark_parallel(query, rinex_nav_file):
     return rinex_nav_evaluate.compute_parallel(rinex_nav_file, query)
 
+def benchmark(query, rinex_nav_file):
+    return rinex_nav_evaluate.compute(rinex_nav_file, query)
+
+def benchmark_dask(query, rinex_nav_file):
+    return rinex_nav_evaluate.compute_dask(rinex_nav_file, query)
 
 if __name__ == "__main__":
     rinex_nav_file = converters.compressed_to_uncompressed(
@@ -47,19 +52,28 @@ if __name__ == "__main__":
         f"Profiling ephemeris evaluation with {len(query.sv.unique())} satellites and"
         f" {len(query.query_time_isagpst.unique())} epochs"
     )
-    p = cProfile.Profile()
     # Warm up cache: we can expect a navigation file to be cached
-    result = benchmark(query, rinex_nav_file)
-    p.enable()
-    benchmark(query, rinex_nav_file)
-    p.disable()
-    stats_file = Path("benchmark_1.prof").resolve()
-    p.dump_stats(stats_file)
-    df = pd.DataFrame(
-        p.getstats(),
-        columns=["func", "ncalls", "ccalls", "tottime", "cumtime", "callers"],
-    ).sort_values(by="tottime", ascending=False)
-    print(
-        f"Approximate ephemeris evaluation speed: {len(query.query_time_isagpst.unique()) / df.iloc[0, :]['tottime']} epochs per second"
-    )
+    # result = benchmark_parallel(query, rinex_nav_file)
+    rinex_nav_evaluate.parse_rinex_nav_file(rinex_nav_file)
+
+    functions = [
+        benchmark,
+        benchmark_parallel,
+        # benchmark_dask
+    ]
+
+    for fct in functions:
+        p = cProfile.Profile()
+        p.enable()
+        fct(query, rinex_nav_file)
+        p.disable()
+        stats_file = Path(f"{fct.__name__}.prof").resolve()
+        p.dump_stats(stats_file)
+        df = pd.DataFrame(
+            p.getstats(),
+            columns=["func", "ncalls", "ccalls", "tottime", "cumtime", "callers"],
+        ).sort_values(by="tottime", ascending=False)
+        print(
+            f"Approximate ephemeris evaluation speed for {fct.__name__}: {len(query.query_time_isagpst.unique()) / df.iloc[0, :]['tottime']} epochs per second"
+        )
     print(f"To inspect profiling results, call \n snakeviz {stats_file}")
