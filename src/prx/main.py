@@ -117,7 +117,7 @@ def write_csv_file(
         )
     records["constellation"] = records.satellite.str[0]
     records["prn"] = records.satellite.str[1:]
-    records = records.rename(columns={"tracking_id": "rnx_obs_identifier"})
+    records.rename(columns={"tracking_id": "rnx_obs_identifier"}, inplace=True)
     records = records.drop(
         columns=[
             "satellite",
@@ -239,13 +239,14 @@ def _build_records_cached(
     flat_obs.obs_value = flat_obs.obs_value.astype(float)
     flat_obs[["sv", "obs_type"]] = flat_obs[["sv", "obs_type"]].astype(str)
 
-    flat_obs = flat_obs.rename(
+    flat_obs.rename(
         columns={
             "time": "time_of_reception_in_receiver_time",
             "sv": "satellite",
             "obs_value": "observation_value",
             "obs_type": "observation_type",
         },
+        inplace=True,
     )
 
     log.info("Computing times of emission in satellite time")
@@ -282,30 +283,28 @@ def _build_records_cached(
         .divide(constants.cGpsSpeedOfLight_mps),
         unit="s",
     )
-    per_sat[
-        "time_of_emission_in_satellite_time_integer_second_aligned_to_receiver_time"
-    ] = per_sat["time_of_reception_in_receiver_time"] - tof_dtrx
+    # per_sat[
+    #     "time_of_emission_in_satellite_time_integer_second_aligned_to_receiver_time"
+    # ] = per_sat["time_of_reception_in_receiver_time"] - tof_dtrx
     # As error terms are tens of nanoseconds here, and the receiver clock is integer-second aligned to GPST, we
     # already have times-of-emission that are integer-second aligned GPST here.
-    per_sat["time_of_emission_isagpst"] = (
-        per_sat.time_of_emission_in_satellite_time_integer_second_aligned_to_receiver_time
-    )
-    per_sat["time_of_emission_weeksecond_isagpst"] = per_sat.apply(
-        lambda row: helpers.timedelta_2_weeks_and_seconds(
-            row.time_of_emission_isagpst
-            - constants.system_time_scale_rinex_utc_epoch["GPST"]
-        )[1],
-        axis=1,
-    )
+    per_sat["time_of_emission_isagpst"] = per_sat["time_of_reception_in_receiver_time"] - tof_dtrx
+    # per_sat["time_of_emission_weeksecond_isagpst"] = per_sat.apply(
+    #     lambda row: helpers.timedelta_2_weeks_and_seconds(
+    #         row.time_of_emission_isagpst
+    #         - constants.system_time_scale_rinex_utc_epoch["GPST"]
+    #     )[1],
+    #     axis=1,
+    # )
 
     flat_obs = flat_obs.merge(
         per_sat[
             [
                 "time_of_reception_in_receiver_time",
                 "satellite",
-                "time_of_emission_in_satellite_time_integer_second_aligned_to_receiver_time",
+                # "time_of_emission_in_satellite_time_integer_second_aligned_to_receiver_time",
                 "time_of_emission_isagpst",
-                "time_of_emission_weeksecond_isagpst",
+                # "time_of_emission_weeksecond_isagpst",
             ]
         ],
         on=["time_of_reception_in_receiver_time", "satellite"],
@@ -313,9 +312,14 @@ def _build_records_cached(
 
     # Compute broadcast position, velocity, clock offset, clock offset rate and TGDs
     query = flat_obs[flat_obs["observation_type"].str.startswith("C")]
-    query[["signal", "sv", "query_time_isagpst"]] = query[
-        ["observation_type", "satellite", "time_of_emission_isagpst"]
-    ]
+    # query[["signal", "sv", "query_time_isagpst"]] = query[
+    #     ["observation_type", "satellite", "time_of_emission_isagpst"]
+    # ]
+    query.rename(columns={"observation_type": "signal",
+                  "satellite": "sv",
+                  "time_of_emission_isagpst": "query_time_isagpst"},
+                  inplace=True,
+                 )
 
     sat_states_per_day = []
     for file in rinex_3_ephemerides_files:
@@ -342,12 +346,13 @@ def _build_records_cached(
             )
         )
     sat_states = pd.concat(sat_states_per_day)
-    sat_states = sat_states.rename(
+    sat_states.rename(
         columns={
             "sv": "satellite",
             "signal": "observation_type",
             "query_time_isagpst": "time_of_emission_isagpst",
-        }
+        },
+        inplace=True
     )
     # We need Timestamps to compute tropo delays
     sat_states = sat_states.merge(

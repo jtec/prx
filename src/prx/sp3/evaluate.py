@@ -53,11 +53,6 @@ def parse_sp3_file(file_path: Path):
                 "position_x": "sat_pos_x_m",
                 "position_y": "sat_pos_y_m",
                 "position_z": "sat_pos_z_m",
-            },
-            inplace=True,
-        )
-        df.rename(
-            columns={
                 "velocity_x": "sat_vel_x_mps",
                 "velocity_y": "sat_vel_y_mps",
                 "velocity_z": "sat_vel_z_mps",

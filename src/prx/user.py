@@ -178,12 +178,12 @@ def bootstrap_coarse_receiver_position(filepath_obs, filepath_nav):
     sat_states = prx.rinex_nav.evaluate.compute(
         filepath_nav[current_nav_file_index], query
     )
-    sat_states = sat_states.rename(
+    sat_states.rename(
         columns={
             # "sv": "satellite",
             "signal": "observation_type",
             "query_time_isagpst": "time_of_emission_isagpst",
-        }
+        }, inplace=True
     )
     sat_states["relativistic_clock_effect_m"] = (
         prx.helpers.compute_relativistic_clock_effect(
@@ -218,7 +218,7 @@ def bootstrap_coarse_receiver_position(filepath_obs, filepath_nav):
         how="left",
         on="sv",
     )
-    obs_df = obs_df.rename(columns={"observation_value": "C_obs_m"})
+    obs_df.rename(columns={"observation_value": "C_obs_m"},inplace=True)
     # add missing columns with 0 value, since approximate position is unknown
     obs_df = pd.concat(
         [

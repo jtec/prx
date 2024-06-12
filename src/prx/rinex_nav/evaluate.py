@@ -468,7 +468,7 @@ def convert_nav_dataset_to_dataframe(nav_ds):
     df = df.groupby("constellation").apply(
         compute_ephemeris_and_clock_offset_reference_times
     )
-    df = df.rename(
+    df.rename(
         columns={
             "M0": "M_0",
             "Eccentricity": "e",
@@ -483,6 +483,7 @@ def convert_nav_dataset_to_dataframe(nav_ds):
             "Io": "i_0",
             "Omega0": "Omega_0",
         },
+        inplace=True,
     )
     df["orbit_type"] = df.constellation.map(
         {
