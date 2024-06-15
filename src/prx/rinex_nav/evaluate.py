@@ -8,7 +8,7 @@ import georinex
 import dask.dataframe
 import xarray
 from joblib import Parallel, delayed
-from math import floor
+from math import ceil
 
 from prx import helpers
 from prx import constants
@@ -633,10 +633,11 @@ def compute_clock_offsets(df):
 def compute_parallel(rinex_nav_file_path, per_signal_query):
     # Warm up nav file parser cache so that we don't parse the file multiple times
     _ = parse_rinex_nav_file(rinex_nav_file_path)
-    parallel = Parallel(n_jobs=round(multiprocessing.cpu_count() / 2), return_as="list")
+    n_jobs = multiprocessing.cpu_count()-1 # leave 1 cpu available
+    parallel = Parallel(n_jobs=n_jobs, return_as="list")
     # split dataframe into `n_chunks` smaller dataframes
-    n_chunks = min(len(per_signal_query.index), 4)
-    chunk_length = floor(len(per_signal_query) / n_chunks)
+    n_chunks = min(len(per_signal_query.index), n_jobs)
+    chunk_length = ceil(len(per_signal_query) / n_chunks)
     chunks = [
         per_signal_query[i : i + chunk_length]
         for i in range(0, len(per_signal_query), chunk_length)
