@@ -5,11 +5,14 @@ import numpy as np
 from pathlib import Path
 import scipy
 import georinex
+import dask.dataframe
+import xarray
 from joblib import Parallel, delayed
 from math import floor
 
 from prx import helpers
 from prx import constants
+
 
 log = helpers.get_logger(__name__)
 
@@ -39,6 +42,22 @@ def parse_rinex_nav_file(rinex_file: Path):
             f"Hashing file content took {hash_time}, we might want to partially hash the file"
         )
     return cached_load(rinex_file, file_content_hash)
+
+
+def evaluate_orbit(sub_df):
+    orbit_type = sub_df["orbit_type"].iloc[0]
+    if orbit_type == "kepler":
+        sub_df = kepler_orbit_position_and_velocity(sub_df)
+    elif orbit_type == "glonass":
+        sub_df = glonass_orbit_position_and_velocity(sub_df)
+    elif orbit_type == "sbas":
+        sub_df = sbas_orbit_position_and_velocity(sub_df)
+    else:
+        log.info(
+            f"Ephemeris evaluation not implemented or under development for constellation {sub_df['constellation'].iloc[0]}, skipping"
+        )
+        sub_df[["sat_pos_x_m", "sat_pos_y_m", "sat_pos_z_m", "sat_vel_x_mps", "sat_vel_y_mps", "sat_vel_z_mps"]] = np.nan
+    return sub_df
 
 
 def time_scale_integer_second_offset_wrt_gpst(time_scale, utc_gpst_leap_seconds=None):
@@ -273,23 +292,23 @@ def orbital_plane_to_earth_centered_cartesian(eph):
     # Satellite positions in cartesian frame (for BDS GEOs this is a particular inertial
     # frame, for others the system ECEF frame)
     # For BDS GEOs we apply an additional rotation later-on to compute their position in Beidou's ECEF frame.
-    eph["X_k"] = eph.x_k * np.cos(eph.Omega_k) - eph.y_k * np.cos(eph.i_k) * np.sin(
+    eph["sat_pos_x_m"] = eph.x_k * np.cos(eph.Omega_k) - eph.y_k * np.cos(eph.i_k) * np.sin(
         eph.Omega_k
     )
-    eph["Y_k"] = eph.x_k * np.sin(eph.Omega_k) + eph.y_k * np.cos(eph.i_k) * np.cos(
+    eph["sat_pos_y_m"] = eph.x_k * np.sin(eph.Omega_k) + eph.y_k * np.cos(eph.i_k) * np.cos(
         eph.Omega_k
     )
-    eph["Z_k"] = eph.y_k * np.sin(eph.i_k)
+    eph["sat_pos_z_m"] = eph.y_k * np.sin(eph.i_k)
     # ECEF velocity, from
     # IS-GPS-200N, Table 20-IV
-    eph["dX_k"] = (
+    eph["sat_vel_x_mps"] = (
         -eph.x_k * eph.dOmega_k * np.sin(eph.Omega_k)
         + eph.dx_k * np.cos(eph.Omega_k)
         - eph.dy_k * np.sin(eph.Omega_k) * np.cos(eph.i_k)
         - eph.y_k * eph.dOmega_k * np.cos(eph.Omega_k) * np.cos(eph.i_k)
         + eph.y_k * eph.di_k * np.sin(eph.Omega_k) * np.sin(eph.i_k)
     )
-    eph["dY_k"] = (
+    eph["sat_vel_y_mps"] = (
         eph.x_k * eph.dOmega_k * np.cos(eph.Omega_k)
         - eph.y_k * eph.dOmega_k * np.sin(eph.Omega_k) * np.cos(eph.i_k)
         - eph.y_k * eph.di_k * np.cos(eph.Omega_k) * np.sin(eph.i_k)
@@ -297,7 +316,7 @@ def orbital_plane_to_earth_centered_cartesian(eph):
         + eph.dy_k * np.cos(eph.Omega_k) * np.cos(eph.i_k)
     )
 
-    eph["dZ_k"] = eph.y_k * eph.di_k * np.cos(eph.i_k) + eph.dy_k * np.sin(eph.i_k)
+    eph["sat_vel_z_mps"] = eph.y_k * eph.di_k * np.cos(eph.i_k) + eph.dy_k * np.sin(eph.i_k)
     pass
 
 
@@ -307,8 +326,8 @@ def handle_bds_geos(eph):
     geos = eph[eph.is_bds_geo]
     if geos.empty:
         return
-    P_GK = np.reshape(geos[["X_k", "Y_k", "Z_k"]].to_numpy(), (-1, 1))
-    V_GK = np.reshape(geos[["dX_k", "dY_k", "dZ_k"]].to_numpy(), (-1, 1))
+    P_GK = np.reshape(geos[["sat_pos_x_m", "sat_pos_y_m", "sat_pos_z_m"]].to_numpy(), (-1, 1))
+    V_GK = np.reshape(geos[["sat_vel_x_mps", "sat_vel_y_mps", "sat_vel_z_mps"]].to_numpy(), (-1, 1))
     z_angles = geos.OmegaEarthIcd_rps * geos.t_k
     rotation_matrices = []
     for i, z_angle in enumerate(z_angles):
@@ -331,23 +350,23 @@ def handle_bds_geos(eph):
     R = scipy.linalg.block_diag(*rotation_matrices)
     P_K = np.matmul(R, P_GK)
     P_K = np.reshape(P_K, (-1, 3))
-    geos["X_k"] = P_K[:, 0]
-    geos["Y_k"] = P_K[:, 1]
-    geos["Z_k"] = P_K[:, 2]
+    geos["sat_pos_x_m"] = P_K[:, 0]
+    geos["sat_pos_y_m"] = P_K[:, 1]
+    geos["sat_pos_z_m"] = P_K[:, 2]
     # Velocity in inertial frame that coincides with BDCS at this time, ie a "frozen" ECEF frame
     V_K_frozen = np.matmul(R, V_GK)
     V_K_frozen = np.reshape(V_K_frozen, (-1, 3))
-    geos["dX_k"] = V_K_frozen[:, 0]
-    geos["dY_k"] = V_K_frozen[:, 1]
-    geos["dZ_k"] = V_K_frozen[:, 2]
+    geos["sat_vel_x_mps"] = V_K_frozen[:, 0]
+    geos["sat_vel_y_mps"] = V_K_frozen[:, 1]
+    geos["sat_vel_z_mps"] = V_K_frozen[:, 2]
 
     # Add term due to ECEFs angular velocity w.r.t. the frozen frame
 
     def frozen_to_rotating_bdcs(row):
-        p = np.array([row["X_k"], row["Y_k"], row["Z_k"]])
-        v_frozen = np.array([row["dX_k"], row["dY_k"], row["dZ_k"]])
+        p = np.array([row["sat_pos_x_m"], row["sat_pos_y_m"], row["sat_pos_z_m"]])
+        v_frozen = np.array([row["sat_vel_x_mps"], row["sat_vel_y_mps"], row["sat_vel_z_mps"]])
         v_rotating = v_frozen + np.cross(np.array([0, 0, -row.OmegaEarthIcd_rps]), p)
-        row[["dX_k", "dY_k", "dZ_k"]] = v_rotating
+        row[["sat_vel_x_mps", "sat_vel_y_mps", "sat_vel_z_mps"]] = v_rotating
         return row
 
     geos = geos.apply(frozen_to_rotating_bdcs, axis=1)
@@ -379,17 +398,6 @@ def kepler_orbit_position_and_velocity(eph):
     position_in_orbital_plane(eph)
     orbital_plane_to_earth_centered_cartesian(eph)
     handle_bds_geos(eph)
-    eph.rename(
-        columns={
-            "X_k": "sat_pos_x_m",
-            "Y_k": "sat_pos_y_m",
-            "Z_k": "sat_pos_z_m",
-            "dX_k": "sat_vel_x_mps",
-            "dY_k": "sat_vel_y_mps",
-            "dZ_k": "sat_vel_z_mps",
-        },
-        inplace=True,
-    )
     return eph
 
 
@@ -403,7 +411,7 @@ def convert_nav_dataset_to_dataframe(nav_ds):
     # georinex adds suffixes to satellite IDs if it sees multiple ephemerides (e.g. F/NAV, I/NAV) for the same
     # satellite and the same timestamp.
     # The downstream code expects three-letter satellite IDs, so remove suffixes.
-    df["sv"] = df.apply(lambda row: row["sv"][:3], axis=1)
+    df["sv"] = df.sv.str[:3]
     df["constellation"] = df["sv"].str[0]
     df["time_scale"] = df["constellation"].replace(
         constants.constellation_2_system_time_scale
@@ -502,8 +510,8 @@ def convert_nav_dataset_to_dataframe(nav_ds):
     df.loc[df.sv.str[0] == "R", "frequency_slot"] = df.loc[
         df.sv.str[0] == "R", "FreqNum"
     ].astype(int)
+    df["frequency_slot"] = df.FreqNum.where(df.sv.str[0] == 'R',1).astype(int)
     return df
-
 
 def compute_gal_inav_fnav_indicators(df):
     """
@@ -676,7 +684,6 @@ def compute(rinex_nav_file_path, per_signal_query):
             )
             sub_df[["x_m", "y_m", "z_m", "dx_mps", "dy_mps", "dz_mps"]] = np.nan
         return sub_df
-
     per_sat_query = per_sat_query.groupby("orbit_type").apply(evaluate_orbit)
     per_sat_query = per_sat_query.reset_index(drop=True)
     columns_to_keep = [
