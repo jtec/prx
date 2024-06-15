@@ -42,27 +42,21 @@ def benchmark(query, rinex_nav_file):
     return rinex_nav_evaluate.compute(rinex_nav_file, query)
 
 
-def benchmark_dask(query, rinex_nav_file):
-    return rinex_nav_evaluate.compute_dask(rinex_nav_file, query)
-
-
 if __name__ == "__main__":
     rinex_nav_file = converters.compressed_to_uncompressed(
         Path(__file__).parent / "datasets/BRDC00IGS_R_20220010000_01D_MN.zip"
     )
-    query = generate_query(100)
+    query = generate_query(1000)
     print(
         f"Profiling ephemeris evaluation with {len(query.sv.unique())} satellites and"
         f" {len(query.query_time_isagpst.unique())} epochs"
     )
     # Warm up cache: we can expect a navigation file to be cached
-    # result = benchmark_parallel(query, rinex_nav_file)
     rinex_nav_evaluate.parse_rinex_nav_file(rinex_nav_file)
 
     functions = [
         benchmark,
         benchmark_parallel,
-        # benchmark_dask
     ]
 
     for fct in functions:

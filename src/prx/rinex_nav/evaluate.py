@@ -5,8 +5,6 @@ import numpy as np
 from pathlib import Path
 import scipy
 import georinex
-import dask.dataframe
-import xarray
 from joblib import Parallel, delayed
 from math import ceil
 
@@ -56,7 +54,16 @@ def evaluate_orbit(sub_df):
         log.info(
             f"Ephemeris evaluation not implemented or under development for constellation {sub_df['constellation'].iloc[0]}, skipping"
         )
-        sub_df[["sat_pos_x_m", "sat_pos_y_m", "sat_pos_z_m", "sat_vel_x_mps", "sat_vel_y_mps", "sat_vel_z_mps"]] = np.nan
+        sub_df[
+            [
+                "sat_pos_x_m",
+                "sat_pos_y_m",
+                "sat_pos_z_m",
+                "sat_vel_x_mps",
+                "sat_vel_y_mps",
+                "sat_vel_z_mps",
+            ]
+        ] = np.nan
     return sub_df
 
 
@@ -292,12 +299,12 @@ def orbital_plane_to_earth_centered_cartesian(eph):
     # Satellite positions in cartesian frame (for BDS GEOs this is a particular inertial
     # frame, for others the system ECEF frame)
     # For BDS GEOs we apply an additional rotation later-on to compute their position in Beidou's ECEF frame.
-    eph["sat_pos_x_m"] = eph.x_k * np.cos(eph.Omega_k) - eph.y_k * np.cos(eph.i_k) * np.sin(
-        eph.Omega_k
-    )
-    eph["sat_pos_y_m"] = eph.x_k * np.sin(eph.Omega_k) + eph.y_k * np.cos(eph.i_k) * np.cos(
-        eph.Omega_k
-    )
+    eph["sat_pos_x_m"] = eph.x_k * np.cos(eph.Omega_k) - eph.y_k * np.cos(
+        eph.i_k
+    ) * np.sin(eph.Omega_k)
+    eph["sat_pos_y_m"] = eph.x_k * np.sin(eph.Omega_k) + eph.y_k * np.cos(
+        eph.i_k
+    ) * np.cos(eph.Omega_k)
     eph["sat_pos_z_m"] = eph.y_k * np.sin(eph.i_k)
     # ECEF velocity, from
     # IS-GPS-200N, Table 20-IV
@@ -316,7 +323,9 @@ def orbital_plane_to_earth_centered_cartesian(eph):
         + eph.dy_k * np.cos(eph.Omega_k) * np.cos(eph.i_k)
     )
 
-    eph["sat_vel_z_mps"] = eph.y_k * eph.di_k * np.cos(eph.i_k) + eph.dy_k * np.sin(eph.i_k)
+    eph["sat_vel_z_mps"] = eph.y_k * eph.di_k * np.cos(eph.i_k) + eph.dy_k * np.sin(
+        eph.i_k
+    )
     pass
 
 
@@ -326,8 +335,12 @@ def handle_bds_geos(eph):
     geos = eph[eph.is_bds_geo]
     if geos.empty:
         return
-    P_GK = np.reshape(geos[["sat_pos_x_m", "sat_pos_y_m", "sat_pos_z_m"]].to_numpy(), (-1, 1))
-    V_GK = np.reshape(geos[["sat_vel_x_mps", "sat_vel_y_mps", "sat_vel_z_mps"]].to_numpy(), (-1, 1))
+    P_GK = np.reshape(
+        geos[["sat_pos_x_m", "sat_pos_y_m", "sat_pos_z_m"]].to_numpy(), (-1, 1)
+    )
+    V_GK = np.reshape(
+        geos[["sat_vel_x_mps", "sat_vel_y_mps", "sat_vel_z_mps"]].to_numpy(), (-1, 1)
+    )
     z_angles = geos.OmegaEarthIcd_rps * geos.t_k
     rotation_matrices = []
     for i, z_angle in enumerate(z_angles):
@@ -364,7 +377,9 @@ def handle_bds_geos(eph):
 
     def frozen_to_rotating_bdcs(row):
         p = np.array([row["sat_pos_x_m"], row["sat_pos_y_m"], row["sat_pos_z_m"]])
-        v_frozen = np.array([row["sat_vel_x_mps"], row["sat_vel_y_mps"], row["sat_vel_z_mps"]])
+        v_frozen = np.array(
+            [row["sat_vel_x_mps"], row["sat_vel_y_mps"], row["sat_vel_z_mps"]]
+        )
         v_rotating = v_frozen + np.cross(np.array([0, 0, -row.OmegaEarthIcd_rps]), p)
         row[["sat_vel_x_mps", "sat_vel_y_mps", "sat_vel_z_mps"]] = v_rotating
         return row
@@ -510,8 +525,9 @@ def convert_nav_dataset_to_dataframe(nav_ds):
     df.loc[df.sv.str[0] == "R", "frequency_slot"] = df.loc[
         df.sv.str[0] == "R", "FreqNum"
     ].astype(int)
-    df["frequency_slot"] = df.FreqNum.where(df.sv.str[0] == 'R',1).astype(int)
+    df["frequency_slot"] = df.FreqNum.where(df.sv.str[0] == "R", 1).astype(int)
     return df
+
 
 def compute_gal_inav_fnav_indicators(df):
     """
@@ -633,7 +649,7 @@ def compute_clock_offsets(df):
 def compute_parallel(rinex_nav_file_path, per_signal_query):
     # Warm up nav file parser cache so that we don't parse the file multiple times
     _ = parse_rinex_nav_file(rinex_nav_file_path)
-    n_jobs = multiprocessing.cpu_count()-1 # leave 1 cpu available
+    n_jobs = multiprocessing.cpu_count() - 1  # leave 1 cpu available
     parallel = Parallel(n_jobs=n_jobs, return_as="list")
     # split dataframe into `n_chunks` smaller dataframes
     n_chunks = min(len(per_signal_query.index), n_jobs)
@@ -670,21 +686,6 @@ def compute(rinex_nav_file_path, per_signal_query):
     per_sat_query = per_sat_query.drop(
         columns=["sat_clock_offset_m", "sat_clock_drift_mps"]
     )
-
-    def evaluate_orbit(sub_df):
-        orbit_type = sub_df["orbit_type"].iloc[0]
-        if orbit_type == "kepler":
-            sub_df = kepler_orbit_position_and_velocity(sub_df)
-        elif orbit_type == "glonass":
-            sub_df = glonass_orbit_position_and_velocity(sub_df)
-        elif orbit_type == "sbas":
-            sub_df = sbas_orbit_position_and_velocity(sub_df)
-        else:
-            log.info(
-                f"Ephemeris evaluation not implemented or under development for constellation {sub_df['constellation'].iloc[0]}, skipping"
-            )
-            sub_df[["x_m", "y_m", "z_m", "dx_mps", "dy_mps", "dz_mps"]] = np.nan
-        return sub_df
     per_sat_query = per_sat_query.groupby("orbit_type").apply(evaluate_orbit)
     per_sat_query = per_sat_query.reset_index(drop=True)
     columns_to_keep = [
