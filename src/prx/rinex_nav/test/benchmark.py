@@ -16,7 +16,7 @@ def generate_query(n_epochs=1):
     # of what an open-sky receiver would see
     for _, constellation_df in df.groupby("constellation"):
         constellation_sats = constellation_df["sv"].unique()
-        sats.extend(constellation_sats[0 : min(10, len(constellation_sats))])
+        sats.extend(constellation_sats[0: min(10, len(constellation_sats))])
     # Only Kepler orbits supported:
     sats = [sat for sat in sats if sat[0] not in ["S", "R"]]
     query_template = pd.DataFrame(
@@ -48,8 +48,6 @@ if __name__ == "__main__":
         f" {len(query.query_time_isagpst.unique())} epochs"
     )
     p = cProfile.Profile()
-    # Warm up cache: we can expect a navigation file to be cached
-    result = benchmark(query, rinex_nav_file)
     p.enable()
     benchmark(query, rinex_nav_file)
     p.disable()
