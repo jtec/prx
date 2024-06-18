@@ -439,15 +439,12 @@ def _build_records_cached(
         frequency_slot = row["frequency_slot"]
         if np.isnan(row["frequency_slot"]):
             return np.nan
-        if (
-            constellation not in carrier_freqs
-            or frequency not in carrier_freqs[constellation]
-            or frequency_slot not in carrier_freqs[constellation][frequency]
-        ):
-            return np.nan
-        return constants.carrier_frequencies_hz()[constellation][frequency][
-            frequency_slot
-        ]
+        # GLONASS satellites with both FDMA and CDMA signals have a frequency slot for FDMA signals,
+        # for CDMA signals we use the common carrier frequency of those signals
+        if len(carrier_freqs[constellation][frequency]) == 1:
+            return carrier_freqs[constellation][frequency][1]
+        else:
+            return carrier_freqs[constellation][frequency][frequency_slot]
 
     flat_obs.loc[:, "carrier_frequency_hz"] = flat_obs.apply(
         signal_2_carrier_frequency, axis=1
