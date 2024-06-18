@@ -431,12 +431,17 @@ def _build_records_cached(
         how="left",
     )
 
+    carrier_freqs = constants.carrier_frequencies_hz()
+
     def signal_2_carrier_frequency(row):
+        constellation = row.satellite[0]
+        frequency = "L" + row.observation_type[1]
+        frequency_slot = row["frequency_slot"]
         if np.isnan(row["frequency_slot"]):
             return np.nan
-        return constants.carrier_frequencies_hz()[row.satellite[0]][
-            "L" + row.observation_type[1]
-        ][row["frequency_slot"]]
+        if constellation not in carrier_freqs or frequency not in carrier_freqs[constellation] or frequency_slot not in carrier_freqs[constellation][frequency]:
+            return np.nan
+        return constants.carrier_frequencies_hz()[constellation][frequency][frequency_slot]
 
     flat_obs.loc[:, "carrier_frequency_hz"] = flat_obs.apply(
         signal_2_carrier_frequency, axis=1
