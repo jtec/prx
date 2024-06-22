@@ -1,10 +1,10 @@
 import platform
+import re
 from functools import wraps
 from pathlib import Path
 import logging
 
 from imohash import imohash
-
 from prx import constants
 import numpy as np
 import pandas as pd
@@ -16,13 +16,25 @@ import os
 from astropy.utils import iers
 from astropy import time as astrotime
 
-
 logging.basicConfig(
     format="%(asctime)s,%(msecs)03d %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s",
     datefmt="%Y-%m-%d:%H:%M:%S",
     level=logging.DEBUG,
 )
 log = logging.getLogger(__name__)
+
+
+def timeit(func):
+    @wraps(func)
+    def timeit_wrapper(*args, **kwargs):
+        start_time = pd.Timestamp.now()
+        result = func(*args, **kwargs)
+        end_time = pd.Timestamp.now()
+        total_time = end_time - start_time
+        log.info(f"Function {func.__name__} took {total_time} to run.")
+        return result
+
+    return timeit_wrapper
 
 
 def parse_boolean_env_variable(env_variable_name: str, value_if_not_set: bool):
@@ -37,7 +49,7 @@ def parse_boolean_env_variable(env_variable_name: str, value_if_not_set: bool):
 
 disk_cache = joblib.Memory(Path(__file__).parent.joinpath("diskcache"), verbose=0)
 if parse_boolean_env_variable("PRX_NO_CACHING", False):
-    log.debug("Caching disabled by environment variable PRX_NO_CACHING, purging cache.")
+    log.warning("Caching disabled by environment variable PRX_NO_CACHING, purging cache.")
     disk_cache.clear()
 
 
@@ -73,18 +85,18 @@ def timestamp_2_timedelta(timestamp: pd.Timestamp, time_scale):
     # RINEX 3 adds the offset between GPST and GST/QZSST/IRNSST epochs, so we can use the GPST epoch here.
     # The SBAST epoch is the same as the GPST epoch.
     if (
-        time_scale == "GPST"
-        or time_scale == "SBAST"
-        or time_scale == "QZSST"
-        or time_scale == "IRNSST"
-        or time_scale == "GST"
+            time_scale == "GPST"
+            or time_scale == "SBAST"
+            or time_scale == "QZSST"
+            or time_scale == "IRNSST"
+            or time_scale == "GST"
     ):
         return timestamp - constants.cGpstUtcEpoch
     if time_scale == "BDT":
         return (
-            (timestamp - constants.cGpstUtcEpoch)
-            - pd.Timedelta(1356 * constants.cSecondsPerWeek, "seconds")
-            - pd.Timedelta(14, "seconds")
+                (timestamp - constants.cGpstUtcEpoch)
+                - pd.Timedelta(1356 * constants.cSecondsPerWeek, "seconds")
+                - pd.Timedelta(14, "seconds")
         )
     # The GLONASS epoch is (probably) the UTC epoch, to keep the Timedelta within the same order of magnitude
     # as for the other constellations, we use an arbitrary epoch here.
@@ -112,11 +124,11 @@ def timedelta_2_seconds(time_delta: pd.Timedelta):
     assert type(time_delta) == pd.Timedelta, "time_delta must be of type pd.Timedelta"
     integer_seconds = np.float64(round(time_delta.total_seconds()))
     fractional_seconds = (
-        np.float64(
-            timedelta_2_nanoseconds(time_delta)
-            - integer_seconds * constants.cNanoSecondsPerSecond
-        )
-        / constants.cNanoSecondsPerSecond
+            np.float64(
+                timedelta_2_nanoseconds(time_delta)
+                - integer_seconds * constants.cNanoSecondsPerSecond
+            )
+            / constants.cNanoSecondsPerSecond
     )
     return integer_seconds + fractional_seconds
 
@@ -168,6 +180,14 @@ def repair_with_gfzrnx(file):
     )
     if result.returncode == 0:
         log.info(f"Ran gfzrnx file repair on {file}")
+        with open(file, 'r') as f:
+            file_content = f.read()
+            file_content = re.sub(r"gfzrnx-(.*?)FILE PROCESSING(.*)UTC COMMENT",
+                                  r"gfzrnx-\1FILE PROCESSING (timestamp removed by prx) UTC COMMENT", file_content,
+                                  count=1)
+        with open(file, 'w') as f:
+            f.write(file_content)
+            log.info(f"Removed repair timestamp from gfzrnx file {file} to avoid content hash changes.")
     else:
         log.info(f"gfzrnx file repair run failed: {result}")
         assert False
@@ -198,27 +218,27 @@ def convert_size_to_bytes(size_str):
     """
     multipliers = {
         "kilobyte": 1024,
-        "megabyte": 1024**2,
-        "gigabyte": 1024**3,
-        "terabyte": 1024**4,
-        "petabyte": 1024**5,
-        "exabyte": 1024**6,
-        "zetabyte": 1024**7,
-        "yottabyte": 1024**8,
+        "megabyte": 1024 ** 2,
+        "gigabyte": 1024 ** 3,
+        "terabyte": 1024 ** 4,
+        "petabyte": 1024 ** 5,
+        "exabyte": 1024 ** 6,
+        "zetabyte": 1024 ** 7,
+        "yottabyte": 1024 ** 8,
         "kb": 1024,
-        "mb": 1024**2,
-        "gb": 1024**3,
-        "tb": 1024**4,
-        "pb": 1024**5,
-        "eb": 1024**6,
-        "zb": 1024**7,
-        "yb": 1024**8,
+        "mb": 1024 ** 2,
+        "gb": 1024 ** 3,
+        "tb": 1024 ** 4,
+        "pb": 1024 ** 5,
+        "eb": 1024 ** 6,
+        "zb": 1024 ** 7,
+        "yb": 1024 ** 8,
     }
 
     for suffix in multipliers:
         size_str = size_str.lower().strip().strip("s")
         if size_str.lower().endswith(suffix):
-            return int(float(size_str[0 : -len(suffix)]) * multipliers[suffix])
+            return int(float(size_str[0: -len(suffix)]) * multipliers[suffix])
     if size_str.endswith("b"):
         size_str = size_str[0:-1]
     elif size_str.endswith("byte"):
@@ -242,14 +262,14 @@ def build_glonass_slot_dictionary(header_line):
 
 def satellite_id_2_system_time_scale(satellite_id):
     assert (
-        len(satellite_id) == 3
+            len(satellite_id) == 3
     ), f"Satellite ID unexpectedly not three characters long: {satellite_id}"
     return constants.constellation_2_system_time_scale[constellation(satellite_id)]
 
 
 def constellation(satellite_id: str):
     assert (
-        len(satellite_id) == 3
+            len(satellite_id) == 3
     ), f"Satellite ID unexpectedly not three characters long: {satellite_id}"
     return satellite_id[0]
 
@@ -268,8 +288,8 @@ def compute_sagnac_effect(sat_pos_m, rx_pos_m):
     RTKLIB v2.4.2 manual, eq E.3.8b, p 140
     """
     sagnac_effect_m = (
-        constants.cGpsOmegaDotEarth_rps / constants.cGpsSpeedOfLight_mps
-    ) * (sat_pos_m[:, 0] * rx_pos_m[1] - sat_pos_m[:, 1] * rx_pos_m[0])
+                              constants.cGpsOmegaDotEarth_rps / constants.cGpsSpeedOfLight_mps
+                      ) * (sat_pos_m[:, 0] * rx_pos_m[1] - sat_pos_m[:, 1] * rx_pos_m[0])
     return sagnac_effect_m
 
 
@@ -281,9 +301,9 @@ def compute_relativistic_clock_effect(sat_pos_m: np.array, sat_vel_mps: np.array
     Expects both arrays to be of shape (rows, columns) (n, 3)
     """
     relativistic_clock_effect_m = (
-        -2
-        * np.einsum("ij, ij->i", sat_pos_m, sat_vel_mps)
-        / constants.cGpsSpeedOfLight_mps
+            -2
+            * np.einsum("ij, ij->i", sat_pos_m, sat_vel_mps)
+            / constants.cGpsSpeedOfLight_mps
     )
 
     return relativistic_clock_effect_m
@@ -298,8 +318,8 @@ def compute_satellite_elevation_and_azimuth(sat_pos_ecef, receiver_pos_ecef):
     """
     sat_pos_wrt_rx_pos_ecef = sat_pos_ecef - receiver_pos_ecef
     sat_pos_wrt_rx_pos_norm = np.linalg.norm(sat_pos_wrt_rx_pos_ecef, axis=1)[
-        :, np.newaxis
-    ]
+                              :, np.newaxis
+                              ]
     unit_vector_rx_satellite_ecef = sat_pos_wrt_rx_pos_ecef / sat_pos_wrt_rx_pos_norm
     [receiver_lat_rad, receiver_lon_rad, __] = ecef_2_geodetic(receiver_pos_ecef)
     unit_e_ecef = [-np.sin(receiver_lon_rad), np.cos(receiver_lon_rad), 0]
@@ -332,24 +352,25 @@ def ecef_2_geodetic(pos_ecef):
     delta_h_m = 1  # initialization to a value larger than precision
     altitude_m = 0
     latitude_rad = np.arctan2(
-        pos_ecef[2], p * (1 - constants.cWgs84EarthEccentricity**2)
+        pos_ecef[2], p * (1 - constants.cWgs84EarthEccentricity ** 2)
     )
     while delta_h_m > precision_m:
         n = constants.cWgs84EarthSemiMajorAxis_m / np.sqrt(
-            1 - constants.cWgs84EarthEccentricity**2 * np.sin(latitude_rad) ** 2
+            1 - constants.cWgs84EarthEccentricity ** 2 * np.sin(latitude_rad) ** 2
         )
         altitude_previous = altitude_m
         altitude_m = p / np.cos(latitude_rad) - n
         delta_h_m = np.abs(altitude_m - altitude_previous)
         latitude_rad = np.arctan2(
             pos_ecef[2],
-            p * (1 - n * constants.cWgs84EarthEccentricity**2 / (n + altitude_m)),
+            p * (1 - n * constants.cWgs84EarthEccentricity ** 2 / (n + altitude_m)),
         )
     return [latitude_rad, longitude_rad, altitude_m]
 
 
-def parse_rinex_file(rinex_file: Path):
-    @disk_cache.cache()
+@timeit
+def parse_rinex_file(rinex_file_path: Path):
+    @disk_cache.cache(ignore=["rinex_file"])
     def cached_load(rinex_file: Path, file_hash: str):
         log.info(f"Parsing {rinex_file} (hash {file_hash}) ...")
         repair_with_gfzrnx(rinex_file)
@@ -357,13 +378,13 @@ def parse_rinex_file(rinex_file: Path):
         return parsed
 
     t0 = pd.Timestamp.now()
-    file_content_hash = hash_of_file_content(rinex_file)
+    file_content_hash = hash_of_file_content(rinex_file_path)
     hash_time = pd.Timestamp.now() - t0
     if hash_time > pd.Timedelta(seconds=1):
         log.info(
             f"Hashing file content took {hash_time}, we might want to partially hash the file"
         )
-    return cached_load(rinex_file, file_content_hash)
+    return cached_load(rinex_file_path, file_content_hash)
 
 
 def get_gpst_utc_leap_seconds(rinex_file: Path):
@@ -377,23 +398,23 @@ def get_gpst_utc_leap_seconds(rinex_file: Path):
     if "LEAP SECONDS" in header:
         ls_before = header["LEAP SECONDS"][0:6].strip()
         assert (
-            0 < len(ls_before) < 3
+                0 < len(ls_before) < 3
         ), f"Unexpected leap seconds {ls_before} in {rinex_file}"
 
         ls_after = header["LEAP SECONDS"][6:12].strip()
         if ls_after == "":
             return int(ls_before)
         assert (
-            0 < len(ls_after) < 3
+                0 < len(ls_after) < 3
         ), f"Unexpected leap seconds {ls_after} in {rinex_file}"
 
         assert (
-            ls_after == ls_before
+                ls_after == ls_before
         ), f"Leap second change announcement in {rinex_file}, this case is not tested, aborting."
 
         leap_seconds_rnx = int(ls_before)
         assert (
-            leap_seconds_rnx == leap_seconds_astropy
+                leap_seconds_rnx == leap_seconds_astropy
         ), "leap second computed from astropy is different from RINEX NAV header"
 
     return leap_seconds_astropy
@@ -401,19 +422,6 @@ def get_gpst_utc_leap_seconds(rinex_file: Path):
 
 def is_sorted(iterable):
     return all(iterable[i] <= iterable[i + 1] for i in range(len(iterable) - 1))
-
-
-def timeit(func):
-    @wraps(func)
-    def timeit_wrapper(*args, **kwargs):
-        start_time = pd.Timestamp.now()
-        result = func(*args, **kwargs)
-        end_time = pd.Timestamp.now()
-        total_time = end_time - start_time
-        log.debug(f"Function {func.__name__} took {total_time} to run.")
-        return result
-
-    return timeit_wrapper
 
 
 def compute_gps_utc_leap_seconds(yyyy: int, doy: int):
