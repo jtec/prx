@@ -48,11 +48,6 @@ def parse_boolean_env_variable(env_variable_name: str, value_if_not_set: bool):
 
 
 disk_cache = joblib.Memory(Path(__file__).parent.joinpath("diskcache"), verbose=0)
-if parse_boolean_env_variable("PRX_NO_CACHING", False):
-    log.warning(
-        "Caching disabled by environment variable PRX_NO_CACHING, purging cache."
-    )
-    disk_cache.clear()
 
 
 def get_logger(label):
