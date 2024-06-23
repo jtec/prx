@@ -316,7 +316,7 @@ def build_records(
             continue
         log.info(f"Computing satellite states for {year}-{doy:03d}")
         sat_states_per_day.append(
-            rinex_evaluate.compute(
+            rinex_evaluate.compute_parallel(
                 file,
                 day_query,
             )
