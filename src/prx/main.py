@@ -1,14 +1,17 @@
 import argparse
 import json
 import logging
+import multiprocessing
 import sys
 from pathlib import Path
 import georinex
 import pandas as pd
 import numpy as np
 import git
+from joblib import delayed, Parallel
 
 from prx import atmospheric_corrections as atmo
+from prx.helpers import parse_rinex_file
 from prx.rinex_nav import nav_file_discovery
 from prx import constants, helpers, converters, user
 from prx.rinex_nav import evaluate as rinex_evaluate
@@ -194,12 +197,21 @@ def check_assumptions(
     ), "Handling of observation files using time scales other than GPST not implemented yet."
 
 
+def warm_up_parser_cache(rinex_files):
+    def warm_up(file):
+        parse_rinex_file(file)
+
+    parallel = Parallel(n_jobs=round(multiprocessing.cpu_count() / 2), return_as="list")
+    _ = parallel(delayed(warm_up)(file) for file in rinex_files)
+
+
 @helpers.timeit
 def build_records(
     rinex_3_obs_file,
     rinex_3_ephemerides_files,
     approximate_receiver_ecef_position_m,
 ):
+    warm_up_parser_cache([rinex_3_obs_file] + rinex_3_ephemerides_files)
     approximate_receiver_ecef_position_m = np.array(
         approximate_receiver_ecef_position_m
     )
