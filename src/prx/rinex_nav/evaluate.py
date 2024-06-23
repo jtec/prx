@@ -542,30 +542,6 @@ def to_isagpst(time, timescale, gpst_utc_leapseconds):
 
 @timeit
 def select_ephemerides(df, query):
-    def find_ephemeris_index(row, df):
-        # For each query, find the ephemeris whose time of reference is closest, but before the query time.
-        # Filter dataframe to keep only sv of interest:
-        df2 = df[df.sv == row.sv]
-        query_time_wrt_ephemeris_reference_time = (
-                row.query_time_isagpst - df2.ephemeris_reference_time_isagpst
-        )
-        eligible_ephemerides = pd.Series(data=True, index=df2.index)
-        # For Galileo, select the FNAV ephemeris for E5b signals, and INAV for other signals
-        if row["sv"][0] == "E" and row["signal"][1] == "5":
-            eligible_ephemerides = df2.fnav_or_inav == "fnav"
-        if row["sv"][0] == "E" and row["signal"][1] != "5":
-            eligible_ephemerides = df2.fnav_or_inav == "inav"
-        delta_time = query_time_wrt_ephemeris_reference_time[
-            eligible_ephemerides
-            & (query_time_wrt_ephemeris_reference_time >= pd.Timedelta(seconds=0))
-            ]
-        if len(delta_time) == 0:
-            return np.nan
-        match_index = delta_time.idxmin()
-        return match_index
-
-    '''
-    t0 = pd.Timestamp.now()
     df = df[df.ephemeris_reference_time_isagpst.notna()]
     query = query.sort_values(by="query_time_isagpst")
     df = df.sort_values(by="ephemeris_reference_time_isagpst")
@@ -573,42 +549,9 @@ def select_ephemerides(df, query):
     query["fnav_or_inav"] = ""
     query.loc[(query.sv.str[0] == "E") & (query.signal.str[1] == "5"), "fnav_or_inav"] = "fnav"
     query.loc[(query.sv.str[0] == "E") & (query.signal.str[1] != "5"), "fnav_or_inav"] = "inav"
-    query_jan = pd.merge_asof(query, df,
-                              left_on="query_time_isagpst", right_on="ephemeris_reference_time_isagpst",
-                              by=["sv", "fnav_or_inav"], direction="backward")
-    print(f"jan took {pd.Timestamp.now() - t0}")
-    '''
-    t0 = pd.Timestamp.now()
-    query["ephemeris_index"] = query.apply(find_ephemeris_index, args=(df,), axis=1)
-    print(f"find_ephemeris_index took {pd.Timestamp.now() - t0}")
-    # Some satellites might not have ephemerides. We create dummy ephemerides with NaN values for those.
-    sats_without_ephemerides = query[query.ephemeris_index.isna()].sv.unique()
-    for sv in sats_without_ephemerides:
-        nan_ephemeris = df.iloc[[0]].copy()
-        nan_ephemeris[
-            [
-                nan_ephemeris.columns[i]
-                for i, dtype in enumerate(nan_ephemeris.dtypes)
-                if dtype in (float, int, np.float64)
-            ]
-        ] = np.nan
-        nan_ephemeris[
-            [
-                nan_ephemeris.columns[i]
-                for i, dtype in enumerate(nan_ephemeris.dtypes)
-                if dtype in (pd.Timedelta, pd.Timestamp)
-            ]
-        ] = pd.NaT
-        nan_ephemeris["sv"] = sv
-        df = pd.concat((df, nan_ephemeris))
-    df = df.reset_index(drop=True)
-    df["ephemeris_index"] = df.index
-
-    query[query.ephemeris_index.isna()]["ephemeris_index"] = df.index[len(df) - 1]
-    # Copy ephemerides into query dataframe
-    # We are doing it this way around because the same satellite might show up multiple times in the query dataframe,
-    # e.g. with different query times
-    query = query.merge(df.drop(columns=["sv"]), on="ephemeris_index")
+    query = pd.merge_asof(query, df,
+                          left_on="query_time_isagpst", right_on="ephemeris_reference_time_isagpst",
+                          by=["sv", "fnav_or_inav"], direction="backward")
     # Compute times w.r.t. orbit and clock reference times used by downstream computations
     query["query_time_wrt_ephemeris_reference_time_s"] = (
             query["query_time_isagpst"] - query["ephemeris_reference_time_isagpst"]
@@ -616,7 +559,6 @@ def select_ephemerides(df, query):
     query["query_time_wrt_clock_reference_time_s"] = (
             query["query_time_isagpst"] - query["clock_reference_time_isagpst"]
     ).apply(helpers.timedelta_2_seconds)
-    query.drop(columns=["ephemeris_index"], inplace=True)
     return query
 
 

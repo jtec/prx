@@ -615,20 +615,27 @@ def test_bds_group_delay(input_for_test):
 
 
 def test_select_ephemerides():
-    ephemerides = pd.DataFrame({"sv": ["G01", "G01", "E02"],
+    ephemerides = pd.DataFrame({"sv": ["E01", "G01", "G01", "G01"],
                                 "ephemeris_reference_time_isagpst":
-                                    [pd.Timedelta('0s'), pd.Timedelta('1000s'), pd.Timedelta('0s')],
+                                    [pd.Timedelta('10s'), pd.Timedelta('10s'), pd.Timedelta('101s'),
+                                     pd.Timedelta('1000s')],
                                 "clock_reference_time_isagpst":
-                                    [pd.Timedelta('0s'), pd.Timedelta('1000s'), pd.Timedelta('0s')],
-                                "fnav_or_inav": ["", "", "fnav"],
-                                "ephemeris_hash": [1, 2, 3],
+                                    [pd.Timedelta('10s'), pd.Timedelta('10s'), pd.Timedelta('101s'),
+                                     pd.Timedelta('1000s')],
+                                "fnav_or_inav": ["fnav", "", "", ""],
+                                "ephemeris_hash": [1, 2, 3, 4],
                                 })
     query = pd.DataFrame(
         {
-            "sv": ["G01", "G01", "E02"],
-            "query_time_isagpst": [pd.Timedelta('100s'), pd.Timedelta('200s'), pd.Timedelta('0s')],
-            'signal': ['C1C', 'C1C', 'C5X']
+            "sv": ["E01", "G01", "G01"],
+            "query_time_isagpst": [pd.Timedelta('100s'), pd.Timedelta('50s'), pd.Timedelta('90s')],
+            'signal': ['C5X', 'C1C', 'C1C']
         }
     )
     query_with_ephemerides = select_ephemerides(ephemerides, query)
-    assert query_with_ephemerides.ephemeris_hash.equals(pd.Series([1, 1, 3]))
+    query_with_ephemerides = query_with_ephemerides.sort_values(by=["sv", "query_time_isagpst"]).reset_index(drop=True)
+    jan = query_with_ephemerides.query_time_isagpst - pd.Series(
+        [pd.Timedelta('100s'), pd.Timedelta('50s'), pd.Timedelta('90s')])
+    assert query_with_ephemerides.query_time_isagpst.equals(
+        pd.Series([pd.Timedelta('100s'), pd.Timedelta('50s'), pd.Timedelta('90s')]))
+    assert query_with_ephemerides.ephemeris_hash.equals(pd.Series([1, 2, 2]))
