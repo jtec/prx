@@ -48,6 +48,9 @@ if __name__ == "__main__":
         f" {len(query.query_time_isagpst.unique())} epochs"
     )
     p = cProfile.Profile()
+    # Warm up cache: we are mainly interested in prx code's performance, not
+    # the RINEX parser's, whose ouput swill be cached this way:
+    result = benchmark(query, rinex_nav_file)
     p.enable()
     benchmark(query, rinex_nav_file)
     p.disable()
