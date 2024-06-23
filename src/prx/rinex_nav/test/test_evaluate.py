@@ -1,6 +1,8 @@
 import numpy as np
 import pandas as pd
 from pathlib import Path
+
+from prx.rinex_nav.evaluate import select_ephemerides
 from prx.sp3 import evaluate as sp3_evaluate
 from prx.rinex_nav import evaluate as rinex_nav_evaluate
 from prx import constants, converters, helpers
@@ -66,7 +68,7 @@ def test_compare_rnx3_gps_sat_pos_with_magnitude(input_for_test):
             "query_time_isagpst": week_and_seconds_2_timedelta(
                 weeks=2190, seconds=523800
             )
-            + constants.cGpstUtcEpoch,
+                                  + constants.cGpstUtcEpoch,
         },
         index=[0],
     )
@@ -76,7 +78,7 @@ def test_compare_rnx3_gps_sat_pos_with_magnitude(input_for_test):
     sv_pos_magnitude = np.array([13053451.235, -12567273.060, 19015357.126])
     sv_pos_prx = rinex_sat_states[["sat_pos_x_m", "sat_pos_y_m", "sat_pos_z_m"]][
         rinex_sat_states.sv == "G01"
-    ].to_numpy()
+        ].to_numpy()
 
     threshold_pos_error_m = 1e-3
     assert np.linalg.norm(sv_pos_prx - sv_pos_magnitude) < threshold_pos_error_m
@@ -125,7 +127,7 @@ def generate_sat_query(sat_state_query_time_isagpst):
                 "sv": "G15",
                 "signal": "C1C",
                 "query_time_isagpst": sat_state_query_time_isagpst
-                + pd.Timedelta(seconds=1),
+                                      + pd.Timedelta(seconds=1),
             },
             # Two Galileo
             {
@@ -231,12 +233,12 @@ def test_compare_to_sp3(input_for_test):
 
     print("\n" + diff.to_string())
     for (
-        column,
-        expected_max_difference,
+            column,
+            expected_max_difference,
     ) in expected_max_differences_broadcast_vs_precise.items():
         assert not diff[column].isnull().values.any()
         assert (
-            diff[column].max() < expected_max_difference
+                diff[column].max() < expected_max_difference
         ), f"Expected maximum difference {expected_max_difference} for column {column}, but got {diff[column].max()}"
 
 
@@ -268,11 +270,11 @@ def test_sbas(input_for_test):
     )
     rGeoStationaryOrbit = 42164e3
     assert (
-        rinex_sat_states[["sat_pos_x_m", "sat_pos_y_m", "sat_pos_z_m"]].apply(
-            np.linalg.norm, axis=1
-        )
-        - rGeoStationaryOrbit
-    ).abs().max() < 2e3
+                   rinex_sat_states[["sat_pos_x_m", "sat_pos_y_m", "sat_pos_z_m"]].apply(
+                       np.linalg.norm, axis=1
+                   )
+                   - rGeoStationaryOrbit
+           ).abs().max() < 2e3
 
 
 @pytest.fixture
@@ -317,7 +319,7 @@ def test_2023_beidou_c27(set_up_test_2023):
 
     rinex_sat_states = rinex_nav_evaluate.compute_parallel(rinex_nav_file, query.copy())
     assert (
-        len(rinex_sat_states.index) == 1
+            len(rinex_sat_states.index) == 1
     ), "Was expecting only one row, make sure to sort before comparing to sp3 with more than one row"
     rinex_sat_states = (
         rinex_sat_states.reset_index()
@@ -347,11 +349,11 @@ def test_2023_beidou_c27(set_up_test_2023):
         diff[["sat_vel_x_mps", "sat_vel_y_mps", "sat_vel_z_mps"]].to_numpy(), axis=1
     )
     for (
-        column,
-        expected_max_difference,
+            column,
+            expected_max_difference,
     ) in expected_max_differences_broadcast_vs_precise.items():
         assert (
-            diff[column].max() < expected_max_difference
+                diff[column].max() < expected_max_difference
         ), f"Expected maximum difference {expected_max_difference} for column {column}, but got {diff[column].max()}"
 
 
@@ -462,8 +464,8 @@ def test_gps_group_delay(input_for_test):
         constants.cGpsSpeedOfLight_mps
         * pd.Series([-1.769512891770e-08, -1.769512891770e-08, -1.769512891769e-08])
         * (
-            constants.carrier_frequencies_hz()["G"]["L1"][1]
-            / constants.carrier_frequencies_hz()["G"]["L2"][1]
+                constants.carrier_frequencies_hz()["G"]["L1"][1]
+                / constants.carrier_frequencies_hz()["G"]["L2"][1]
         )
         ** 2,
         1e-6,
@@ -525,8 +527,8 @@ def test_gal_group_delay(input_for_test):
         tgds[tgds.signal == "C5X"]["sat_code_bias_m"],
         4.423782229424e-09
         * (
-            constants.carrier_frequencies_hz()["E"]["L1"][1]
-            / constants.carrier_frequencies_hz()["E"]["L5"][1]
+                constants.carrier_frequencies_hz()["E"]["L1"][1]
+                / constants.carrier_frequencies_hz()["E"]["L5"][1]
         )
         ** 2
         * constants.cGpsSpeedOfLight_mps,
@@ -536,8 +538,8 @@ def test_gal_group_delay(input_for_test):
         tgds[tgds.signal == "C7X"]["sat_code_bias_m"],
         4.889443516730e-09
         * (
-            constants.carrier_frequencies_hz()["E"]["L1"][1]
-            / constants.carrier_frequencies_hz()["E"]["L7"][1]
+                constants.carrier_frequencies_hz()["E"]["L1"][1]
+                / constants.carrier_frequencies_hz()["E"]["L7"][1]
         )
         ** 2
         * constants.cGpsSpeedOfLight_mps,
@@ -610,3 +612,23 @@ def test_bds_group_delay(input_for_test):
     assert np.all(np.isnan(tgds[tgds.signal == "C1D"]["sat_code_bias_m"].to_numpy()))
     assert np.all(np.isnan(tgds[tgds.signal == "C1P"]["sat_code_bias_m"].to_numpy()))
     assert np.all(np.isnan(tgds[tgds.signal == "C5X"]["sat_code_bias_m"].to_numpy()))
+
+
+def test_select_ephemerides():
+    ephemerides = pd.DataFrame({"sv": ["G01", "G01", "E02"],
+                                "ephemeris_reference_time_isagpst":
+                                    [pd.Timedelta('0s'), pd.Timedelta('1000s'), pd.Timedelta('0s')],
+                                "clock_reference_time_isagpst":
+                                    [pd.Timedelta('0s'), pd.Timedelta('1000s'), pd.Timedelta('0s')],
+                                "fnav_or_inav": ["", "", "fnav"],
+                                "ephemeris_hash": [1, 2, 3],
+                                })
+    query = pd.DataFrame(
+        {
+            "sv": ["G01", "G01", "E02"],
+            "query_time_isagpst": [pd.Timedelta('100s'), pd.Timedelta('200s'), pd.Timedelta('0s')],
+            'signal': ['C1C', 'C1C', 'C5X']
+        }
+    )
+    query_with_ephemerides = select_ephemerides(ephemerides, query)
+    assert query_with_ephemerides.ephemeris_hash.equals(pd.Series([1, 1, 3]))
