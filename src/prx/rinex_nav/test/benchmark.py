@@ -16,7 +16,7 @@ def generate_query(n_epochs=1):
     # of what an open-sky receiver would see
     for _, constellation_df in df.groupby("constellation"):
         constellation_sats = constellation_df["sv"].unique()
-        sats.extend(constellation_sats[0: min(10, len(constellation_sats))])
+        sats.extend(constellation_sats[0 : min(10, len(constellation_sats))])
     # Only Kepler orbits supported:
     sats = [sat for sat in sats if sat[0] not in ["S", "R"]]
     query_template = pd.DataFrame(

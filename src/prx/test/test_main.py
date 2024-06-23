@@ -38,8 +38,16 @@ def input_for_test_tlse():
     # Also provide ephemerides on disk so the test does not have to download them:
     # compressed_compact_rinex_file = datasets_directory / "TLSE_2023001" / "TLSE00FRA_R_20230010100_10S_01S_MO.crx.gz"
     # ephemerides_file = datasets_directory / "TLSE_2023001/BRDC00IGS_R_20230010000_01D_MN.rnx.zip"
-    compressed_compact_rinex_file = datasets_directory / "TLSE00FRA_R_2024001" / "TLSE00FRA_R_20240011200_15M_01S_MO.crx.gz"
-    ephemerides_file = datasets_directory / "TLSE00FRA_R_2024001" / "BRDC00IGS_R_20240010000_01D_MN.rnx"
+    compressed_compact_rinex_file = (
+        datasets_directory
+        / "TLSE00FRA_R_2024001"
+        / "TLSE00FRA_R_20240011200_15M_01S_MO.crx.gz"
+    )
+    ephemerides_file = (
+        datasets_directory
+        / "TLSE00FRA_R_2024001"
+        / "BRDC00IGS_R_20240010000_01D_MN.rnx"
+    )
 
     for file in [compressed_compact_rinex_file, ephemerides_file]:
         shutil.copy(
@@ -150,7 +158,7 @@ def test_prx_function_call_with_csv_output(input_for_test_tlse):
 
 
 def test_prx_function_call_for_obs_file_across_two_days(
-        input_for_test_with_first_epoch_at_midnight,
+    input_for_test_with_first_epoch_at_midnight,
 ):
     test_file = input_for_test_with_first_epoch_at_midnight["obs_file"]
     main.process(observation_file_path=test_file, output_format="csv")
@@ -181,12 +189,12 @@ def test_spp_lsq_nist(input_for_test_nist):
     df_first_epoch = df[
         df.time_of_reception_in_receiver_time
         == df.time_of_reception_in_receiver_time.min()
-        ]
+    ]
     for constellations_to_use in [
         (
-                "G",
-                "E",
-                "C",
+            "G",
+            "E",
+            "C",
         ),
         ("G", "S"),
         ("G",),
@@ -208,7 +216,7 @@ def test_spp_lsq_nist(input_for_test_nist):
         log.info(f"Position offset: {position_offset}")
         log.info(f"Velocity offset: {velocity_offset}")
         assert (
-                np.max(np.abs(position_offset)) < 2e1
+            np.max(np.abs(position_offset)) < 2e1
         )  # relaxed position offset (instead of 1e1)
         assert np.max(np.abs(velocity_offset)) < 1e-1
 
@@ -219,12 +227,12 @@ def test_spp_lsq_tlse(input_for_test_tlse):
     df_first_epoch = df[
         df.time_of_reception_in_receiver_time
         == df.time_of_reception_in_receiver_time.min()
-        ]
+    ]
     for constellations_to_use in [
         (
-                "G",
-                "E",
-                "C",
+            "G",
+            "E",
+            "C",
         ),
         ("G", "S"),
         ("G",),
@@ -250,7 +258,7 @@ def test_spp_lsq_tlse(input_for_test_tlse):
 
 
 def test_spp_lsq_for_obs_file_across_two_days(
-        input_for_test_with_first_epoch_at_midnight,
+    input_for_test_with_first_epoch_at_midnight,
 ):
     df, metadata = run_rinex_through_prx(
         input_for_test_with_first_epoch_at_midnight["obs_file"]
@@ -258,7 +266,7 @@ def test_spp_lsq_for_obs_file_across_two_days(
     df_first_epoch = df[
         df.time_of_reception_in_receiver_time
         == df.time_of_reception_in_receiver_time.min()
-        ]
+    ]
     for constellations_to_use in [
         ("G",),
     ]:
@@ -341,7 +349,7 @@ def test_bootstrap_coarse_receiver_position(input_for_test_tlse):
 
     # Compute position error
     position_error_ecef_m = (
-            solution[0:3] - metadata["approximate_receiver_ecef_position_m"]
+        solution[0:3] - metadata["approximate_receiver_ecef_position_m"]
     )
 
     # Verify position error magnitude
