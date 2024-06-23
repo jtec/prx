@@ -36,8 +36,15 @@ def input_for_test_tlse():
     os.makedirs(test_directory)
     datasets_directory = Path(__file__).parent / "datasets"
     # Also provide ephemerides on disk so the test does not have to download them:
-    # compressed_compact_rinex_file = datasets_directory / "TLSE_2023001" / "TLSE00FRA_R_20230010100_10S_01S_MO.crx.gz"
-    # ephemerides_file = datasets_directory / "TLSE_2023001/BRDC00IGS_R_20230010000_01D_MN.rnx.zip"
+    compressed_compact_rinex_file = (
+        datasets_directory
+        / "TLSE_2023001"
+        / "TLSE00FRA_R_20230010100_10S_01S_MO.crx.gz"
+    )
+    ephemerides_file = (
+        datasets_directory / "TLSE_2023001/BRDC00IGS_R_20230010000_01D_MN.rnx.zip"
+    )
+    """
     compressed_compact_rinex_file = (
         datasets_directory
         / "TLSE00FRA_R_2024001"
@@ -48,7 +55,7 @@ def input_for_test_tlse():
         / "TLSE00FRA_R_2024001"
         / "BRDC00IGS_R_20240010000_01D_MN.rnx"
     )
-
+    """
     for file in [compressed_compact_rinex_file, ephemerides_file]:
         shutil.copy(
             file,
@@ -152,9 +159,9 @@ def test_prx_function_call_with_csv_output(input_for_test_tlse):
     assert not df.empty
     assert helpers.is_sorted(df.time_of_reception_in_receiver_time)
     # Elevation sanity check
-    # assert (
-    #               df[(df.prn == 14) & (df.constellation == "C")].sat_elevation_deg - 34.86
-    #       ).abs().max() < 0.3
+    assert (
+        df[(df.prn == 14) & (df.constellation == "C")].sat_elevation_deg - 34.86
+    ).abs().max() < 0.3
 
 
 def test_prx_function_call_for_obs_file_across_two_days(
