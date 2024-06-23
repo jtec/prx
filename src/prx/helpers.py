@@ -121,6 +121,8 @@ def week_and_seconds_2_timedelta(weeks, seconds):
 
 
 def timedelta_2_seconds(time_delta: pd.Timedelta):
+    if pd.isnull(time_delta):
+        return np.nan
     assert type(time_delta) == pd.Timedelta, "time_delta must be of type pd.Timedelta"
     integer_seconds = np.float64(round(time_delta.total_seconds()))
     fractional_seconds = (

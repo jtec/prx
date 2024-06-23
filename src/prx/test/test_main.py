@@ -36,10 +36,10 @@ def input_for_test_tlse():
     os.makedirs(test_directory)
     datasets_directory = Path(__file__).parent / "datasets"
     # Also provide ephemerides on disk so the test does not have to download them:
-    compressed_compact_rinex_file = datasets_directory / "TLSE_2023001" / "TLSE00FRA_R_20230010100_10S_01S_MO.crx.gz"
-    ephemerides_file = datasets_directory / "TLSE_2023001/BRDC00IGS_R_20230010000_01D_MN.rnx.zip"
-    # compressed_compact_rinex_file = datasets_directory / "TLSE00FRA_R_2024001" / "TLSE00FRA_R_20240011200_15M_01S_MO.crx.gz"
-    # ephemerides_file = datasets_directory / "TLSE00FRA_R_2024001" / "BRDC00IGS_R_20240010000_01D_MN.rnx"
+    # compressed_compact_rinex_file = datasets_directory / "TLSE_2023001" / "TLSE00FRA_R_20230010100_10S_01S_MO.crx.gz"
+    # ephemerides_file = datasets_directory / "TLSE_2023001/BRDC00IGS_R_20230010000_01D_MN.rnx.zip"
+    compressed_compact_rinex_file = datasets_directory / "TLSE00FRA_R_2024001" / "TLSE00FRA_R_20240011200_15M_01S_MO.crx.gz"
+    ephemerides_file = datasets_directory / "TLSE00FRA_R_2024001" / "BRDC00IGS_R_20240010000_01D_MN.rnx"
 
     for file in [compressed_compact_rinex_file, ephemerides_file]:
         shutil.copy(
