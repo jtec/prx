@@ -155,7 +155,7 @@ def bootstrap_coarse_receiver_position(filepath_obs, filepath_nav):
             "time_of_reception_in_receiver_time": obs.time.values[0],
             "observation_value": obs.isel(time=0).C1C.values,
             "signal": "C1C",
-            "sv": obs.sv.values, # duplicate of 'satellite', but used in
+            "sv": obs.sv.values,
             "query_time_isagpst": time_of_emission,
         }
     )
