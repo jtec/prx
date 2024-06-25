@@ -168,7 +168,6 @@ def bootstrap_coarse_receiver_position(filepath_obs, filepath_nav):
     )
     sat_states = sat_states.rename(
         columns={
-            # "sv": "satellite",
             "signal": "observation_type",
             "query_time_isagpst": "time_of_emission_isagpst",
         }

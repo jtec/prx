@@ -398,7 +398,7 @@ def convert_nav_dataset_to_dataframe(nav_ds):
     # georinex adds suffixes to satellite IDs if it sees multiple ephemerides (e.g. F/NAV, I/NAV) for the same
     # satellite and the same timestamp.
     # The downstream code expects three-letter satellite IDs, so remove suffixes.
-    df["sv"] = df.apply(lambda row: row["sv"][:3], axis=1)
+    df["sv"] = df.sv.str[:3]
     df["constellation"] = df["sv"].str[0]
     df["time_scale"] = df["constellation"].replace(
         constants.constellation_2_system_time_scale
@@ -492,10 +492,7 @@ def convert_nav_dataset_to_dataframe(nav_ds):
     )
     df = df.reset_index(drop=True)
     df = compute_gal_inav_fnav_indicators(df)
-    df["frequency_slot"] = int(1)
-    df.loc[df.sv.str[0] == "R", "frequency_slot"] = df.loc[
-        df.sv.str[0] == "R", "FreqNum"
-    ].astype(int)
+    df["frequency_slot"] = df.FreqNum.where(df.sv.str[0] == 'R', 1).astype(int)
     return df
 
 
