@@ -374,7 +374,7 @@ def kepler_orbit_position_and_velocity(eph):
     position_in_orbital_plane(eph)
     orbital_plane_to_earth_centered_cartesian(eph)
     handle_bds_geos(eph)
-    eph.rename(
+    eph = eph.rename(
         columns={
             "X_k": "sat_pos_x_m",
             "Y_k": "sat_pos_y_m",
@@ -383,7 +383,6 @@ def kepler_orbit_position_and_velocity(eph):
             "dY_k": "sat_vel_y_mps",
             "dZ_k": "sat_vel_z_mps",
         },
-        inplace=True,
     )
     return eph
 

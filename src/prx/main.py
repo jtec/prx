@@ -119,7 +119,7 @@ def write_csv_file(
         )
     records["constellation"] = records.satellite.str[0]
     records["prn"] = records.satellite.str[1:]
-    records.rename(columns={"tracking_id": "rnx_obs_identifier"}, inplace=True)
+    records = records.rename(columns={"tracking_id": "rnx_obs_identifier"})
     records = records.drop(
         columns=[
             "satellite",
@@ -228,14 +228,13 @@ def build_records(
     flat_obs.obs_value = flat_obs.obs_value.astype(float)
     flat_obs[["sv", "obs_type"]] = flat_obs[["sv", "obs_type"]].astype(str)
 
-    flat_obs.rename(
+    flat_obs = flat_obs.rename(
         columns={
             "time": "time_of_reception_in_receiver_time",
             "sv": "satellite",
             "obs_value": "observation_value",
             "obs_type": "observation_type",
         },
-        inplace=True,
     )
 
     log.info("Computing times of emission in satellite time")
@@ -291,13 +290,12 @@ def build_records(
 
     # Compute broadcast position, velocity, clock offset, clock offset rate and TGDs
     query = flat_obs[flat_obs["observation_type"].str.startswith("C")]
-    query.rename(
+    query = query.rename(
         columns={
             "observation_type": "signal",
             "satellite": "sv",
             "time_of_emission_isagpst": "query_time_isagpst",
         },
-        inplace=True,
     )
 
     sat_states_per_day = []
@@ -325,13 +323,12 @@ def build_records(
             )
         )
     sat_states = pd.concat(sat_states_per_day)
-    sat_states.rename(
+    sat_states = sat_states.rename(
         columns={
             "sv": "satellite",
             "signal": "observation_type",
             "query_time_isagpst": "time_of_emission_isagpst",
         },
-        inplace=True,
     )
     # We need Timestamps to compute tropo delays
     sat_states = sat_states.merge(
