@@ -1,10 +1,10 @@
 import platform
+import re
 from functools import wraps
 from pathlib import Path
 import logging
 
 from imohash import imohash
-
 from prx import constants
 import numpy as np
 import pandas as pd
@@ -16,13 +16,25 @@ import os
 from astropy.utils import iers
 from astropy import time as astrotime
 
-
 logging.basicConfig(
     format="%(asctime)s,%(msecs)03d %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s",
     datefmt="%Y-%m-%d:%H:%M:%S",
     level=logging.DEBUG,
 )
 log = logging.getLogger(__name__)
+
+
+def timeit(func):
+    @wraps(func)
+    def timeit_wrapper(*args, **kwargs):
+        start_time = pd.Timestamp.now()
+        result = func(*args, **kwargs)
+        end_time = pd.Timestamp.now()
+        total_time = end_time - start_time
+        log.info(f"Function {func.__name__} took {total_time} to run.")
+        return result
+
+    return timeit_wrapper
 
 
 def parse_boolean_env_variable(env_variable_name: str, value_if_not_set: bool):
@@ -36,9 +48,6 @@ def parse_boolean_env_variable(env_variable_name: str, value_if_not_set: bool):
 
 
 disk_cache = joblib.Memory(Path(__file__).parent.joinpath("diskcache"), verbose=0)
-if parse_boolean_env_variable("PRX_NO_CACHING", False):
-    log.debug("Caching disabled by environment variable PRX_NO_CACHING, purging cache.")
-    disk_cache.clear()
 
 
 def get_logger(label):
@@ -109,6 +118,8 @@ def week_and_seconds_2_timedelta(weeks, seconds):
 
 
 def timedelta_2_seconds(time_delta: pd.Timedelta):
+    if pd.isnull(time_delta):
+        return np.nan
     assert type(time_delta) == pd.Timedelta, "time_delta must be of type pd.Timedelta"
     integer_seconds = np.float64(round(time_delta.total_seconds()))
     fractional_seconds = (
@@ -168,6 +179,19 @@ def repair_with_gfzrnx(file):
     )
     if result.returncode == 0:
         log.info(f"Ran gfzrnx file repair on {file}")
+        with open(file, "r") as f:
+            file_content = f.read()
+            file_content = re.sub(
+                r"gfzrnx-(.*?)FILE PROCESSING(.*)UTC COMMENT",
+                r"gfzrnx-\1FILE PROCESSING (timestamp removed by prx) UTC COMMENT",
+                file_content,
+                count=1,
+            )
+        with open(file, "w") as f:
+            f.write(file_content)
+            log.info(
+                f"Removed repair timestamp from gfzrnx file {file} to avoid content hash changes."
+            )
     else:
         log.info(f"gfzrnx file repair run failed: {result}")
         assert False
@@ -348,8 +372,9 @@ def ecef_2_geodetic(pos_ecef):
     return [latitude_rad, longitude_rad, altitude_m]
 
 
-def parse_rinex_file(rinex_file: Path):
-    @disk_cache.cache()
+@timeit
+def parse_rinex_file(rinex_file_path: Path):
+    @disk_cache.cache(ignore=["rinex_file"])
     def cached_load(rinex_file: Path, file_hash: str):
         log.info(f"Parsing {rinex_file} (hash {file_hash}) ...")
         repair_with_gfzrnx(rinex_file)
@@ -357,13 +382,13 @@ def parse_rinex_file(rinex_file: Path):
         return parsed
 
     t0 = pd.Timestamp.now()
-    file_content_hash = hash_of_file_content(rinex_file)
+    file_content_hash = hash_of_file_content(rinex_file_path)
     hash_time = pd.Timestamp.now() - t0
     if hash_time > pd.Timedelta(seconds=1):
         log.info(
             f"Hashing file content took {hash_time}, we might want to partially hash the file"
         )
-    return cached_load(rinex_file, file_content_hash)
+    return cached_load(rinex_file_path, file_content_hash)
 
 
 def get_gpst_utc_leap_seconds(rinex_file: Path):
@@ -401,19 +426,6 @@ def get_gpst_utc_leap_seconds(rinex_file: Path):
 
 def is_sorted(iterable):
     return all(iterable[i] <= iterable[i + 1] for i in range(len(iterable) - 1))
-
-
-def timeit(func):
-    @wraps(func)
-    def timeit_wrapper(*args, **kwargs):
-        start_time = pd.Timestamp.now()
-        result = func(*args, **kwargs)
-        end_time = pd.Timestamp.now()
-        total_time = end_time - start_time
-        log.debug(f"Function {func.__name__} took {total_time} to run.")
-        return result
-
-    return timeit_wrapper
 
 
 def compute_gps_utc_leap_seconds(yyyy: int, doy: int):

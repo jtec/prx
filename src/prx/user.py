@@ -153,19 +153,7 @@ def bootstrap_coarse_receiver_position(filepath_obs, filepath_nav):
     query = pd.DataFrame(
         data={
             "time_of_reception_in_receiver_time": obs.time.values[0],
-            "satellite": obs.sv.values,
             "observation_value": obs.isel(time=0).C1C.values,
-            "observation_type": "C1C",
-            "time_of_emission_in_satellite_time_integer_second_aligned_to_receiver_time": time_of_emission,
-            "time_of_emission_isagpst": time_of_emission,
-            "time_of_emission_weeksecond_isagpst": [
-                prx.helpers.timedelta_2_weeks_and_seconds(
-                    prx.helpers.timestamp_2_timedelta(
-                        time_of_emission[i], time_scale="GPST"
-                    )
-                )[1]
-                for i in range(len(obs.sv))
-            ],
             "signal": "C1C",
             "sv": obs.sv.values,
             "query_time_isagpst": time_of_emission,
@@ -180,7 +168,6 @@ def bootstrap_coarse_receiver_position(filepath_obs, filepath_nav):
     )
     sat_states = sat_states.rename(
         columns={
-            "sv": "satellite",
             "signal": "observation_type",
             "query_time_isagpst": "time_of_emission_isagpst",
         }
@@ -196,7 +183,7 @@ def bootstrap_coarse_receiver_position(filepath_obs, filepath_nav):
     obs_df = query[
         [
             "time_of_reception_in_receiver_time",
-            "satellite",
+            "sv",
             "observation_value",
         ]
     ].merge(
@@ -205,7 +192,7 @@ def bootstrap_coarse_receiver_position(filepath_obs, filepath_nav):
                 "sat_code_bias_m",
                 "sat_clock_offset_m",
                 "sat_clock_drift_mps",
-                "satellite",
+                "sv",
                 "sat_pos_x_m",
                 "sat_pos_y_m",
                 "sat_pos_z_m",
@@ -216,7 +203,7 @@ def bootstrap_coarse_receiver_position(filepath_obs, filepath_nav):
             ]
         ],
         how="left",
-        on="satellite",
+        on="sv",
     )
     obs_df = obs_df.rename(columns={"observation_value": "C_obs_m"})
     # add missing columns with 0 value, since approximate position is unknown

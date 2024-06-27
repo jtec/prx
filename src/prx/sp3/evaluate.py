@@ -13,7 +13,7 @@ log = helpers.get_logger(__name__)
 
 
 def parse_sp3_file(file_path: Path):
-    @helpers.disk_cache.cache
+    @helpers.disk_cache.cache(ignore=["file_path"])
     def cached_load(file_path: Path, file_hash: str):
         log.info(f"Parsing {file_path} (hash {file_hash}) ...")
         parsed = georinex.load(file_path)

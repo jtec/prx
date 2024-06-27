@@ -34,24 +34,24 @@ def input_for_test_tlse():
         # test run having crashed:
         shutil.rmtree(test_directory)
     os.makedirs(test_directory)
-    compressed_compact_rinex_file = "TLSE00FRA_R_20230010100_10S_01S_MO.crx.gz"
-    test_file = test_directory.joinpath(compressed_compact_rinex_file)
-    shutil.copy(
-        Path(__file__).parent
-        / f"datasets/TLSE_2023001/{compressed_compact_rinex_file}",
-        test_file,
+    datasets_directory = Path(__file__).parent / "datasets"
+    # Also provide ephemerides on disk so the test does not have to download them:
+    compressed_compact_rinex_file = (
+        datasets_directory
+        / "TLSE_2023001"
+        / "TLSE00FRA_R_20230010100_10S_01S_MO.crx.gz"
     )
-    assert test_file.exists()
-    # Also provide ephemerides so the test does not have to download them:
-    ephemerides_file = "BRDC00IGS_R_20230010000_01D_MN.rnx.zip"
-    shutil.copy(
-        Path(__file__).parent / f"datasets/TLSE_2023001/{ephemerides_file}",
-        test_file.parent.joinpath(ephemerides_file),
+    ephemerides_file = (
+        datasets_directory / "TLSE_2023001/BRDC00IGS_R_20230010000_01D_MN.rnx.zip"
     )
-    assert test_file.parent.joinpath(ephemerides_file).exists()
+    for file in [compressed_compact_rinex_file, ephemerides_file]:
+        shutil.copy(
+            file,
+            test_directory / file.name,
+        )
 
-    yield test_file
-    shutil.rmtree(test_file.parent)
+    yield test_directory / compressed_compact_rinex_file.name
+    shutil.rmtree(test_directory)
 
 
 @pytest.fixture
