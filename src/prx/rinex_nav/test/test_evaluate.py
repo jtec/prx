@@ -1,6 +1,8 @@
 import numpy as np
 import pandas as pd
 from pathlib import Path
+
+from prx.rinex_nav.evaluate import select_ephemerides
 from prx.sp3 import evaluate as sp3_evaluate
 from prx.rinex_nav import evaluate as rinex_nav_evaluate
 from prx import constants, converters, helpers
@@ -610,3 +612,44 @@ def test_bds_group_delay(input_for_test):
     assert np.all(np.isnan(tgds[tgds.signal == "C1D"]["sat_code_bias_m"].to_numpy()))
     assert np.all(np.isnan(tgds[tgds.signal == "C1P"]["sat_code_bias_m"].to_numpy()))
     assert np.all(np.isnan(tgds[tgds.signal == "C5X"]["sat_code_bias_m"].to_numpy()))
+
+
+def test_select_ephemerides():
+    ephemerides = pd.DataFrame(
+        {
+            "sv": ["E01", "G01", "G01", "G01"],
+            "ephemeris_reference_time_isagpst": [
+                pd.Timedelta("10s"),
+                pd.Timedelta("10s"),
+                pd.Timedelta("101s"),
+                pd.Timedelta("1000s"),
+            ],
+            "clock_reference_time_isagpst": [
+                pd.Timedelta("10s"),
+                pd.Timedelta("10s"),
+                pd.Timedelta("101s"),
+                pd.Timedelta("1000s"),
+            ],
+            "fnav_or_inav": ["fnav", "", "", ""],
+            "ephemeris_hash": [1, 2, 3, 4],
+        }
+    )
+    query = pd.DataFrame(
+        {
+            "sv": ["E01", "G01", "G01"],
+            "query_time_isagpst": [
+                pd.Timedelta("100s"),
+                pd.Timedelta("50s"),
+                pd.Timedelta("90s"),
+            ],
+            "signal": ["C5X", "C1C", "C1C"],
+        }
+    )
+    query_with_ephemerides = select_ephemerides(ephemerides, query)
+    query_with_ephemerides = query_with_ephemerides.sort_values(
+        by=["sv", "query_time_isagpst"]
+    ).reset_index(drop=True)
+    assert query_with_ephemerides.query_time_isagpst.equals(
+        pd.Series([pd.Timedelta("100s"), pd.Timedelta("50s"), pd.Timedelta("90s")])
+    )
+    assert query_with_ephemerides.ephemeris_hash.equals(pd.Series([1, 2, 2]))

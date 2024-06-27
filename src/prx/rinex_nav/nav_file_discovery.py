@@ -15,7 +15,7 @@ def is_rinex_3_mixed_mgex_broadcast_ephemerides_file(file: Path):
     return str(file).endswith("MN.rnx")
 
 
-def try_downloading_ephemerides_http(day: pd.Timestamp, folder: Path):
+def try_downloading_ephemerides_http(day: pd.Timestamp, local_destination_folder: Path):
     # IGS BKG Rinex 3.04 mixed file paths follow this pattern:
     # For files after 2022
     # https://igs.bkg.bund.de/root_ftp/IGS/BRDC/2023/002/BRDC00IGS_R_20230020000_01D_MN.rnx.gz
@@ -28,7 +28,7 @@ def try_downloading_ephemerides_http(day: pd.Timestamp, folder: Path):
     remote_file = Path(
         f"/{day.year}/{day.day_of_year:03}/BRDC00{country_code}_R_{day.year}{day.day_of_year:03}0000_01D_MN.rnx.gz"
     )
-    local_compressed_file = folder.joinpath(remote_file.name)
+    local_compressed_file = local_destination_folder.joinpath(remote_file.name)
     url = "https://igs.bkg.bund.de/root_ftp/IGS/BRDC" + str(remote_file.as_posix())
     try:
         urllib.request.urlretrieve(url, local_compressed_file)

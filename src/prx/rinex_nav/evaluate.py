@@ -4,34 +4,29 @@ import pandas as pd
 import numpy as np
 from pathlib import Path
 import scipy
-import georinex
 from joblib import Parallel, delayed
-from math import floor
 
 from prx import helpers
 from prx import constants
+from prx.helpers import timeit, parse_rinex_file
 
 log = helpers.get_logger(__name__)
 
 
+@timeit
 def parse_rinex_nav_file(rinex_file: Path):
-    @helpers.disk_cache.cache
-    def cached_parse(rinex_file: Path, file_hash: str):
-        log.info(f"Parsing {rinex_file} (hash: {file_hash}) ...")
-        ds = georinex.load(rinex_file)
-        return ds
-
-    @helpers.disk_cache.cache
-    def cached_load(rinex_file: Path, file_hash: str):
-        ds = cached_parse(rinex_file, file_hash)
+    @helpers.disk_cache.cache(ignore=["rinex_file_path"])
+    def cached_load(rinex_file_path: Path, file_hash: str):
+        ds = parse_rinex_file(rinex_file_path)
         ds.attrs["utc_gpst_leap_seconds"] = helpers.get_gpst_utc_leap_seconds(
-            rinex_file
+            rinex_file_path
         )
         df = convert_nav_dataset_to_dataframe(ds)
         df["ephemeris_hash"] = pd.util.hash_pandas_object(df, index=False).astype(str)
         return df
 
     t0 = pd.Timestamp.now()
+
     file_content_hash = helpers.hash_of_file_content(rinex_file)
     hash_time = pd.Timestamp.now() - t0
     if hash_time > pd.Timedelta(seconds=1):
@@ -379,7 +374,7 @@ def kepler_orbit_position_and_velocity(eph):
     position_in_orbital_plane(eph)
     orbital_plane_to_earth_centered_cartesian(eph)
     handle_bds_geos(eph)
-    eph.rename(
+    eph = eph.rename(
         columns={
             "X_k": "sat_pos_x_m",
             "Y_k": "sat_pos_y_m",
@@ -388,7 +383,6 @@ def kepler_orbit_position_and_velocity(eph):
             "dY_k": "sat_vel_y_mps",
             "dZ_k": "sat_vel_z_mps",
         },
-        inplace=True,
     )
     return eph
 
@@ -403,7 +397,7 @@ def convert_nav_dataset_to_dataframe(nav_ds):
     # georinex adds suffixes to satellite IDs if it sees multiple ephemerides (e.g. F/NAV, I/NAV) for the same
     # satellite and the same timestamp.
     # The downstream code expects three-letter satellite IDs, so remove suffixes.
-    df["sv"] = df.apply(lambda row: row["sv"][:3], axis=1)
+    df["sv"] = df.sv.str[:3]
     df["constellation"] = df["sv"].str[0]
     df["time_scale"] = df["constellation"].replace(
         constants.constellation_2_system_time_scale
@@ -497,10 +491,7 @@ def convert_nav_dataset_to_dataframe(nav_ds):
     )
     df = df.reset_index(drop=True)
     df = compute_gal_inav_fnav_indicators(df)
-    df["frequency_slot"] = int(1)
-    df.loc[df.sv.str[0] == "R", "frequency_slot"] = df.loc[
-        df.sv.str[0] == "R", "FreqNum"
-    ].astype(int)
+    df["frequency_slot"] = df.FreqNum.where(df.sv.str[0] == "R", 1).astype(int)
     return df
 
 
@@ -544,60 +535,27 @@ def to_isagpst(time, timescale, gpst_utc_leapseconds):
     ), f"Unexpected types: time is {type(time)}, timescale is {type(timescale)}"
 
 
+@timeit
 def select_ephemerides(df, query):
-    def find_ephemeris_index(row, df):
-        # For each query, find the ephemeris whose time of reference is closest, but before the query time
-        # filter dataframe to keep only sv of interest
-        df2 = df[df.sv == row.sv]
-        query_time_wrt_ephemeris_reference_time = (
-            row.query_time_isagpst - df2.ephemeris_reference_time_isagpst
-        )
-        eligible_ephemerides = pd.Series(data=True, index=df2.index)
-        # For Galileo, select the FNAV ephemeris for E5b signals, and INAV for other signals
-        if row["sv"][0] == "E" and row["signal"][1] == "5":
-            eligible_ephemerides = df2.fnav_or_inav == "fnav"
-        if row["sv"][0] == "E" and row["signal"][1] != "5":
-            eligible_ephemerides = df2.fnav_or_inav == "inav"
-        delta_time = query_time_wrt_ephemeris_reference_time[
-            eligible_ephemerides
-            & (query_time_wrt_ephemeris_reference_time >= pd.Timedelta(seconds=0))
-        ]
-        if len(delta_time) == 0:
-            return np.nan
-        match_index = delta_time.idxmin()
-        return match_index
-
-    query["ephemeris_index"] = query.apply(find_ephemeris_index, args=(df,), axis=1)
-    # Some satellites might not have ephemerides. We create dummy ephemerides with NaN values for those.
-    sats_without_ephemerides = query[query.ephemeris_index.isna()].sv.unique()
-    for sv in sats_without_ephemerides:
-        nan_ephemeris = df.iloc[[0]].copy()
-        nan_ephemeris[
-            [
-                nan_ephemeris.columns[i]
-                for i, dtype in enumerate(nan_ephemeris.dtypes)
-                if dtype in (float, int, np.float64)
-            ]
-        ] = np.nan
-        nan_ephemeris[
-            [
-                nan_ephemeris.columns[i]
-                for i, dtype in enumerate(nan_ephemeris.dtypes)
-                if dtype in (pd.Timedelta, pd.Timestamp)
-            ]
-        ] = pd.NaT
-        nan_ephemeris["sv"] = sv
-        df = pd.concat((df, nan_ephemeris))
-    df = df.reset_index(drop=True)
-    df["ephemeris_index"] = df.index
-
-    query[query.ephemeris_index.isna()]["ephemeris_index"] = df.index[len(df) - 1]
-    # Copy ephemerides into query dataframe
-    # We are doing it this way around because the same satellite might show up multiple times in the query dataframe,
-    # e.g. with different query times
-    query = query.merge(df.drop(columns=["sv"]), on="ephemeris_index")
-    # For Galileo satellites we can have both F/NAV and I/NAV ephemerides for the same satellite and time, keep
-    # only one
+    df = df[df.ephemeris_reference_time_isagpst.notna()]
+    query = query.sort_values(by="query_time_isagpst")
+    df = df.sort_values(by="ephemeris_reference_time_isagpst")
+    # Add fnav/inav indicator to query for to select the FNAV ephemeris for E5b signals, and INAV for other signals
+    query["fnav_or_inav"] = ""
+    query.loc[
+        (query.sv.str[0] == "E") & (query.signal.str[1] == "5"), "fnav_or_inav"
+    ] = "fnav"
+    query.loc[
+        (query.sv.str[0] == "E") & (query.signal.str[1] != "5"), "fnav_or_inav"
+    ] = "inav"
+    query = pd.merge_asof(
+        query,
+        df,
+        left_on="query_time_isagpst",
+        right_on="ephemeris_reference_time_isagpst",
+        by=["sv", "fnav_or_inav"],
+        direction="backward",
+    )
     # Compute times w.r.t. orbit and clock reference times used by downstream computations
     query["query_time_wrt_ephemeris_reference_time_s"] = (
         query["query_time_isagpst"] - query["ephemeris_reference_time_isagpst"]
@@ -627,11 +585,7 @@ def compute_parallel(rinex_nav_file_path, per_signal_query):
     parallel = Parallel(n_jobs=round(multiprocessing.cpu_count() / 2), return_as="list")
     # split dataframe into `n_chunks` smaller dataframes
     n_chunks = min(len(per_signal_query.index), 4)
-    chunk_length = floor(len(per_signal_query) / n_chunks)
-    chunks = [
-        per_signal_query[i : i + chunk_length]
-        for i in range(0, len(per_signal_query), chunk_length)
-    ]
+    chunks = np.array_split(per_signal_query, n_chunks)
     processed_chunks = parallel(
         delayed(compute)(rinex_nav_file_path, chunk) for chunk in chunks
     )
@@ -641,12 +595,7 @@ def compute_parallel(rinex_nav_file_path, per_signal_query):
 def compute(rinex_nav_file_path, per_signal_query):
     # per_signal_query is a pd.DataFrame with the following columns
     #   - time_of_reception_in_receiver_time
-    #   - satellite
     #   - observation_value
-    #   - observation_type
-    #   - time_of_emission_in_satellite_time_integer_second_aligned_to_receiver_time
-    #   - time_of_emission_isagpst
-    #   - time_of_emission_weeksecond_isagpst
     #   - signal
     #   - sv
     #   - query_time_isagpst
