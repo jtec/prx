@@ -10,12 +10,6 @@ import plotly.graph_objects as go
 import georinex
 
 
-def run_obs3_parser(file_path):
-    # parsed = gr.load(file_path)
-    parsed = janobs(file_path)
-    ...
-
-
 def generate_data():
     base_file = Path(__file__).parent / "datasets" / "TLSE00FRA_R_20220010000_01D_30S_MO.rnx"
     sweep_dir = base_file.parent / "sweep"
@@ -45,25 +39,28 @@ def generate_data():
         cases.append({"epochs": (duration / pd.Timedelta('1s')) / float(header['INTERVAL']),
                       "file": slice_file, })
     for case in cases:
-        for parser in [georinex.load, prx_parse]:
+        for parser in [("prx", prx_parse), ("georinex", prx_parse)]:
             print(f"Processing {case}")
-            case["georinex_parsing_s"] = timeit.timeit(lambda: georinex.load(case['file']), number=2)
-            case["prx_parsing_s"] = timeit.timeit(lambda: prx_parse(case['file']), number=2)
-            case['epochs_per_second'] = case['epochs'] / case['parsing_s']
-            print(f"took {case['parsing_s']:.2f} s ({case['epochs_per_second']:.2f} epochs/s)")
+            case[f"{parser[0]}_parsing_s"] = timeit.timeit(lambda: parser[1](case['file']), number=2)
+            case[f"{parser[0]}_epochs_per_second"] = case['epochs'] / case[f"{parser[0]}_parsing_s"]
+            print(f"took {case[f'{parser[0]}_parsing_s']:.2f} s"
+                  f" ({case[f'{parser[0]}_epochs_per_second']:.2f} epochs/s)"
+                  f" with {parser[0]}")
     df = pd.DataFrame(cases)
-    df.to_csv(results_file, index=False)
+    # df.to_csv(results_file, index=False)
 
 
 if __name__ == "__main__":
     df = generate_data()
     df["file_size_mbytes"] = df.file.apply(lambda x: Path(x).stat().st_size) / 1e6
     fig = make_subplots(rows=1, cols=1, shared_xaxes=True)
-    fig.add_trace(
-        go.Scatter(x=df.file_size_mbytes, y=df.epochs_per_second, mode='lines+markers', name="Epochs per second"),
-        row=1, col=1)
-    fig.update_layout(title_text="Performance of the Obs3 parser")
+    for col in [col for col in df.columns if "_epochs_per_second" in col]:
+        fig.add_trace(
+            go.Scatter(x=df.file_size_mbytes, y=df[col], mode='lines+markers',
+                       name=f"Epochs per second {col.split('_')[0]}"),
+            row=1, col=1)
+    fig.update_layout(title_text="Performance of rinex 3 obs file parsers")
     fig.update_xaxes(title_text="File size [MB]", row=1, col=1)
-    fig.update_yaxes(title_text="Epochs per second", range=[0, df.epochs_per_second.max() * 1.1], row=1, col=1)
+    fig.update_yaxes(title_text="Epochs per second", range=[0, None], row=1, col=1)
     fig.show()
     ...
