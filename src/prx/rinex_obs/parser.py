@@ -4,6 +4,9 @@ import pandas as pd
 def get_obs_types(header):
     types = []
     marker = "SYS / # / OBS TYPES"
+    # with regex:
+    lines = " " + " ".join(header[header.lines.str.contains(marker)].lines.to_list()).replace(marker, " ") + "STOP"
+    regex = r"(( C | E | G | I | J | R | S )(.\s)[0-9]+(\s))"
     for line in header.lines.to_list():
         if marker in line:
             line = line.replace(marker, "")
