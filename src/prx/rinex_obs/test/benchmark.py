@@ -6,7 +6,6 @@ import pandas as pd
 from pathlib import Path
 
 from prx import helpers
-from prx.rinex_obs.parser import parse as prx_parse
 from plotly.subplots import make_subplots
 import plotly.graph_objects as go
 import georinex
@@ -52,7 +51,10 @@ def generate_data():
             }
         )
     for case in cases:
-        for parser in [("prx", prx_parse), ("georinex", helpers.parse_rinex_file)]:
+        for parser in [
+            ("prx", helpers.parse_rinex_obs_file),
+            ("georinex", helpers.parse_rinex_obs_file_with_georinex),
+        ]:
             print(f"Processing {case}")
             helpers.disk_cache.clear()
             case[f"{parser[0]}_parsing_s"] = timeit.timeit(

@@ -11,8 +11,8 @@ def test_compare_to_georinex():
         / "datasets"
         / "TLSE00FRA_R_20220010000_01D_30S_MO.rnx_slice_0.24h.rnx"
     )
-    georinex_output = helpers.parse_rinex_obs_file(file, "georinex").dropna()
-    prx_output = helpers.parse_rinex_obs_file(file, "prx").dropna()
+    georinex_output = helpers.parse_rinex_obs_file_with_georinex(file)
+    prx_output = helpers.parse_rinex_obs_file(file)
     merged = prx_output.merge(
         georinex_output, on=["time", "sv", "obs_type"], suffixes=("_prx", "_georinex")
     )
