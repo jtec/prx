@@ -1,25 +1,17 @@
 import pandas as pd
+import re
 
 
 def get_obs_types(header):
     types = []
     marker = "SYS / # / OBS TYPES"
-    # with regex:
-    lines = " " + " ".join(header[header.lines.str.contains(marker)].lines.to_list()).replace(marker, " ") + "STOP"
-    regex = r"(( C | E | G | I | J | R | S )(.\s)[0-9]+(\s))"
-    for line in header.lines.to_list():
-        if marker in line:
-            line = line.replace(marker, "")
-            blocks = [s.strip() for s in line.split()]
-            if len(blocks[0]) < 3:
-                constellation = blocks[0]
-                number_of_sats = int(blocks[1])
-                obs_types = blocks[2:]
-                types.append({"constellation": constellation, "number_of_sats": number_of_sats, "obs_types": obs_types})
-            else:
-                # This is a continuation line:
-                obs_types = line.split()
-                types[-1]["obs_types"].extend(obs_types)
+    lines = " " + " ".join(header[header.lines.str.contains(marker)].lines.to_list()).replace(marker, " ")
+    blocks = re.split(r'( C | E | J | R | I | G| S )', lines)
+    blocks = [block.strip() for block in blocks if len(block.strip()) > 0]
+    blocks = [block + " " + blocks[i + 1] for i, block in enumerate(blocks) if len(block) == 1]
+    for block in blocks:
+        types.append({"constellation": block.split()[0].strip(), "number_of_sats": int(block.split()[1].strip()),
+                      "obs_types": [element.strip() for element in block.split()[2:-1]]})
     return types
 
 
