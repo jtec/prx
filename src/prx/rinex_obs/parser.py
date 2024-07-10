@@ -30,10 +30,10 @@ def parse(file_path):
     i_end_of_header = df[df.lines.str.contains("END OF HEADER")].index[0]
     header = df.iloc[:i_end_of_header]
     obs_types = get_obs_types(header)
-    df = df.iloc[i_end_of_header + 1 :].reset_index(drop=True)
+    df = df.iloc[i_end_of_header + 1:].reset_index(drop=True)
     df["i"] = df.index
     is_timestamp = df.lines.str.startswith(">")
-    timestamps = df[df.lines.str.startswith(">")]
+    timestamps = df[is_timestamp]
     timestamps["time"] = pd.to_datetime(
         timestamps.lines.str[2:29], format="%Y %m %d %H %M %S.%f"
     )
