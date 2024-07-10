@@ -4,6 +4,7 @@ from functools import wraps
 from pathlib import Path
 import logging
 
+import xarray
 from imohash import imohash
 from prx import constants
 import numpy as np
@@ -15,6 +16,7 @@ import georinex
 import os
 from astropy.utils import iers
 from astropy import time as astrotime
+from prx.rinex_obs.parser import parse as prx_obs_parse
 
 logging.basicConfig(
     format="%(asctime)s,%(msecs)03d %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s",
@@ -370,6 +372,27 @@ def ecef_2_geodetic(pos_ecef):
             p * (1 - n * constants.cWgs84EarthEccentricity**2 / (n + altitude_m)),
         )
     return [latitude_rad, longitude_rad, altitude_m]
+
+
+def obs_dataset_to_obs_dataframe(ds: xarray.Dataset):
+    # Flatten the xarray DataSet into a pandas DataFrame:
+    log.info("Converting Dataset into flat Dataframe of observations")
+    flat_obs = pd.DataFrame()
+    for obs_label, sat_time_obs_array in ds.data_vars.items():
+        df = sat_time_obs_array.to_dataframe(name="obs_value").reset_index()
+        df = df[df["obs_value"].notna()]
+        df = df.assign(obs_type=lambda x: obs_label)
+        flat_obs = pd.concat([flat_obs, df])
+    return flat_obs
+
+
+def parse_rinex_obs_file(rinex_file_path: Path, parser: str = "georinex"):
+    if parser == "georinex":
+        return obs_dataset_to_obs_dataframe(parse_rinex_file(rinex_file_path))
+    elif parser == "prx":
+        return prx_obs_parse(rinex_file_path)
+    else:
+        raise ValueError(f"Don't know parser {parser}.")
 
 
 @timeit

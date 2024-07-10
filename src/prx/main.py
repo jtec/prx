@@ -215,15 +215,6 @@ def build_records(
     check_assumptions(rinex_3_obs_file)
     obs = helpers.parse_rinex_file(rinex_3_obs_file)
 
-    # Flatten the xarray DataSet into a pandas DataFrame:
-    log.info("Converting Dataset into flat Dataframe of observations")
-    flat_obs = pd.DataFrame()
-    for obs_label, sat_time_obs_array in obs.data_vars.items():
-        df = sat_time_obs_array.to_dataframe(name="obs_value").reset_index()
-        df = df[df["obs_value"].notna()]
-        df = df.assign(obs_type=lambda x: obs_label)
-        flat_obs = pd.concat([flat_obs, df])
-
     flat_obs.time = pd.to_datetime(flat_obs.time, format="%Y-%m-%dT%H:%M:%S")
     flat_obs.obs_value = flat_obs.obs_value.astype(float)
     flat_obs[["sv", "obs_type"]] = flat_obs[["sv", "obs_type"]].astype(str)
