@@ -16,7 +16,6 @@ import georinex
 import os
 from astropy.utils import iers
 from astropy import time as astrotime
-from prx.rinex_obs.parser import parse as prx_obs_parse
 
 logging.basicConfig(
     format="%(asctime)s,%(msecs)03d %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s",
@@ -387,12 +386,8 @@ def obs_dataset_to_obs_dataframe(ds: xarray.Dataset):
     return flat_obs
 
 
-def parse_rinex_obs_file_with_georinex(rinex_file_path: Path):
-    return obs_dataset_to_obs_dataframe(parse_rinex_file(rinex_file_path))
-
-
 def parse_rinex_obs_file(rinex_file_path: Path):
-    return prx_obs_parse(rinex_file_path)
+    return obs_dataset_to_obs_dataframe(parse_rinex_file(rinex_file_path))
 
 
 @timeit
