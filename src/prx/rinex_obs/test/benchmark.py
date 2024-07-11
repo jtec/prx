@@ -5,15 +5,15 @@ import numpy as np
 import pandas as pd
 from pathlib import Path
 
-from prx import helpers
+from prx import helpers, converters
 from plotly.subplots import make_subplots
 import plotly.graph_objects as go
 import georinex
 
 
 def generate_data():
-    base_file = (
-        Path(__file__).parent / "datasets" / "TLSE00FRA_R_20220010000_01D_30S_MO.rnx"
+    base_file = converters.anything_to_rinex_3(
+        Path(__file__).parent / "datasets" / "TLSE00FRA_R_20220010000_01D_30S_MO.rnx.gz"
     )
     sweep_dir = base_file.parent / "sweep"
     results_file = sweep_dir / "benchmark.csv"
