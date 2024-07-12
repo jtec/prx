@@ -8,7 +8,7 @@ def get_obs_types(header):
     lines = " " + " ".join(
         header[header.lines.str.contains(marker)].lines.to_list()
     ).replace(marker, " ")
-    blocks = re.split(r"( C | E | J | R | I | G| S )", lines)
+    blocks = re.split(r"( C | E | J | R | I | G | S )", lines)
     blocks = [block.strip() for block in blocks if len(block.strip()) > 0]
     blocks = [
         block + " " + blocks[i + 1] for i, block in enumerate(blocks) if len(block) == 1
@@ -18,7 +18,7 @@ def get_obs_types(header):
             {
                 "constellation": block.split()[0].strip(),
                 "number_of_sats": int(block.split()[1].strip()),
-                "obs_types": [element.strip() for element in block.split()[2:-1]],
+                "obs_types": [element.strip() for element in block.split()[2:]],
             }
         )
     return {content["constellation"]: content for content in types}
