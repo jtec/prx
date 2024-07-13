@@ -11,13 +11,13 @@ def test_compare_to_georinex():
         / "datasets"
         / "TLSE00FRA_R_20220010000_01D_30S_MO.rnx_slice_0.24h.rnx.gz"
     )
-    georinex_output = (
-        helpers.parse_rinex_obs_file(file)
+    prx_output = (
+        prx_obs_parse(file)
         .sort_values(by=["time", "sv", "obs_type"])
         .reset_index(drop=True)
     )
-    prx_output = (
-        prx_obs_parse(file)
+    georinex_output = (
+        helpers.parse_rinex_obs_file(file)
         .sort_values(by=["time", "sv", "obs_type"])
         .reset_index(drop=True)
     )
