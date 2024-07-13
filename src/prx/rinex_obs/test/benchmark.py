@@ -31,8 +31,8 @@ def generate_data():
     for steps in range(1, n_steps, 1):
         duration = dt * steps
         slice_file = (
-                sweep_dir
-                / f"{base_file.name}_slice_{duration / pd.Timedelta('1h'):.2f}h.rnx"
+            sweep_dir
+            / f"{base_file.name}_slice_{duration / pd.Timedelta('1h'):.2f}h.rnx"
         )
         cmd = (
             f"gfzrnx_217_osx_intl64 -finp {base_file}"
@@ -62,7 +62,7 @@ def generate_data():
                 lambda: parser[1](case["file"]), number=1
             )
             case[f"{parser[0]}_epochs_per_second"] = (
-                    case["epochs"] / case[f"{parser[0]}_parsing_s"]
+                case["epochs"] / case[f"{parser[0]}_parsing_s"]
             )
             print(
                 f"took {case[f'{parser[0]}_parsing_s']:.2f} s"

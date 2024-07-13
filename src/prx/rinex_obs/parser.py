@@ -33,7 +33,7 @@ def parse(file_path):
     i_end_of_header = df[df.lines.str.contains("END OF HEADER")].index[0]
     header = df.iloc[:i_end_of_header]
     obs_types = get_obs_types(header)
-    df = df.iloc[i_end_of_header + 1:].reset_index(drop=True)
+    df = df.iloc[i_end_of_header + 1 :].reset_index(drop=True)
     df["i"] = df.index
     is_timestamp = df.lines.str.startswith(">")
     timestamps = df[is_timestamp]
@@ -50,8 +50,8 @@ def parse(file_path):
     block_length = 14 + 1 + 1
     sat_prefix_length = 3
     padded_length = (
-            math.ceil((df.records.str.len().max()) / block_length) * block_length
-            + sat_prefix_length
+        math.ceil((df.records.str.len().max()) / block_length) * block_length
+        + sat_prefix_length
     )
     df["records"] = df.records.str.pad(padded_length, side="right", fillchar=" ")
     df["sv"] = df.records.str[:sat_prefix_length]
@@ -59,15 +59,17 @@ def parse(file_path):
     assert np.isclose(df.records.str.len().max() % block_length, 0), (
         "Expect padded rows to be an integer multiple " "of block_length"
     )
-    obs_columns = {}
-    for i_block, col in enumerate(range(0, df.records.str.len().max(), block_length)):
-        obs_columns[f"block_{i_block}"] = (
-            df.records.str[col: col + block_length - 2]
-            .str.strip()
-            .replace({"": "NaN"})
-            .astype(float)
-        )
-    obs = pd.DataFrame(obs_columns)
+    # Insert character we can split on
+    df.records = df.records.str.findall("." * block_length).map("|".join)
+    obs = (
+        df.records.str.split("|", expand=True)
+        .stack()
+        .str[: block_length - 2]
+        .str.strip()
+        .replace({"": "NaN"})
+        .unstack()
+        .astype(float)
+    )
     obs["sv"] = df.sv
     obs["constellation"] = df.sv.str[0]
     obs["time"] = df.time
