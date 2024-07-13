@@ -1,3 +1,5 @@
+import math
+import numpy as np
 import pandas as pd
 import re
 
@@ -24,13 +26,14 @@ def get_obs_types(header):
     return {content["constellation"]: content for content in types}
 
 
+# @profile
 def parse(file_path):
     df = pd.read_csv(file_path, sep="|", header=None)
     df.columns = ["lines"]
     i_end_of_header = df[df.lines.str.contains("END OF HEADER")].index[0]
     header = df.iloc[:i_end_of_header]
     obs_types = get_obs_types(header)
-    df = df.iloc[i_end_of_header + 1 :].reset_index(drop=True)
+    df = df.iloc[i_end_of_header + 1:].reset_index(drop=True)
     df["i"] = df.index
     is_timestamp = df.lines.str.startswith(">")
     timestamps = df[is_timestamp]
@@ -43,23 +46,28 @@ def parse(file_path):
     ]
     df = df[~is_timestamp]
     df.columns = ["records", "time"]
-    df["records"] = df.records.str.pad(
-        df.records.str.len().max(), side="right", fillchar=" "
-    )
-    df["sv"] = df.records.str[:3]
-    df["records"] = df.records.str[3:]
     # See table A3 in the RINEX 3.05 specification
     block_length = 14 + 1 + 1
-    df.records = df.records.str.wrap(block_length, drop_whitespace=False)
-    obs = (
-        df.records.str.split("\n", expand=True)
-        .stack()
-        .str[:14]
-        .str.strip()
-        .replace({"": "NaN"})
-        .unstack()
-        .astype(float)
+    sat_prefix_length = 3
+    padded_length = (
+            math.ceil((df.records.str.len().max()) / block_length) * block_length
+            + sat_prefix_length
     )
+    df["records"] = df.records.str.pad(padded_length, side="right", fillchar=" ")
+    df["sv"] = df.records.str[:sat_prefix_length]
+    df["records"] = df.records.str[sat_prefix_length:]
+    assert np.isclose(df.records.str.len().max() % block_length, 0), (
+        "Expect padded rows to be an integer multiple " "of block_length"
+    )
+    obs_columns = {}
+    for i_block, col in enumerate(range(0, df.records.str.len().max(), block_length)):
+        obs_columns[f"block_{i_block}"] = (
+            df.records.str[col: col + block_length - 2]
+            .str.strip()
+            .replace({"": "NaN"})
+            .astype(float)
+        )
+    obs = pd.DataFrame(obs_columns)
     obs["sv"] = df.sv
     obs["constellation"] = df.sv.str[0]
     obs["time"] = df.time
@@ -74,4 +82,5 @@ def parse(file_path):
         group_df = group_df.drop(columns=["constellation"])
         group_df = group_df[["time", "sv", "obs_value", "obs_type"]]
         group_dfs.append(group_df)
-    return pd.concat(group_dfs).sort_values(by=["time"])
+    result = pd.concat(group_dfs).sort_values(by=["time"])
+    return result

@@ -2,7 +2,7 @@ from pathlib import Path
 
 from prx.rinex_obs.parser import parse as prx_obs_parse
 
-from prx import helpers, converters
+from prx import converters, helpers
 
 
 def test_compare_to_georinex():
