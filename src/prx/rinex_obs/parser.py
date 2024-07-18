@@ -33,7 +33,7 @@ def parse(file_path):
     i_end_of_header = df[df.lines.str.contains("END OF HEADER")].index[0]
     header = df.iloc[:i_end_of_header]
     obs_types = get_obs_types(header)
-    df = df.iloc[i_end_of_header + 1 :].reset_index(drop=True)
+    df = df.iloc[i_end_of_header + 1:].reset_index(drop=True)
     df["i"] = df.index
     is_timestamp = df.lines.str.startswith(">")
     timestamps = df[is_timestamp]
@@ -50,8 +50,8 @@ def parse(file_path):
     block_length = 14 + 1 + 1
     sat_prefix_length = 3
     padded_length = (
-        math.ceil((df.records.str.len().max()) / block_length) * block_length
-        + sat_prefix_length
+            math.ceil((df.records.str.len().max()) / block_length) * block_length
+            + sat_prefix_length
     )
     df["records"] = df.records.str.pad(padded_length, side="right", fillchar=" ")
     df["sv"] = df.records.str[:sat_prefix_length]
@@ -84,5 +84,5 @@ def parse(file_path):
         group_df = group_df.drop(columns=["constellation"])
         group_df = group_df[["time", "sv", "obs_value", "obs_type"]]
         group_dfs.append(group_df)
-    result = pd.concat(group_dfs).sort_values(by=["time"])
+    result = pd.concat(group_dfs).sort_values(by=["time"]).reset_index(drop=True)
     return result

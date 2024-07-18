@@ -90,8 +90,8 @@ def test_ecef_to_geodetic():
     expected_geodetic = [0.0, 0.0, 0.0]
     computed_geodetic = helpers.ecef_2_geodetic(ecef_coords)
     assert (
-        np.abs(np.array(expected_geodetic[:2]) - np.array(computed_geodetic[:2]))
-        < tolerance_rad
+            np.abs(np.array(expected_geodetic[:2]) - np.array(computed_geodetic[:2]))
+            < tolerance_rad
     ).all()
     assert np.abs(expected_geodetic[2] - computed_geodetic[2]) < tolerance_alt
 
@@ -99,8 +99,8 @@ def test_ecef_to_geodetic():
     expected_geodetic = [np.deg2rad(0.0), np.deg2rad(90), 0.0]
     computed_geodetic = helpers.ecef_2_geodetic(ecef_coords)
     assert (
-        np.abs(np.array(expected_geodetic[:2]) - np.array(computed_geodetic[:2]))
-        < tolerance_rad
+            np.abs(np.array(expected_geodetic[:2]) - np.array(computed_geodetic[:2]))
+            < tolerance_rad
     ).all()
     assert np.abs(expected_geodetic[2] - computed_geodetic[2]) < tolerance_alt
 
@@ -112,8 +112,8 @@ def test_ecef_to_geodetic():
     ]
     computed_geodetic = helpers.ecef_2_geodetic(ecef_coords)
     assert (
-        np.abs(np.array(expected_geodetic[:2]) - np.array(computed_geodetic[:2]))
-        < tolerance_rad
+            np.abs(np.array(expected_geodetic[:2]) - np.array(computed_geodetic[:2]))
+            < tolerance_rad
     ).all()
     assert np.abs(expected_geodetic[2] - computed_geodetic[2]) < tolerance_alt
 
@@ -125,8 +125,8 @@ def test_ecef_to_geodetic():
     expected_geodetic = [np.deg2rad(-33.8688197), np.deg2rad(151.2092955), 0]
     computed_geodetic = helpers.ecef_2_geodetic(ecef_coords)
     assert (
-        np.abs(np.array(expected_geodetic[:2]) - np.array(computed_geodetic[:2]))
-        < tolerance_rad
+            np.abs(np.array(expected_geodetic[:2]) - np.array(computed_geodetic[:2]))
+            < tolerance_rad
     ).all()
     assert np.abs(expected_geodetic[2] - computed_geodetic[2]) < tolerance_alt
 
@@ -138,8 +138,8 @@ def test_ecef_to_geodetic():
     expected_geodetic = [np.deg2rad(-54.8019121), np.deg2rad(-68.3029511), 0]
     computed_geodetic = helpers.ecef_2_geodetic(ecef_coords)
     assert (
-        np.abs(np.array(expected_geodetic[:2]) - np.array(computed_geodetic[:2]))
-        < tolerance_rad
+            np.abs(np.array(expected_geodetic[:2]) - np.array(computed_geodetic[:2]))
+            < tolerance_rad
     ).all()
     assert np.abs(expected_geodetic[2] - computed_geodetic[2]) < tolerance_alt
 
@@ -180,7 +180,7 @@ def test_satellite_elevation_and_azimuth():
 def test_sagnac_effect():
     # load validation data
     path_to_validation_file = (
-        helpers.prx_repository_root() / "tools/validation_data/sagnac_effect.csv"
+            helpers.prx_repository_root() / "tools/validation_data/sagnac_effect.csv"
     )
 
     # satellite position (from reference CSV header)
@@ -312,7 +312,7 @@ def test_timedelta_2_weeks_and_seconds():
     seconds_of_week_computed = []
     for timestamp in tested_timestamps:
         tested_timedelta = (
-            timestamp - constants.system_time_scale_rinex_utc_epoch["GPST"]
+                timestamp - constants.system_time_scale_rinex_utc_epoch["GPST"]
         )
         w, s = helpers.timedelta_2_weeks_and_seconds(tested_timedelta)
         week_computed.append(w)
@@ -341,3 +341,7 @@ def test_compute_gps_leap_seconds():
         np.testing.assert_equal(
             helpers.compute_gps_utc_leap_seconds(year, doy), expected_leap_second
         )
+
+
+def test_timestamp_to_mid_day():
+    assert helpers.timestamp_to_mid_day(pd.Timestamp("2023-01-01T01:02:03")) == pd.Timestamp("2023-01-01T12:00:00")

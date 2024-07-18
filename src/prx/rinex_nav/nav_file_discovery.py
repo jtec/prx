@@ -3,7 +3,6 @@ import os
 from pathlib import Path
 import georinex
 import urllib.request
-import glob
 import pandas as pd
 
 from prx import converters, helpers
@@ -59,7 +58,6 @@ def try_downloading_ephemerides_ftp(day: pd.Timestamp, folder: Path):
 def try_downloading_ephemerides(t_start: pd.Timestamp, t_end, folder: Path):
     time = t_start
     files = []
-
     local_file = try_downloading_ephemerides_http(time, folder)
     if not local_file:
         local_file = try_downloading_ephemerides_ftp(time, folder)
@@ -76,7 +74,7 @@ def rinex_3_ephemerides_file_coverage_time(ephemerides_file: Path):
     parts = str(ephemerides_file).split("_")
     start_time = pd.to_datetime(parts[-3], format="%Y%j%H%M")
     assert (
-        parts[-2][-1] == "D"
+            parts[-2][-1] == "D"
     ), f"Was expecting 'D' (days) as duration unit in Rinex ephemerides file name: {ephemerides_file}"
     duration = parts[-2][:-1]
     duration_unit = parts[-2][-1]
@@ -84,19 +82,23 @@ def rinex_3_ephemerides_file_coverage_time(ephemerides_file: Path):
     return start_time, end_time
 
 
-def discover_local_ephemerides(
-    # This function returns a list of paths, in case the observation file spans several days
-    t_start: pd.Timestamp,
-    t_end: pd.Timestamp,
-    folder: Path,
+def nav_file_folder(day: pd.Timestamp, parent_folder: Path):
+    return parent_folder / str(day.year) / str(day.day_of_year)
+
+
+def get_local_ephemerides(
+        day: pd.Timestamp,
+        folder: Path,
 ):
-    candidates = glob.glob(str(folder.joinpath("**.rnx**")), recursive=True)
-    nav_files = []
-    for candidate in candidates:
+    candidates = nav_file_folder(day, folder).glob(str(folder.joinpath("**.rnx**")))
+    if
         nav_file = converters.anything_to_rinex_3(Path(candidate))
         if nav_file is None:
             continue
         if not is_rinex_3_mixed_mgex_broadcast_ephemerides_file(nav_file):
+            continue
+        if rinex_3_ephemerides_file_coverage_time(nav_file)[0] > day or \
+                rinex_3_ephemerides_file_coverage_time(nav_file)[1] < day:
             continue
         nav_files.append(
             {
@@ -116,8 +118,11 @@ def discover_local_ephemerides(
 
 
 def discover_or_download_ephemerides(
-    t_start: pd.Timestamp, t_end: pd.Timestamp, folder, constellations
+        t_start: pd.Timestamp, t_end: pd.Timestamp, folder, constellations
 ):
+    # Ephemeris files cover at least a day, so first round time stamps to midday here
+    t_start = timestamp_to_mid_day(t_start)
+    t_end = timestamp_to_mid_day(t_end)
     sources = [discover_local_ephemerides, try_downloading_ephemerides]
     for source in sources:
         ephemerides_files = source(t_start, t_end, folder)
@@ -153,7 +158,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         prog="rinex_aux_files",
         description="rinex_aux_files discovers or downloads files needed to get started on positioning: "
-        "broadcast ephemeris, precise ephemeris etc.",
+                    "broadcast ephemeris, precise ephemeris etc.",
     )
     parser.add_argument(
         "--observation_file_path", type=str, help="Observation file path", required=True
