@@ -6,6 +6,7 @@ import urllib.request
 import pandas as pd
 
 from prx import converters, helpers
+from prx.helpers import timestamp_to_mid_day
 
 log = helpers.get_logger(__name__)
 
@@ -55,19 +56,12 @@ def try_downloading_ephemerides_ftp(day: pd.Timestamp, folder: Path):
     return local_file
 
 
-def try_downloading_ephemerides(t_start: pd.Timestamp, t_end, folder: Path):
-    time = t_start
-    files = []
-    local_file = try_downloading_ephemerides_http(time, folder)
+def try_downloading_ephemerides(mid_day: pd.Timestamp, folder: Path):
+    local_file = try_downloading_ephemerides_http(mid_day, folder)
     if not local_file:
-        local_file = try_downloading_ephemerides_ftp(time, folder)
-    assert local_file, f"Could not download broadcast ephemerides for {time}"
-
-    files.append(local_file)
-    if len(files) == 0:
-        return None
-    else:
-        return files
+        local_file = try_downloading_ephemerides_ftp(mid_day, folder)
+    assert local_file, f"Could not download broadcast ephemerides for {mid_day}"
+    return local_file
 
 
 def rinex_3_ephemerides_file_coverage_time(ephemerides_file: Path):
@@ -86,35 +80,30 @@ def nav_file_folder(day: pd.Timestamp, parent_folder: Path):
     return parent_folder / str(day.year) / str(day.day_of_year)
 
 
+def nav_file_database_folder():
+    db_folder = Path(__file__).parent / "nav_files"
+    db_folder.mkdir(exist_ok=True)
+    return db_folder
+
+
 def get_local_ephemerides(
         day: pd.Timestamp,
-        folder: Path,
 ):
-    candidates = nav_file_folder(day, folder).glob(str(folder.joinpath("**.rnx**")))
-    if
-        nav_file = converters.anything_to_rinex_3(Path(candidate))
+    candidates = list(nav_file_folder(day, nav_file_database_folder()).glob("**.rnx**"))
+    assert len(candidates) >= 0, f"Found no nav file for {day}"
+    assert len(candidates) <= 1, f"Found more than one nav file for {day}"
+    return candidates[0]
+
+
+def update_local_database(mid_day_start: pd.Timestamp, mid_day_end: pd.Timestamp):
+    # Make sure we have nav files for the given period in our local database
+    day = mid_day_start
+    while day <= mid_day_end:
+        nav_file = get_local_ephemerides(day, nav_file_database_folder())
         if nav_file is None:
-            continue
-        if not is_rinex_3_mixed_mgex_broadcast_ephemerides_file(nav_file):
-            continue
-        if rinex_3_ephemerides_file_coverage_time(nav_file)[0] > day or \
-                rinex_3_ephemerides_file_coverage_time(nav_file)[1] < day:
-            continue
-        nav_files.append(
-            {
-                "file": nav_file,
-                "start_time": rinex_3_ephemerides_file_coverage_time(nav_file)[0],
-                "end_time": rinex_3_ephemerides_file_coverage_time(nav_file)[1],
-            }
-        )
-    df = pd.DataFrame(nav_files)
-    df = df.drop_duplicates(subset=["start_time", "end_time"])
-    if len(df.index) == 0:
-        return None
-    if min(df.start_time) > t_start or max(df.end_time) < t_end:
-        return None
-    log.info(f"Found broadcast ephemeris files on disk: {[str(f) for f in df.file]}")
-    return df.file.tolist()
+            try_downloading_ephemerides(day, nav_file_database_folder())
+            assert get_local_ephemerides(day, nav_file_database_folder()) is not None
+        day += pd.Timedelta(1, unit="days")
 
 
 def discover_or_download_ephemerides(
@@ -123,6 +112,8 @@ def discover_or_download_ephemerides(
     # Ephemeris files cover at least a day, so first round time stamps to midday here
     t_start = timestamp_to_mid_day(t_start)
     t_end = timestamp_to_mid_day(t_end)
+    # Make sure we have nav files for the given period in our local database
+    update_local_database(t_start, t_end)
     sources = [discover_local_ephemerides, try_downloading_ephemerides]
     for source in sources:
         ephemerides_files = source(t_start, t_end, folder)
