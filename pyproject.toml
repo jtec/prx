@@ -5,6 +5,14 @@ description = "Making raw GNSS data more accessible"
 authors = ["Jan Bolting <janbolting@gmail.com>", "Paul Thevenon <paul.thevenon@gmail.com>"]
 license = "MIT"
 readme = "README.md"
+packages = [
+    { include = "prx", from = "src" },
+]
+
+
+[tool.poetry.scripts]
+prx = 'prx.main:main'
+
 
 [tool.poetry.dependencies]
 python = "^3.12.1"
