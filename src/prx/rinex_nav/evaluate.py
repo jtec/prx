@@ -1,10 +1,7 @@
-import multiprocessing
-
 import pandas as pd
 import numpy as np
 from pathlib import Path
 import scipy
-from joblib import Parallel, delayed
 
 from prx import helpers
 from prx import constants
@@ -22,7 +19,7 @@ def parse_rinex_nav_file(rinex_file: Path):
             rinex_file_path
         )
         df = convert_nav_dataset_to_dataframe(ds)
-        df["ephemeris_hash"] = pd.util.hash_pandas_object(df, index=False).astype(str)
+        df["ephemeris_hash"] = pd.util.hash_pandas_object(df, index=False).astype(int)
         return df
 
     t0 = pd.Timestamp.now()
@@ -536,8 +533,52 @@ def to_isagpst(time, timescale, gpst_utc_leapseconds):
 
 
 @timeit
+def add_discontinuity_queries(df, query_columns):
+    assert df.query_time_isagpst.is_monotonic_increasing, (
+        "Query times must be sorted in ascending order to be able to detect"
+        "ephemeris transitions"
+    )
+    df["is_previous_ephemeris"] = False
+
+    def insert(group_df, query_columns):
+        query_columns = query_columns[0]
+        group_df["previous_ephemeris_hash"] = group_df.ephemeris_hash.shift(1)
+        is_after_discontinuity = (
+            group_df.ephemeris_hash != group_df.previous_ephemeris_hash
+        )
+        queries_after_discontinuity = group_df[is_after_discontinuity].copy()
+        # The first query has no previous ephemeris hash, so let's remove that one.
+        # Also, if the ephemeris after the change in ephemeris is NaN, we can't compute a discontinuity, so drop those as well.
+        queries_after_discontinuity = queries_after_discontinuity.dropna(
+            subset=["ephemeris_hash", "previous_ephemeris_hash"]
+        )
+        # Switch out ephemeris values for the ones of the one before the discontinuity
+        ephemeris_columns = [
+            col for col in group_df.columns if col not in query_columns
+        ]
+        for query_index, query in queries_after_discontinuity.iterrows():
+            previous_ephemeris = group_df.loc[
+                group_df.ephemeris_hash == query.previous_ephemeris_hash,
+                ephemeris_columns,
+            ].iloc[0, :]
+            queries_after_discontinuity.loc[query_index, ephemeris_columns] = (
+                previous_ephemeris.to_numpy()
+            )
+        queries_after_discontinuity["is_previous_ephemeris"] = True
+        return pd.concat([group_df, queries_after_discontinuity])
+
+    df = (
+        df.groupby(["sv", "fnav_or_inav"])
+        .apply(insert, (query_columns,))
+        .drop(columns=["previous_ephemeris_hash"])
+        .sort_values(by="query_time_isagpst")
+        .reset_index(drop=True)
+    )
+    return df
+
+
+@timeit
 def select_ephemerides(df, query):
-    df = df[df.ephemeris_reference_time_isagpst.notna()]
     query = query.sort_values(by="query_time_isagpst")
     df = df.sort_values(by="ephemeris_reference_time_isagpst")
     # Add fnav/inav indicator to query for to select the FNAV ephemeris for E5b signals, and INAV for other signals
@@ -548,7 +589,8 @@ def select_ephemerides(df, query):
     query.loc[
         (query.sv.str[0] == "E") & (query.signal.str[1] != "5"), "fnav_or_inav"
     ] = "inav"
-    query = pd.merge_asof(
+
+    query_with_ephemerides = pd.merge_asof(
         query,
         df,
         left_on="query_time_isagpst",
@@ -556,14 +598,19 @@ def select_ephemerides(df, query):
         by=["sv", "fnav_or_inav"],
         direction="backward",
     )
+    query_with_ephemerides = add_discontinuity_queries(
+        query_with_ephemerides, query.columns.to_list()
+    )
     # Compute times w.r.t. orbit and clock reference times used by downstream computations
-    query["query_time_wrt_ephemeris_reference_time_s"] = (
-        query["query_time_isagpst"] - query["ephemeris_reference_time_isagpst"]
+    query_with_ephemerides["query_time_wrt_ephemeris_reference_time_s"] = (
+        query_with_ephemerides["query_time_isagpst"]
+        - query_with_ephemerides["ephemeris_reference_time_isagpst"]
     ).apply(helpers.timedelta_2_seconds)
-    query["query_time_wrt_clock_reference_time_s"] = (
-        query["query_time_isagpst"] - query["clock_reference_time_isagpst"]
+    query_with_ephemerides["query_time_wrt_clock_reference_time_s"] = (
+        query_with_ephemerides["query_time_isagpst"]
+        - query_with_ephemerides["clock_reference_time_isagpst"]
     ).apply(helpers.timedelta_2_seconds)
-    return query
+    return query_with_ephemerides
 
 
 def compute_clock_offsets(df):
@@ -579,28 +626,16 @@ def compute_clock_offsets(df):
     return df
 
 
-def compute_parallel(rinex_nav_file_path, per_signal_query):
-    # Warm up nav file parser cache so that we don't parse the file multiple times
-    _ = parse_rinex_nav_file(rinex_nav_file_path)
-    parallel = Parallel(n_jobs=round(multiprocessing.cpu_count() / 2), return_as="list")
-    # split dataframe into `n_chunks` smaller dataframes
-    n_chunks = min(len(per_signal_query.index), 4)
-    chunks = np.array_split(per_signal_query, n_chunks)
-    processed_chunks = parallel(
-        delayed(compute)(rinex_nav_file_path, chunk) for chunk in chunks
-    )
-    return pd.concat(processed_chunks)
-
-
+@timeit
 def compute(rinex_nav_file_path, per_signal_query):
     # per_signal_query is a pd.DataFrame with the following columns
-    #   - time_of_reception_in_receiver_time
     #   - observation_value
     #   - signal
     #   - sv
     #   - query_time_isagpst
     rinex_nav_file_path = Path(rinex_nav_file_path)
     ephemerides = parse_rinex_nav_file(rinex_nav_file_path)
+    ephemerides = ephemerides[ephemerides.ephemeris_reference_time_isagpst.notnull()]
     # Group delays and clock offsets can be signal-specific, so we need to match ephemerides to code signals,
     # not only to satellites
     # Example: Galileo transmits E5a clock and group delay parameters in the F/NAV message, but parameters for other

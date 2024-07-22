@@ -308,7 +308,7 @@ def build_records(
             continue
         log.info(f"Computing satellite states for {year}-{doy:03d}")
         sat_states_per_day.append(
-            rinex_evaluate.compute_parallel(
+            rinex_evaluate.compute(
                 file,
                 day_query,
             )
@@ -515,7 +515,7 @@ def process(observation_file_path: Path, output_format="csv"):
     )
 
 
-if __name__ == "__main__":
+def main():
     parser = argparse.ArgumentParser(
         prog="prx",
         description="prx processes RINEX observations, computes a few useful things such as satellite position, "
@@ -540,3 +540,7 @@ if __name__ == "__main__":
         log.error(f"Observation file {args.observation_file_path} does not exist.")
         sys.exit(1)
     process(Path(args.observation_file_path), args.output_format)
+
+
+if __name__ == "__main__":
+    main()
