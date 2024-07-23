@@ -287,7 +287,7 @@ def build_records(
             "satellite": "sv",
             "time_of_emission_isagpst": "query_time_isagpst",
         },
-    )
+    ).drop(columns=["time_of_reception_in_receiver_time"])
 
     sat_states_per_day = []
     for file in rinex_3_ephemerides_files:
