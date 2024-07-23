@@ -568,7 +568,7 @@ def add_discontinuity_queries(df, query_columns):
         return pd.concat([group_df, queries_after_discontinuity])
 
     df = (
-        df.groupby(["sv", "fnav_or_inav"])
+        df.groupby(["sv", "signal"])
         .apply(insert, (query_columns,))
         .drop(columns=["previous_ephemeris_hash"])
         .sort_values(by="query_time_isagpst")
@@ -626,6 +626,32 @@ def compute_clock_offsets(df):
     return df
 
 
+def compute_discontinuities(df):
+    before_discontinuity = df[df.is_previous_ephemeris]
+    df = df[~df.is_previous_ephemeris]
+    df = df.drop(columns=["is_previous_ephemeris"])
+    before_discontinuity = before_discontinuity.drop(columns=["is_previous_ephemeris"])
+    df = df.merge(
+        before_discontinuity,
+        how="left",
+        on=["sv", "signal", "query_time_isagpst", "frequency_slot"],
+        suffixes=("", "_wrt_previous_ephemeris"),
+    )
+    for col in [
+        col
+        for col in df.columns
+        if col.endswith("_wrt_previous_ephemeris")
+        and (col != "ephemeris_hash_wrt_previous_ephemeris")
+    ]:
+        df[col] = df[col.replace("_wrt_previous_ephemeris", "")] - df[col]
+    df = df.rename(
+        columns={
+            "ephemeris_hash_wrt_previous_ephemeris": "ephemeris_hash_previous_ephemeris"
+        }
+    )
+    return df
+
+
 @timeit
 def compute(rinex_nav_file_path, per_signal_query):
     # per_signal_query is a pd.DataFrame with the following columns
@@ -633,6 +659,7 @@ def compute(rinex_nav_file_path, per_signal_query):
     #   - signal
     #   - sv
     #   - query_time_isagpst
+    assert not per_signal_query.duplicated().any(), "Duplicate queries found, this is not covered by tests and likely to break commputation of ephemeris discontinuities."
     rinex_nav_file_path = Path(rinex_nav_file_path)
     ephemerides = parse_rinex_nav_file(rinex_nav_file_path)
     ephemerides = ephemerides[ephemerides.ephemeris_reference_time_isagpst.notnull()]
@@ -644,7 +671,9 @@ def compute(rinex_nav_file_path, per_signal_query):
     per_signal_query = compute_clock_offsets(per_signal_query)
     # Compute orbital states for each satellite only once:
     per_sat_query = (
-        per_signal_query.groupby(["sv", "query_time_isagpst"]).first().reset_index()
+        per_signal_query.groupby(["sv", "query_time_isagpst", "ephemeris_hash"])
+        .first()
+        .reset_index()
     )
     per_sat_query = per_sat_query.drop(
         columns=["sat_clock_offset_m", "sat_clock_drift_mps"]
@@ -686,6 +715,7 @@ def compute(rinex_nav_file_path, per_signal_query):
     columns_to_keep = [
         "sat_clock_offset_m",
         "sat_clock_drift_mps",
+        "is_previous_ephemeris",
     ] + columns_to_keep
     per_signal_query = compute_total_group_delays(per_signal_query)
 
@@ -693,6 +723,7 @@ def compute(rinex_nav_file_path, per_signal_query):
         columns_to_keep = ["signal", "sat_code_bias_m"] + columns_to_keep
     columns_to_keep.append("frequency_slot")
     per_signal_query = per_signal_query[columns_to_keep].reset_index(drop=True)
+    per_signal_query = compute_discontinuities(per_signal_query)
     return per_signal_query
 
 
