@@ -5,18 +5,11 @@ import numpy as np
 import pandas as pd
 from pathlib import Path
 
-from prx import helpers, converters, constants
+from prx import helpers, converters
 from prx.rinex_obs.parser import parse as prx_obs_parse
 from plotly.subplots import make_subplots
 import plotly.graph_objects as go
 import georinex
-import platform
-
-path_gfzrnx_binary = (
-    helpers.prx_repository_root()
-    .joinpath("tools", "gfzrnx")
-    .joinpath(constants.gfzrnx_binary[platform.system()])
-)
 
 
 def generate_data():
@@ -38,11 +31,11 @@ def generate_data():
     for steps in range(1, n_steps, 1):
         duration = dt * steps
         slice_file = (
-            sweep_dir
-            / f"{base_file.name}_slice_{duration / pd.Timedelta('1h'):.2f}h.rnx"
+                sweep_dir
+                / f"{base_file.name}_slice_{duration / pd.Timedelta('1h'):.2f}h.rnx"
         )
         cmd = (
-            f"{path_gfzrnx_binary} -finp {base_file}"
+            f"gfzrnx_217_osx_intl64 -finp {base_file}"
             f" -fout {slice_file}"
             f" -epo_beg {t_start.strftime('%Y-%m-%d_%H%M%S')}"
             f" -d {int(duration / pd.Timedelta('1s'))}"
@@ -69,7 +62,7 @@ def generate_data():
                 lambda: parser[1](case["file"]), number=1
             )
             case[f"{parser[0]}_epochs_per_second"] = (
-                case["epochs"] / case[f"{parser[0]}_parsing_s"]
+                    case["epochs"] / case[f"{parser[0]}_parsing_s"]
             )
             print(
                 f"took {case[f'{parser[0]}_parsing_s']:.2f} s"

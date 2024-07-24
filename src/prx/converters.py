@@ -4,9 +4,15 @@ import itertools
 import subprocess
 import gzip
 import zipfile
-from . import helpers
+from prx.helpers import get_logger, prx_repository_root
+from prx.util import (
+    is_rinex_2_obs_file,
+    is_rinex_2_nav_file,
+    is_rinex_3_obs_file,
+    is_rinex_3_nav_file,
+)
 
-log = helpers.get_logger(__name__)
+log = get_logger(__name__)
 
 
 def compressed_to_uncompressed(file: Path):
@@ -46,7 +52,7 @@ def compact_rinex_obs_file_to_rinex_obs_file(file: Path):
     if not is_compact_rinex_obs_file(file):
         return None
     crx2rnx_binaries = glob.glob(
-        str(helpers.prx_repository_root() / "tools/RNXCMP/**/CRX2RNX*"), recursive=True
+        str(prx_repository_root() / "tools/RNXCMP/**/CRX2RNX*"), recursive=True
     )
     assert len(crx2rnx_binaries) > 0, "Could not find any CRX2RNX binary"
     for crx2rnx_binary in crx2rnx_binaries:
@@ -63,51 +69,6 @@ def rinex_2_to_rinex_3(file: Path):
     if is_rinex_2_obs_file(file) or is_rinex_2_nav_file(file):
         log.debug(f"RINEX 2 not supported: {file}")
         return None
-
-
-def file_exists_and_can_read_first_line(file: Path):
-    assert file.exists(), f"Provided file path {file} does not exist"
-    try:
-        with open(file) as f:
-            return f.readline()
-    except UnicodeDecodeError:
-        return None
-
-
-def is_rinex_3_obs_file(file: Path):
-    first_line = file_exists_and_can_read_first_line(file)
-    if first_line is None:
-        return False
-    if "RINEX VERSION" not in first_line or "3.0" not in first_line:
-        return False
-    return True
-
-
-def is_rinex_3_nav_file(file: Path):
-    first_line = file_exists_and_can_read_first_line(file)
-    if first_line is None:
-        return False
-    if "NAVIGATION DATA" not in first_line or "3.0" not in first_line:
-        return False
-    return True
-
-
-def is_rinex_2_obs_file(file: Path):
-    first_line = file_exists_and_can_read_first_line(file)
-    if first_line is None:
-        return False
-    if "RINEX VERSION" not in first_line or "2.0" not in first_line:
-        return False
-    return True
-
-
-def is_rinex_2_nav_file(file: Path):
-    first_line = file_exists_and_can_read_first_line(file)
-    if first_line is None:
-        return False
-    if "NAV" not in first_line or "2." not in first_line:
-        return False
-    return True
 
 
 def anything_to_rinex_3(file: Path):

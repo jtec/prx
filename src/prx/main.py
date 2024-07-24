@@ -1,14 +1,12 @@
 import argparse
 import json
 import logging
-import multiprocessing
 import sys
 from pathlib import Path
 import georinex
 import pandas as pd
 import numpy as np
 import git
-from joblib import delayed, Parallel
 
 from prx import atmospheric_corrections as atmo
 from prx.helpers import parse_rinex_file
@@ -195,11 +193,7 @@ def check_assumptions(
 
 
 def warm_up_parser_cache(rinex_files):
-    def warm_up(file):
-        parse_rinex_file(file)
-
-    parallel = Parallel(n_jobs=round(multiprocessing.cpu_count() / 2), return_as="list")
-    _ = parallel(delayed(warm_up)(file) for file in rinex_files)
+    _ = [parse_rinex_file(file) for file in rinex_files]
 
 
 @helpers.timeit
