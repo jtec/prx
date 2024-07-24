@@ -2,7 +2,6 @@ from pathlib import Path
 import pytest
 import shutil
 import os
-import numpy as np
 import pandas as pd
 from prx.rinex_obs.parser import parse as prx_obs_parse
 from prx import converters, helpers
