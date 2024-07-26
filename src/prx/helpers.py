@@ -4,6 +4,7 @@ from functools import wraps
 from pathlib import Path
 import logging
 
+import xarray
 from imohash import imohash
 from prx import constants
 import numpy as np
@@ -154,6 +155,7 @@ def rinex_header_time_string_2_timestamp_ns(time_string: str) -> pd.Timestamp:
     return timestamp
 
 
+@timeit
 def repair_with_gfzrnx(file):
     with open(file) as f:
         if "gfzrnx" in f.read():
@@ -370,6 +372,22 @@ def ecef_2_geodetic(pos_ecef):
             p * (1 - n * constants.cWgs84EarthEccentricity ** 2 / (n + altitude_m)),
         )
     return [latitude_rad, longitude_rad, altitude_m]
+
+
+def obs_dataset_to_obs_dataframe(ds: xarray.Dataset):
+    # Flatten the xarray DataSet into a pandas DataFrame:
+    log.info("Converting Dataset into flat Dataframe of observations")
+    flat_obs = pd.DataFrame()
+    for obs_label, sat_time_obs_array in ds.data_vars.items():
+        df = sat_time_obs_array.to_dataframe(name="obs_value").reset_index()
+        df = df[df["obs_value"].notna()]
+        df = df.assign(obs_type=lambda x: obs_label)
+        flat_obs = pd.concat([flat_obs, df])
+    return flat_obs
+
+
+def parse_rinex_obs_file(rinex_file_path: Path):
+    return obs_dataset_to_obs_dataframe(parse_rinex_file(rinex_file_path))
 
 
 @timeit
