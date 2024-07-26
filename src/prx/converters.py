@@ -21,7 +21,7 @@ def compressed_to_uncompressed(file: Path):
     if str(file).endswith(".zip"):
         with zipfile.ZipFile(file, mode="r") as archive:
             assert (
-                    len(archive.namelist()) == 1
+                len(archive.namelist()) == 1
             ), "Not expecting more than one file in archive here."
             uncompressed_file = file.parent.joinpath(archive.namelist()[0])
             archive.extract(uncompressed_file.name, uncompressed_file.parent)
