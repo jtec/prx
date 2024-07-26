@@ -220,7 +220,7 @@ def test_gfzrnx_execution_on_obs_file(input_for_test):
     # convert test file to RX3 format
     file_obs = converters.anything_to_rinex_3(input_for_test["obs"])
     # list all gfzrnx binaries contained in the folder "prx/tools/gfzrnx/"
-    path_folder_gfzrnx = helpers.prx_repository_root().joinpath("tools", "gfzrnx")
+    path_folder_gfzrnx = helpers.prx_repository_root() / "src/prx/tools/gfzrnx"
     path_binary = path_folder_gfzrnx.joinpath(
         constants.gfzrnx_binary[platform.system()]
     )
@@ -249,7 +249,7 @@ def test_gfzrnx_execution_on_obs_file(input_for_test):
 def test_gfzrnx_execution_on_nav_file(input_for_test):
     """Check execution of gfzrnx on a RNX NAV file and check"""
     file_nav = converters.anything_to_rinex_3(input_for_test["nav"])
-    path_folder_gfzrnx = helpers.prx_repository_root().joinpath("tools", "gfzrnx")
+    path_folder_gfzrnx = helpers.prx_repository_root() / "src/prx/tools/gfzrnx"
     path_binary = path_folder_gfzrnx.joinpath(
         constants.gfzrnx_binary[platform.system()]
     )
