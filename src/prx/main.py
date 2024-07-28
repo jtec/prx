@@ -19,19 +19,21 @@ log = helpers.get_logger(__name__)
 
 @helpers.timeit
 def write_prx_file(
-        prx_header: dict,
-        prx_records: pd.DataFrame,
-        file_name_without_extension: Path,
-        output_format: str,
+    prx_header: dict,
+    prx_records: pd.DataFrame,
+    file_name_without_extension: Path,
+    output_format: str,
 ):
     output_writers = {"jsonseq": write_json_text_sequence_file, "csv": write_csv_file}
     if output_format not in output_writers.keys():
         assert False, f"Output format {output_format} not supported,  we can do {list(output_writers.keys())}"
-    return output_writers[output_format](prx_header, prx_records, file_name_without_extension)
+    return output_writers[output_format](
+        prx_header, prx_records, file_name_without_extension
+    )
 
 
 def write_json_text_sequence_file(
-        prx_header: dict, prx_records: pd.DataFrame, file_name_without_extension: Path
+    prx_header: dict, prx_records: pd.DataFrame, file_name_without_extension: Path
 ):
     output_file = Path(
         f"{str(file_name_without_extension)}.{constants.cPrxJsonTextSequenceFileExtension}"
@@ -46,7 +48,7 @@ def write_json_text_sequence_file(
             epoch = pd.Timestamp(epoch)
             epoch_obs = prx_records[
                 prx_records["time_of_reception_in_receiver_time"] == epoch
-                ]
+            ]
             record = {
                 "time_of_reception_in_receiver_time": epoch.strftime(
                     "%Y:%m:%dT%H:%M:%S.%f"
@@ -73,7 +75,7 @@ def write_json_text_sequence_file(
 
 
 def write_csv_file(
-        prx_header: dict, flat_records: pd.DataFrame, file_name_without_extension: Path
+    prx_header: dict, flat_records: pd.DataFrame, file_name_without_extension: Path
 ):
     output_file = Path(
         f"{str(file_name_without_extension)}.{constants.cPrxCsvFileExtension}"
@@ -181,15 +183,15 @@ def build_metadata(input_files):
 
 
 def check_assumptions(
-        rinex_3_obs_file,
+    rinex_3_obs_file,
 ):
     obs_header = georinex.rinexheader(rinex_3_obs_file)
     if "RCV CLOCK OFFS APPL" in obs_header.keys():
         assert (
-                obs_header["RCV CLOCK OFFS APPL"].strip() == "0"
+            obs_header["RCV CLOCK OFFS APPL"].strip() == "0"
         ), "Handling of 'RCV CLOCK OFFS APPL' != 0 not implemented yet."
     assert (
-            obs_header["TIME OF FIRST OBS"].split()[-1].strip() == "GPS"
+        obs_header["TIME OF FIRST OBS"].split()[-1].strip() == "GPS"
     ), "Handling of observation files using time scales other than GPST not implemented yet."
 
 
@@ -199,9 +201,9 @@ def warm_up_parser_cache(rinex_files):
 
 @helpers.timeit
 def build_records(
-        rinex_3_obs_file,
-        rinex_3_ephemerides_files,
-        approximate_receiver_ecef_position_m,
+    rinex_3_obs_file,
+    rinex_3_ephemerides_files,
+    approximate_receiver_ecef_position_m,
 ):
     warm_up_parser_cache([rinex_3_obs_file] + rinex_3_ephemerides_files)
     approximate_receiver_ecef_position_m = np.array(
@@ -260,7 +262,7 @@ def build_records(
     # As error terms are tens of nanoseconds here, and the receiver clock is integer-second aligned to GPST, we
     # already have times-of-emission that are integer-second aligned GPST here.
     per_sat["time_of_emission_isagpst"] = (
-            per_sat["time_of_reception_in_receiver_time"] - tof_dtrx
+        per_sat["time_of_reception_in_receiver_time"] - tof_dtrx
     )
 
     flat_obs = flat_obs.merge(
@@ -291,14 +293,14 @@ def build_records(
         doy = int(file.name[16:19])
         day_query = query.loc[
             (
-                    query.query_time_isagpst
-                    >= pd.Timestamp(year=year, month=1, day=1) + pd.Timedelta(days=doy - 1)
+                query.query_time_isagpst
+                >= pd.Timestamp(year=year, month=1, day=1) + pd.Timedelta(days=doy - 1)
             )
             & (
-                    query.query_time_isagpst
-                    < pd.Timestamp(year=year, month=1, day=1) + pd.Timedelta(days=doy)
+                query.query_time_isagpst
+                < pd.Timestamp(year=year, month=1, day=1) + pd.Timedelta(days=doy)
             )
-            ]
+        ]
         if day_query.empty:
             continue
         log.info(f"Computing satellite states for {year}-{doy:03d}")
@@ -431,12 +433,12 @@ def build_records(
 
         # Selection criteria: time of emission belonging to the day of the current NAV file
         mask = (
-                       flat_obs.time_of_emission_isagpst
-                       >= pd.Timestamp(year=year, month=1, day=1) + pd.Timedelta(days=doy - 1)
-               ) & (
-                       flat_obs.time_of_emission_isagpst
-                       < pd.Timestamp(year=year, month=1, day=1) + pd.Timedelta(days=doy)
-               )
+            flat_obs.time_of_emission_isagpst
+            >= pd.Timestamp(year=year, month=1, day=1) + pd.Timedelta(days=doy - 1)
+        ) & (
+            flat_obs.time_of_emission_isagpst
+            < pd.Timestamp(year=year, month=1, day=1) + pd.Timedelta(days=doy)
+        )
         if "IONOSPHERIC CORR" in nav_header_dict[f"{year:03d}" + f"{doy:03d}"]:
             log.info(f"Computing iono delay for {year}-{doy:03d}")
             time_of_emission_weeksecond_isagpst = (
@@ -467,9 +469,9 @@ def build_records(
                 latitude_user_rad,
                 longitude_user_rad,
             ) * (
-                        constants.carrier_frequencies_hz()["G"]["L1"][1] ** 2
-                        / flat_obs.loc[mask].carrier_frequency_hz ** 2
-                )
+                constants.carrier_frequencies_hz()["G"]["L1"][1] ** 2
+                / flat_obs.loc[mask].carrier_frequency_hz ** 2
+            )
         else:
             logging.warning(f"Missing iono model parameters for day {doy:03d}")
             flat_obs.loc[
@@ -514,7 +516,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         prog="prx",
         description="prx processes RINEX observations, computes a few useful things such as satellite position, "
-                    "relativistic effects etc. and outputs everything to a text file in a convenient format.",
+        "relativistic effects etc. and outputs everything to a text file in a convenient format.",
         epilog="P.S. GNSS rules!",
     )
     parser.add_argument(

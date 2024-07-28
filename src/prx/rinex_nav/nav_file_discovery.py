@@ -68,7 +68,7 @@ def rinex_3_ephemerides_file_coverage_time(ephemerides_file: Path):
     parts = str(ephemerides_file).split("_")
     start_time = pd.to_datetime(parts[-3], format="%Y%j%H%M")
     assert (
-            parts[-2][-1] == "D"
+        parts[-2][-1] == "D"
     ), f"Was expecting 'D' (days) as duration unit in Rinex ephemerides file name: {ephemerides_file}"
     duration = parts[-2][:-1]
     duration_unit = parts[-2][-1]
@@ -87,7 +87,7 @@ def nav_file_database_folder():
 
 
 def get_local_ephemerides(
-        day: pd.Timestamp,
+    day: pd.Timestamp,
 ):
     candidates = list(nav_file_folder(day, nav_file_database_folder()).glob("**.rnx**"))
     assert len(candidates) >= 0, f"Found no nav file for {day}"
@@ -107,7 +107,7 @@ def update_local_database(mid_day_start: pd.Timestamp, mid_day_end: pd.Timestamp
 
 
 def discover_or_download_ephemerides(
-        t_start: pd.Timestamp, t_end: pd.Timestamp, folder, constellations
+    t_start: pd.Timestamp, t_end: pd.Timestamp, folder, constellations
 ):
     # Ephemeris files cover at least a day, so first round time stamps to midday here
     t_start = timestamp_to_mid_day(t_start)
@@ -149,7 +149,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         prog="rinex_aux_files",
         description="rinex_aux_files discovers or downloads files needed to get started on positioning: "
-                    "broadcast ephemeris, precise ephemeris etc.",
+        "broadcast ephemeris, precise ephemeris etc.",
     )
     parser.add_argument(
         "--observation_file_path", type=str, help="Observation file path", required=True
