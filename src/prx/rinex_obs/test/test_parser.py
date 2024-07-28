@@ -13,7 +13,8 @@ def test_compare_to_georinex():
         / "TLSE00FRA_R_20220010000_01D_30S_MO.rnx_slice_0.24h.rnx.gz"
     )
     file = Path(
-        "/Users/janbolting/repositories/prx/src/demos/rover_base_differencing/obs/TLSE00FRA_R_20241900000_15M_01S_MO.rnx")
+        "/Users/janbolting/repositories/prx/src/demos/rover_base_differencing/obs/TLSE00FRA_R_20241900000_15M_01S_MO.rnx"
+    )
     repair_with_gfzrnx(file)
     prx_output = (
         prx_obs_parse(file)
