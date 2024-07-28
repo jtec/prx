@@ -89,20 +89,21 @@ def nav_file_database_folder():
 def get_local_ephemerides(
     day: pd.Timestamp,
 ):
-    candidates = list(nav_file_folder(day, nav_file_database_folder()).glob("**.rnx**"))
-    assert len(candidates) >= 0, f"Found no nav file for {day}"
+    candidates = list(nav_file_folder(day, nav_file_database_folder()).glob("*.rnx*"))
+    if len(candidates) == 0:
+        return None
     assert len(candidates) <= 1, f"Found more than one nav file for {day}"
     return candidates[0]
 
 
 def update_local_database(mid_day_start: pd.Timestamp, mid_day_end: pd.Timestamp):
-    # Make sure we have nav files for the given period in our local database
+    # Download IGS nav files for the given period to our local nav file folder
     day = mid_day_start
     while day <= mid_day_end:
-        nav_file = get_local_ephemerides(day, nav_file_database_folder())
+        nav_file = get_local_ephemerides(day)
         if nav_file is None:
             try_downloading_ephemerides(day, nav_file_database_folder())
-            assert get_local_ephemerides(day, nav_file_database_folder()) is not None
+            assert get_local_ephemerides(day) is not None
         day += pd.Timedelta(1, unit="days")
 
 
