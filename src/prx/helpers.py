@@ -6,7 +6,6 @@ import logging
 
 from prx.util import is_rinex_3_obs_file, is_rinex_3_nav_file
 from prx.rinex_obs.parser import parse as prx_obs_parse
-
 import xarray
 from imohash import imohash
 from prx import constants
