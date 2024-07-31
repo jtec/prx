@@ -277,7 +277,7 @@ def test_unb3m_corrections():
     tol = 1e-3
 
     tropo_expected = np.genfromtxt(
-        helpers.prx_repository_root() / "tools/UNB3m_pack/tunb3m_.txt",
+        helpers.prx_repository_root() / "src/prx/tools/UNB3m_pack/tunb3m_.txt",
         skip_header=3,
     )
 

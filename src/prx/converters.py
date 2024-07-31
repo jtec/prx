@@ -46,7 +46,7 @@ def compact_rinex_obs_file_to_rinex_obs_file(file: Path):
     if not is_compact_rinex_obs_file(file):
         return None
     crx2rnx_binaries = glob.glob(
-        str(helpers.prx_repository_root() / "tools/RNXCMP/**/CRX2RNX*"), recursive=True
+        str(Path(__file__).parent / "tools/RNXCMP/**/CRX2RNX*"), recursive=True
     )
     assert len(crx2rnx_binaries) > 0, "Could not find any CRX2RNX binary"
     for crx2rnx_binary in crx2rnx_binaries:
