@@ -124,17 +124,17 @@ def update_local_database(mid_day_start: pd.Timestamp, mid_day_end: pd.Timestamp
 def discover_or_download_ephemerides(
     t_start: pd.Timestamp, t_end: pd.Timestamp, folder, constellations
 ):
-    # Ephemeris files cover at least a day, so first round time stamps to midday here
-    t_start = timestamp_to_mid_day(t_start)
-    t_end = timestamp_to_mid_day(t_end)
-    # Update our local ephemeris database, fetching nav file from IGS servers for the days in question
-    update_local_database(t_start, t_end)
     # If there are any navigation file provided by the user, use them, if not, use IGS files.
     user_provided_nav_files = [
         f for f in folder.rglob("*.rnx") if is_rinex_3_nav_file(f)
     ]
     if len(user_provided_nav_files) > 0:
         return user_provided_nav_files
+    # Ephemeris files cover at least a day, so first round time stamps to midday here
+    t_start = timestamp_to_mid_day(t_start)
+    t_end = timestamp_to_mid_day(t_end)
+    # Update our local ephemeris database, fetching nav file from IGS servers for the days in question
+    update_local_database(t_start, t_end)
     ephemerides_files = []
     day = t_start
     while day <= t_end:
