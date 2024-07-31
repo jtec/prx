@@ -169,7 +169,7 @@ def repair_with_gfzrnx(file):
         if "gfzrnx" in f.read():
             logging.warning(f"File {file} already contains 'gfzrnx', skipping repair.")
             return file
-    path_folder_gfzrnx = prx_repository_root().joinpath("tools", "gfzrnx")
+    path_folder_gfzrnx = Path(__file__).parent.joinpath("tools", "gfzrnx")
     path_binary = path_folder_gfzrnx.joinpath(
         constants.gfzrnx_binary[platform.system()]
     )
