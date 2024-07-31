@@ -82,7 +82,7 @@ def hash_of_file_content(file: Path, use_sampling: bool = False):
 
 
 def timestamp_2_timedelta(timestamp: pd.Timestamp, time_scale):
-    assert type(timestamp) == pd.Timestamp, "timestamp must be of type pd.Timestamp"
+    assert isinstance(timestamp, pd.Timestamp), "timestamp must be of type pd.Timestamp"
     # RINEX 3 adds the offset between GPST and GST/QZSST/IRNSST epochs, so we can use the GPST epoch here.
     # The SBAST epoch is the same as the GPST epoch.
     if (
@@ -118,7 +118,9 @@ def timedelta_2_weeks_and_seconds(time_delta: pd.Timedelta):
     if pd.isnull(time_delta):
         return np.nan, np.nan
 
-    assert type(time_delta) == pd.Timedelta, "time_delta must be of type pd.Timedelta"
+    assert isinstance(
+        time_delta, pd.Timedelta
+    ), "time_delta must be of type pd.Timedelta"
     in_nanoseconds = time_delta / pd.Timedelta(1, "ns")
     weeks = math.floor(in_nanoseconds / constants.cNanoSecondsPerWeek)
     week_nanoseconds = in_nanoseconds - weeks * constants.cNanoSecondsPerWeek
@@ -132,7 +134,9 @@ def week_and_seconds_2_timedelta(weeks, seconds):
 def timedelta_2_seconds(time_delta: pd.Timedelta):
     if pd.isnull(time_delta):
         return np.nan
-    assert type(time_delta) == pd.Timedelta, "time_delta must be of type pd.Timedelta"
+    assert isinstance(
+        time_delta, pd.Timedelta
+    ), "time_delta must be of type pd.Timedelta"
     integer_seconds = np.float64(round(time_delta.total_seconds()))
     fractional_seconds = (
         np.float64(
@@ -145,7 +149,9 @@ def timedelta_2_seconds(time_delta: pd.Timedelta):
 
 
 def timedelta_2_nanoseconds(time_delta: pd.Timedelta):
-    assert type(time_delta) == pd.Timedelta, "time_delta must be of type pd.Timedelta"
+    assert isinstance(
+        time_delta, pd.Timedelta
+    ), "time_delta must be of type pd.Timedelta"
     return np.float64(time_delta / pd.Timedelta(1, "ns"))
 
 
