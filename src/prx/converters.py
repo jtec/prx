@@ -4,7 +4,7 @@ import itertools
 import subprocess
 import gzip
 import zipfile
-from prx.helpers import get_logger, prx_repository_root
+from prx.helpers import get_logger
 from prx.util import (
     is_rinex_2_obs_file,
     is_rinex_2_nav_file,
@@ -52,7 +52,7 @@ def compact_rinex_obs_file_to_rinex_obs_file(file: Path):
     if not is_compact_rinex_obs_file(file):
         return None
     crx2rnx_binaries = glob.glob(
-        str(prx_repository_root() / "tools/RNXCMP/**/CRX2RNX*"), recursive=True
+        str(Path(__file__).parent / "tools/RNXCMP/**/CRX2RNX*"), recursive=True
     )
     assert len(crx2rnx_binaries) > 0, "Could not find any CRX2RNX binary"
     for crx2rnx_binary in crx2rnx_binaries:
