@@ -7,6 +7,7 @@ import pandas as pd
 
 from prx import converters, helpers
 from prx.helpers import timestamp_to_mid_day
+from prx.util import is_rinex_3_nav_file
 
 log = helpers.get_logger(__name__)
 
@@ -35,6 +36,7 @@ def try_downloading_ephemerides_http(day: pd.Timestamp, local_destination_folder
         local_file = converters.compressed_to_uncompressed(local_compressed_file)
         os.remove(local_compressed_file)
         log.info(f"Downloaded broadcast ephemerides file from {url}")
+        helpers.repair_with_gfzrnx(local_file)
         return local_file
     except Exception:
         log.warning(f"Could not download broadcast ephemerides file from {url}")
@@ -53,6 +55,7 @@ def try_downloading_ephemerides_ftp(day: pd.Timestamp, folder: Path):
     local_file = converters.compressed_to_uncompressed(local_compressed_file)
     os.remove(local_compressed_file)
     log.info(f"Downloaded broadcast ephemerides file {ftp_file_path}")
+    helpers.repair_with_gfzrnx(local_file)
     return local_file
 
 
@@ -60,7 +63,8 @@ def try_downloading_ephemerides(mid_day: pd.Timestamp, folder: Path):
     local_file = try_downloading_ephemerides_http(mid_day, folder)
     if not local_file:
         local_file = try_downloading_ephemerides_ftp(mid_day, folder)
-    assert local_file, f"Could not download broadcast ephemerides for {mid_day}"
+    if not local_file:
+        log.warning(f"Could not download broadcast ephemerides for {mid_day}")
     return local_file
 
 
@@ -77,7 +81,9 @@ def rinex_3_ephemerides_file_coverage_time(ephemerides_file: Path):
 
 
 def nav_file_folder(day: pd.Timestamp, parent_folder: Path):
-    return parent_folder / str(day.year) / str(day.day_of_year)
+    folder = parent_folder / str(day.year) / str(day.day_of_year)
+    folder.mkdir(parents=True, exist_ok=True)
+    return folder
 
 
 def nav_file_database_folder():
@@ -89,7 +95,11 @@ def nav_file_database_folder():
 def get_local_ephemerides(
     day: pd.Timestamp,
 ):
-    candidates = list(nav_file_folder(day, nav_file_database_folder()).glob("*.rnx*"))
+    candidates = list(
+        nav_file_folder(day, nav_file_database_folder()).glob(
+            f"*_{day.year}{day.day_of_year}0000_01D_MN.rnx"
+        )
+    )
     if len(candidates) == 0:
         return None
     assert len(candidates) <= 1, f"Found more than one nav file for {day}"
@@ -102,8 +112,9 @@ def update_local_database(mid_day_start: pd.Timestamp, mid_day_end: pd.Timestamp
     while day <= mid_day_end:
         nav_file = get_local_ephemerides(day)
         if nav_file is None:
-            try_downloading_ephemerides(day, nav_file_database_folder())
-            assert get_local_ephemerides(day) is not None
+            try_downloading_ephemerides(
+                day, nav_file_folder(day, nav_file_database_folder())
+            )
         day += pd.Timedelta(1, unit="days")
 
 
@@ -113,17 +124,22 @@ def discover_or_download_ephemerides(
     # Ephemeris files cover at least a day, so first round time stamps to midday here
     t_start = timestamp_to_mid_day(t_start)
     t_end = timestamp_to_mid_day(t_end)
-    # Make sure we have nav files for the given period in our local database
+    # Update our local ephemeris database, fetching nav file from IGS servers for the days in question
     update_local_database(t_start, t_end)
-    sources = [discover_local_ephemerides, try_downloading_ephemerides]
-    for source in sources:
-        ephemerides_files = source(t_start, t_end, folder)
-        if ephemerides_files is not None:
-            ephemerides_files = [
-                helpers.repair_with_gfzrnx(f) for f in ephemerides_files
-            ]
-            return ephemerides_files
-    return None
+    # If there are any navigation file provided by the user, use them, if not, use IGS files.
+    user_provided_nav_files = [
+        f for f in folder.rglob("*.rnx") if is_rinex_3_nav_file(f)
+    ]
+    if len(user_provided_nav_files) > 0:
+        return user_provided_nav_files
+    ephemerides_files = []
+    day = t_start
+    while day <= t_end:
+        ephemerides_file = get_local_ephemerides(day)
+        if ephemerides_file is not None:
+            ephemerides_files.append(ephemerides_file)
+        day += pd.Timedelta(1, unit="days")
+    return ephemerides_files
 
 
 def discover_or_download_auxiliary_files(observation_file_path=Path()):
