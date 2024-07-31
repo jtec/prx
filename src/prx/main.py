@@ -80,9 +80,6 @@ def write_csv_file(
     output_file = Path(
         f"{str(file_name_without_extension)}.{constants.cPrxCsvFileExtension}"
     )
-    # write header
-    with open(output_file, "w", encoding="utf-8") as file:
-        file.write(f"# {json.dumps(prx_header)}\n")
     flat_records["sat_elevation_deg"] = np.rad2deg(
         flat_records.elevation_rad.to_numpy()
     )
@@ -136,6 +133,15 @@ def write_csv_file(
     )
     # Keep only records with valid sat states
     records = records[records.sat_clock_offset_m.notna()]
+    # write header
+    prx_header["processing_time"] = str(
+        pd.Timestamp.now() - prx_header["processing_start_time"]
+    )
+    prx_header["processing_start_time"] = prx_header["processing_start_time"].strftime(
+        "%Y-%m-%d %H:%M:%S.%f3"
+    )
+    with open(output_file, "w", encoding="utf-8") as file:
+        file.write(f"# {json.dumps(prx_header)}\n")
     records.to_csv(
         path_or_buf=output_file,
         index=False,
@@ -484,6 +490,7 @@ def build_records(
 
 @helpers.timeit
 def process(observation_file_path: Path, output_format="csv"):
+    t0 = pd.Timestamp.now()
     # We expect a Path, but might get a string here:
     observation_file_path = Path(observation_file_path)
     log.info(
@@ -498,6 +505,7 @@ def process(observation_file_path: Path, output_format="csv"):
     metadata = build_metadata(
         {"obs_file": rinex_3_obs_file, "nav_file": aux_files["broadcast_ephemerides"]}
     )
+    metadata["processing_start_time"] = t0
     helpers.repair_with_gfzrnx(rinex_3_obs_file)
     records = build_records(
         rinex_3_obs_file,
