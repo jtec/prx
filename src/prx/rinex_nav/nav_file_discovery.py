@@ -102,7 +102,10 @@ def get_local_ephemerides(
     )
     if len(candidates) == 0:
         return None
-    assert len(candidates) == 1, f"Found more than one nav file for {day}"
+    if len(candidates) > 1:
+        log.warning(
+            f"Found more than one nav file for {day}: \n{candidates} \n Will use the first one."
+        )
     return candidates[0]
 
 
