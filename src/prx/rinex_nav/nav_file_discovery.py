@@ -81,7 +81,7 @@ def rinex_3_ephemerides_file_coverage_time(ephemerides_file: Path):
 
 
 def nav_file_folder(day: pd.Timestamp, parent_folder: Path):
-    folder = parent_folder / str(day.year) / str(day.day_of_year)
+    folder = parent_folder / f"{day.year}/{day.day_of_year:03d}"
     folder.mkdir(parents=True, exist_ok=True)
     return folder
 
@@ -97,12 +97,12 @@ def get_local_ephemerides(
 ):
     candidates = list(
         nav_file_folder(day, nav_file_database_folder()).glob(
-            f"*_{day.year}{day.day_of_year}0000_01D_MN.rnx"
+            f"*_{day.year}{day.day_of_year:03d}0000_01D_MN.rnx"
         )
     )
     if len(candidates) == 0:
         return None
-    assert len(candidates) <= 1, f"Found more than one nav file for {day}"
+    assert len(candidates) == 1, f"Found more than one nav file for {day}"
     return candidates[0]
 
 
