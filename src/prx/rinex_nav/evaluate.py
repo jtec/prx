@@ -405,7 +405,8 @@ def convert_nav_dataset_to_dataframe(nav_ds):
 
     # Keep only SBAS ephemerides with low URA, these are based on SBAS message type 9, while those with large URA are
     # based on message type 17 which only contains almanac-like coarse satellite position estimates.
-    df = df[~((df.sv.str.startswith("S")) & (df.URA >= constants.cSbasURALimit))]
+    if "URA" in df.columns:
+        df = df[~((df.sv.str.startswith("S")) & (df.URA >= constants.cSbasURALimit))]
 
     def compute_ephemeris_and_clock_offset_reference_times(group):
         week_field = {
