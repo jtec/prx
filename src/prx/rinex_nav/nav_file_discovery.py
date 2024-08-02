@@ -124,7 +124,7 @@ def update_local_database(mid_day_start: pd.Timestamp, mid_day_end: pd.Timestamp
 def discover_or_download_ephemerides(
     t_start: pd.Timestamp, t_end: pd.Timestamp, folder, constellations
 ):
-    # If there are any navigation file provided by the user, use them, if not, use IGS files.
+    # If there are any navigation files provided by the user, use them, otherwise use IGS files.
     user_provided_nav_files = [
         f for f in folder.rglob("*.rnx") if is_rinex_3_nav_file(f)
     ]
