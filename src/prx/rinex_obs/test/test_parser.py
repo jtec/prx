@@ -3,8 +3,11 @@ import pytest
 import shutil
 import os
 import pandas as pd
+
+from prx.helpers import repair_with_gfzrnx, obs_dataset_to_obs_dataframe
 from prx.rinex_obs.parser import parse as prx_obs_parse
 from prx import converters
+import georinex
 
 
 @pytest.fixture
@@ -40,7 +43,6 @@ def test_compare_to_georinex():
         .sort_values(by=["time", "sv", "obs_type"])
         .reset_index(drop=True)
     )
-    ...
     georinex_output = (
         obs_dataset_to_obs_dataframe(georinex.load(file))
         .sort_values(by=["time", "sv", "obs_type"])
