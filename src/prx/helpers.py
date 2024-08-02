@@ -4,6 +4,8 @@ from functools import wraps
 from pathlib import Path
 import logging
 
+from prx.util import is_rinex_3_obs_file, is_rinex_3_nav_file
+from prx.rinex_obs.parser import parse as prx_obs_parse
 import xarray
 from imohash import imohash
 from prx import constants
@@ -392,27 +394,40 @@ def obs_dataset_to_obs_dataframe(ds: xarray.Dataset):
     return flat_obs
 
 
-def parse_rinex_obs_file(rinex_file_path: Path):
-    return obs_dataset_to_obs_dataframe(parse_rinex_file(rinex_file_path))
+def parse_rinex_file(rinex_file_path: Path):
+    if is_rinex_3_obs_file(rinex_file_path):
+        return parse_rinex_obs_file(rinex_file_path)
+    elif is_rinex_3_nav_file(rinex_file_path):
+        return parse_rinex_nav_file(rinex_file_path)
+    assert (
+        False
+    ), f"File {rinex_file_path} appears to be neither RINEX 3 OBS nor NAV file."
 
 
 @timeit
-def parse_rinex_file(rinex_file_path: Path):
+def parse_rinex_obs_file(rinex_file_path: Path):
     @disk_cache.cache(ignore=["rinex_file"])
-    def cached_load(rinex_file: Path, file_hash: str):
+    def parse_rinex_obs_file_cached(rinex_file: Path, file_hash: str):
         log.info(f"Parsing {rinex_file} (hash {file_hash}) ...")
         repair_with_gfzrnx(rinex_file)
-        parsed = georinex.load(rinex_file)
-        return parsed
+        return prx_obs_parse(rinex_file)
 
-    t0 = pd.Timestamp.now()
-    file_content_hash = hash_of_file_content(rinex_file_path)
-    hash_time = pd.Timestamp.now() - t0
-    if hash_time > pd.Timedelta(seconds=1):
-        log.info(
-            f"Hashing file content took {hash_time}, we might want to partially hash the file"
-        )
-    return cached_load(rinex_file_path, file_content_hash)
+    return parse_rinex_obs_file_cached(
+        rinex_file_path, hash_of_file_content(rinex_file_path)
+    )
+
+
+@timeit
+def parse_rinex_nav_file(rinex_file_path: Path):
+    @disk_cache.cache(ignore=["rinex_file"])
+    def parse_rinex_nav_file_cached(rinex_file: Path, file_hash: str):
+        log.info(f"Parsing {rinex_file} (hash {file_hash}) ...")
+        repair_with_gfzrnx(rinex_file)
+        return georinex.load(rinex_file)
+
+    return parse_rinex_nav_file_cached(
+        rinex_file_path, hash_of_file_content(rinex_file_path)
+    )
 
 
 def get_gpst_utc_leap_seconds(rinex_file: Path):
