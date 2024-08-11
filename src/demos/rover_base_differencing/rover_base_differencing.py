@@ -1,14 +1,17 @@
 from pathlib import Path
-
 from prx import helpers
 from prx.converters import anything_to_rinex_3
 from prx.user import parse_prx_csv_file
+from prx.main import process as prx_process
 
 log = helpers.get_logger(__name__)
 
 
 def parse(obs_file: Path):
     rnx_file = anything_to_rinex_3(obs_file)
+    assert rnx_file, f"Failed to convert {obs_file} to RINEX 3"
+    if not rnx_file.exists():
+        prx_process(rnx_file)
     df, metadata = parse_prx_csv_file(rnx_file.with_suffix(".csv"))
     # Receiver clocks are off by at most a few tens of milliseconds, so let's round for matching rover-base obs
     df["time_of_reception_rounded"] = df.time_of_reception_in_receiver_time.round(
