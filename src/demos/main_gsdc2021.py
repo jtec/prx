@@ -13,7 +13,7 @@ log = helpers.get_logger(__name__)
 @helpers.timeit
 def process_gsdc2021_dataset(path_dataset: Path):
     """
-    This script creates a local copy of gunzipped RINEX files from the GSDC2021 data set and process them with prx
+    This script creates a local copy of gunzipped RINEX files from the GSDC2021 data set and processes them with prx
 
     The filepath to the original GSDC2021 folder is specified in `path_dataset`.
     This has to be downloaded from the Kaggle website (requires login):
