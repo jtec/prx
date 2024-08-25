@@ -1,6 +1,7 @@
 import argparse
 import json
 import logging
+import shutil
 import sys
 from pathlib import Path
 import georinex
@@ -9,7 +10,7 @@ import numpy as np
 import git
 
 from prx import atmospheric_corrections as atmo
-from prx.helpers import parse_rinex_file
+from prx.helpers import parse_rinex_file, merge_rinex3_nav_files
 from prx.rinex_nav import nav_file_discovery
 from prx import constants, helpers, converters, user
 from prx.rinex_nav import evaluate as rinex_evaluate
@@ -157,7 +158,7 @@ def build_metadata(input_files):
     # convert input_files to a list of files
     files = []
     files.append(input_files["obs_file"])
-    files.extend([file for file in input_files["nav_file"]])
+    files.append(input_files["nav_file"])
 
     prx_metadata = {}
     obs_header = georinex.rinexheader(input_files["obs_file"])
@@ -201,17 +202,17 @@ def check_assumptions(
     ), "Handling of observation files using time scales other than GPST not implemented yet."
 
 
-def warm_up_parser_cache(rinex_files):
+def warm_up_parser_cache(rinex_files: list[Path]):
     _ = [parse_rinex_file(file) for file in rinex_files]
 
 
 @helpers.timeit
 def build_records(
     rinex_3_obs_file,
-    rinex_3_ephemerides_files,
+    rinex_3_ephemerides_file,
     approximate_receiver_ecef_position_m,
 ):
-    warm_up_parser_cache([rinex_3_obs_file] + rinex_3_ephemerides_files)
+    warm_up_parser_cache([rinex_3_obs_file, rinex_3_ephemerides_file])
     approximate_receiver_ecef_position_m = np.array(
         approximate_receiver_ecef_position_m
     )
@@ -294,7 +295,8 @@ def build_records(
 
     sat_states_per_day = []
     for file in rinex_3_ephemerides_files:
-        # get year and doy from NAV filename
+        # get year and doy from nav file
+
         year = int(file.name[12:16])
         doy = int(file.name[16:19])
         day_query = query.loc[
@@ -488,34 +490,43 @@ def build_records(
     return flat_obs
 
 
-@helpers.timeit
-def process(observation_file_path: Path, output_format="csv"):
-    t0 = pd.Timestamp.now()
-    # We expect a Path, but might get a string here:
-    observation_file_path = Path(observation_file_path)
-    log.info(
-        f"Starting processing {observation_file_path.name} (full path {observation_file_path})"
-    )
+def set_up_workspace(observation_file_path: Path):
+    workspace = observation_file_path.parent / "prx"
+    if workspace.exists():
+        log.info(f"Workspace {workspace} already exists, will overwrite it.")
+        shutil.rmtree(workspace)
+    workspace.mkdir()
     rinex_3_obs_file = converters.anything_to_rinex_3(observation_file_path)
+    shutil.copy(rinex_3_obs_file, workspace / rinex_3_obs_file.name)
+    rinex_3_obs_file = workspace / rinex_3_obs_file.name
     rinex_3_obs_file = helpers.repair_with_gfzrnx(rinex_3_obs_file)
-    prx_file = rinex_3_obs_file.with_suffix("")
     aux_files = nav_file_discovery.discover_or_download_auxiliary_files(
         rinex_3_obs_file
     )
-    metadata = build_metadata(
-        {"obs_file": rinex_3_obs_file, "nav_file": aux_files["broadcast_ephemerides"]}
+    ephemerides = workspace / "merged_nav.rnx"
+    merge_rinex3_nav_files(aux_files["broadcast_ephemerides"], ephemerides)
+    return rinex_3_obs_file, ephemerides
+
+
+@helpers.timeit
+def process(observation_file_path: Path, output_format="csv"):
+    log.info(
+        f"Starting processing {observation_file_path.name} (full path {observation_file_path})"
     )
+    t0 = pd.Timestamp.now()
+    rinex_3_obs_file, ephemerides = set_up_workspace(observation_file_path)
+
+    metadata = build_metadata({"obs_file": rinex_3_obs_file, "nav_file": ephemerides})
     metadata["processing_start_time"] = t0
-    helpers.repair_with_gfzrnx(rinex_3_obs_file)
     records = build_records(
         rinex_3_obs_file,
-        aux_files["broadcast_ephemerides"],
+        ephemerides,
         metadata["approximate_receiver_ecef_position_m"],
     )
     return write_prx_file(
         metadata,
         records,
-        prx_file,
+        rinex_3_obs_file.with_suffix(""),
         output_format,
     )
 

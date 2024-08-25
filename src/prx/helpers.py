@@ -1,5 +1,6 @@
 import platform
 import re
+import shutil
 from functools import wraps
 from pathlib import Path
 import logging
@@ -214,6 +215,35 @@ def repair_with_gfzrnx(file):
         log.info(f"gfzrnx file repair run failed: {result}")
         assert False
     return file
+
+
+@timeit
+def merge_rinex3_nav_files(files: list[Path], merged_file: Path) -> Path:
+    [repair_with_gfzrnx(file) for file in files]
+    if len(files) == 1:
+        log.info(f"Only one file to merge, copying {files[0]} to {merged_file}")
+        shutil.copy(files[0], merged_file)
+        return
+    path_folder_gfzrnx = Path(__file__).parent.joinpath("tools", "gfzrnx")
+    path_binary = path_folder_gfzrnx.joinpath(
+        constants.gfzrnx_binary[platform.system()]
+    )
+    command = [
+        str(path_binary),
+        "-fout",
+        str(merged_file),
+        "--version_out 3",
+        "-finp",
+    ] + [str(file) for file in files]
+    result = subprocess.run(
+        command,
+        capture_output=True,
+    )
+    if result.returncode == 0:
+        log.debug(f"Merged {files} into {merged_file}")
+    else:
+        log.error(f"Merging {files} into {merged_file} failed: {result}")
+        assert False
 
 
 def deg_2_rad(angle_deg):
