@@ -22,6 +22,8 @@ def is_rinex_3_obs_file(file: Path):
 
 
 def is_rinex_3_nav_file(file: Path):
+    if not file.is_file():
+        return False
     first_line = file_exists_and_can_read_first_line(file)
     if first_line is None:
         return False

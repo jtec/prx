@@ -73,8 +73,8 @@ def hash_of_file_content(file: Path, use_sampling: bool = False):
     hash_time = pd.Timestamp.now() - t0
     if hash_time > pd.Timedelta(seconds=1):
         log.info(
-            f"Hashing file content took {hash_time}, we might want want to think about partially hashing the"
-            f" file, e.g. using https://github.com/kalafut/py-imohash"
+            f"Hashing file content took {hash_time}, you might want want to think about partially hashing the"
+            f" file by passing sampling=True to this function."
         )
 
     return hash_string
