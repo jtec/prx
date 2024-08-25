@@ -14,7 +14,7 @@ def parse(obs_file: Path):
         prx_process(rnx_file)
     df, metadata = parse_prx_csv_file(rnx_file.with_suffix(".csv"))
     # Receiver clocks are off by at most a few tens of milliseconds, so let's round for matching rover-base obs
-    df["time_of_reception_rounded"] = df.time_of_reception_in_receiver_time.round(
+    df["time_of_reception_rounded"] = df.time_of_reception_in_receiver_time.dt.round(
         "50ms"
     )
     df["sv"] = df["constellation"].astype(str) + df["prn"].astype(str).str.pad(
@@ -36,9 +36,7 @@ def main():
         on=["time_of_reception_rounded", "sv", "rnx_obs_identifier"],
         suffixes=("_rover", "_base"),
     ).reset_index()
-    df["C_obs_m_sd"] = df.C_obs_m_rover + df.C_obs_m_base
-    df["L_obs_cycles_sd"] = df.L_obs_cycles_rover + df.L_obs_cycles_base
-    df["ref_sv"] = ""
+    df["C_obs_m_sd"] = df.C_obs_m_rover - df.C_obs_m_base
 
     print(df.info())
 
