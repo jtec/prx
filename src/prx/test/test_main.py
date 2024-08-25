@@ -15,6 +15,7 @@ from prx.user import (
     spp_pt_lsq,
     spp_vt_lsq,
     bootstrap_coarse_receiver_position,
+    trajectory_pvt_lsq,
 )
 from prx.rinex_nav import nav_file_discovery
 
@@ -210,14 +211,11 @@ def test_prx_function_call_for_obs_file_across_two_days(
     assert expected_prx_file.exists()
 
 
+@helpers.disk_cache.cache()
 def run_rinex_through_prx(rinex_obs_file: Path):
-    main.process(observation_file_path=rinex_obs_file, output_format="csv")
-    expected_prx_file = Path(
-        str(rinex_obs_file).replace("crx.gz", constants.cPrxCsvFileExtension)
-    )
-    assert expected_prx_file.exists()
-    records, metadata = parse_prx_csv_file(expected_prx_file)
-    records = pd.read_csv(expected_prx_file, comment="#")
+    prx_file = main.process(observation_file_path=rinex_obs_file, output_format="csv")
+    assert prx_file.exists()
+    records, metadata = parse_prx_csv_file(prx_file)
     assert not records.empty
     assert metadata
     records.sat_code_bias_m = records.sat_code_bias_m.fillna(0)
@@ -403,4 +401,9 @@ def test_bootstrap_coarse_receiver_position(input_for_test_tlse):
 def test_trajectory_spp_lsq(dynamic_dataset):
     df, metadata = run_rinex_through_prx(dynamic_dataset["rover_obs"])
     reference = pd.read_csv(dynamic_dataset["ground_truth"])
+    pvt = trajectory_pvt_lsq(
+        df_rover=df,
+        p_base=metadata["approximate_receiver_ecef_position_m"],
+        df_base=None,
+    )
     pass

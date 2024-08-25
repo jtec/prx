@@ -1,5 +1,7 @@
 import json
 from pathlib import Path
+
+import numba
 import numpy as np
 import pandas as pd
 import georinex as gr
@@ -13,6 +15,9 @@ import prx.helpers
 def parse_prx_csv_file_metadata(prx_file: Path):
     with open(prx_file, "r") as f:
         metadata = json.loads(f.readline().replace("# ", ""))
+    metadata["approximate_receiver_ecef_position_m"] = np.array(
+        metadata["approximate_receiver_ecef_position_m"]
+    )
     return metadata
 
 
@@ -234,5 +239,70 @@ def bootstrap_coarse_receiver_position(filepath_obs, filepath_nav):
     return solution[0:3].squeeze()
 
 
-def trajectory_pvt_lsq(df_rover, df_base=None):
+def compute_spp_base_obs(df_rover, p_base):
+    df_base = df_rover.copy()
+    range_obs = np.linalg.norm(
+        df_base[["sat_pos_x_m", "sat_pos_y_m", "sat_pos_z_m"]].to_numpy() - p_base.T,
+        axis=1,
+    )
+    range_obs += (
+        -df_rover.sat_clock_offset_m
+        - df_rover.relativistic_clock_effect_m
+        + df_rover.sagnac_effect_m
+        + df_rover.iono_delay_m
+        + df_rover.tropo_delay_m
+        + df_rover.sat_code_bias_m
+    )
+    df_base["C_obs_m"] = range_obs
+    df_base["L_obs_cycles"] = range_obs / (
+        df_rover.carrier_frequency_hz / cGpsSpeedOfLight_mps
+    )
+    return df_base
+
+
+@numba.jit(nopython=True, parallel=True)
+def solve_lsq(df):
+    pass
+
+
+def trajectory_pvt_lsq(
+    df_rover,
+    p_base,
+    df_base=None,
+):
+    if df_base is None:
+        df_base = compute_spp_base_obs(df_rover, p_base)
+    for _df in [df_rover, df_base]:
+        _df["time_of_reception_rounded"] = (
+            _df.time_of_reception_in_receiver_time.dt.round("50ms")
+        )
+        _df["sv"] = _df["constellation"].astype(str) + _df["prn"].astype(str).str.pad(
+            2, fillchar="0"
+        )
+        _df["broadcast_range"] = np.linalg.norm(
+            df_base[["sat_pos_x_m", "sat_pos_y_m", "sat_pos_z_m"]].to_numpy()
+            - p_base.T,
+            axis=1,
+        )
+        # Remove fast-changing satellite terms
+        _df["lambda"] = _df.carrier_frequency_hz / cGpsSpeedOfLight_mps
+        _df.C_obs_m = _df.C_obs_m - _df.broadcast_range + _df.sat_clock_offset_m
+        _df.L_obs_cycles = (
+            _df.L_obs_cycles
+            - (_df.broadcast_range - _df.sat_clock_offset_m) / _df["lambda"]
+        )
+    df = df_rover.merge(
+        df_base,
+        on=["time_of_reception_rounded", "sv", "rnx_obs_identifier", "ephemeris_hash"],
+        suffixes=("_rover", "_base"),
+    ).reset_index(drop=True)
+    df["C_obs_m_sd"] = df.C_obs_m_rover - df.C_obs_m_base
+    df[["u_x", "u_y", "u_z"]] = (
+        df[["sat_pos_x_m_base", "sat_pos_y_m_base", "sat_pos_z_m_base"]].to_numpy()
+        - p_base.T
+    ) / df["broadcast_range_base"].to_numpy().reshape(-1, 1)
+
+    solve_lsq(
+        df[["time_of_reception_in_receiver_time_rover", "u_x", "u_y", "u_z"]].to_numpy()
+    )
     return None
