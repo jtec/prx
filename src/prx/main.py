@@ -9,10 +9,11 @@ import numpy as np
 import git
 
 from prx import atmospheric_corrections as atmo
-from prx.helpers import parse_rinex_file
+from prx.helpers import parse_rinex_obs_file
 from prx.rinex_nav import nav_file_discovery
 from prx import constants, helpers, converters, user
 from prx.rinex_nav import evaluate as rinex_evaluate
+from prx.rinex_nav.evaluate import parse_rinex_nav_file
 
 log = helpers.get_logger(__name__)
 
@@ -201,8 +202,9 @@ def check_assumptions(
     ), "Handling of observation files using time scales other than GPST not implemented yet."
 
 
-def warm_up_parser_cache(rinex_files):
-    _ = [parse_rinex_file(file) for file in rinex_files]
+def warm_up_parser_cache(obs_files, nav_files):
+    _ = [parse_rinex_obs_file(file) for file in obs_files]
+    _ = [parse_rinex_nav_file(file) for file in nav_files]
 
 
 @helpers.timeit
@@ -211,7 +213,8 @@ def build_records(
     rinex_3_ephemerides_files,
     approximate_receiver_ecef_position_m,
 ):
-    warm_up_parser_cache([rinex_3_obs_file] + rinex_3_ephemerides_files)
+    warm_up_parser_cache([rinex_3_obs_file], rinex_3_ephemerides_files)
+
     approximate_receiver_ecef_position_m = np.array(
         approximate_receiver_ecef_position_m
     )
@@ -292,31 +295,10 @@ def build_records(
         },
     )
 
-    sat_states_per_day = []
-    for file in rinex_3_ephemerides_files:
-        # get year and doy from NAV filename
-        year = int(file.name[12:16])
-        doy = int(file.name[16:19])
-        day_query = query.loc[
-            (
-                query.query_time_isagpst
-                >= pd.Timestamp(year=year, month=1, day=1) + pd.Timedelta(days=doy - 1)
-            )
-            & (
-                query.query_time_isagpst
-                < pd.Timestamp(year=year, month=1, day=1) + pd.Timedelta(days=doy)
-            )
-        ]
-        if day_query.empty:
-            continue
-        log.info(f"Computing satellite states for {year}-{doy:03d}")
-        sat_states_per_day.append(
-            rinex_evaluate.compute_parallel(
-                file,
-                day_query,
-            )
-        )
-    sat_states = pd.concat(sat_states_per_day)
+    sat_states = rinex_evaluate.compute_parallel(
+        rinex_3_ephemerides_files,
+        query,
+    )
     sat_states = sat_states.rename(
         columns={
             "sv": "satellite",
@@ -414,7 +396,7 @@ def build_records(
         frequency_slot = row["frequency_slot"]
         if np.isnan(row["frequency_slot"]):
             return np.nan
-        # GLONASS satellites with both FDMA and CDMA signals have a frequency slot for FDMA signals,
+        # GLONASS satellites with both FDMA and CDMA signals have a frequency slot for FDMA signals.
         # for CDMA signals we use the common carrier frequency of those signals
         if len(carrier_freqs[constellation][frequency]) == 1:
             return carrier_freqs[constellation][frequency][1]
@@ -424,18 +406,28 @@ def build_records(
     flat_obs.loc[:, "carrier_frequency_hz"] = flat_obs.apply(
         signal_2_carrier_frequency, axis=1
     )
+
+    file_2_to_year_and_day = {}
+    for file in rinex_3_ephemerides_files:
+        # get year and doy from NAV filename
+        nav_content = parse_rinex_nav_file(file)
+        year = int(nav_content["time"].dt.year.median())
+        doy = int(nav_content["time"].dt.day_of_year.median())
+        file_2_to_year_and_day[file] = (year, doy)
+    assert len(file_2_to_year_and_day.keys()) == len(rinex_3_ephemerides_files)
     # create a dictionary containing the headers of the different NAV files.
-    # The keys are the "YYYYDDD" (year and day of year) and are located at
-    # [12:19] of the file name using RINEX naming convention
+    # The keys are the "YYYYDDD" (year and day of year)
     nav_header_dict = {
-        file.name[12:19]: georinex.rinexheader(file)
+        f"{file_2_to_year_and_day[file][0]:03d}{file_2_to_year_and_day[file][1]:03d}": georinex.rinexheader(
+            file
+        )
         for file in rinex_3_ephemerides_files
     }
 
     for file in rinex_3_ephemerides_files:
         # get year and doy from NAV filename
-        year = int(file.name[12:16])
-        doy = int(file.name[16:19])
+        year = file_2_to_year_and_day[file][0]
+        doy = file_2_to_year_and_day[file][1]
 
         # Selection criteria: time of emission belonging to the day of the current NAV file
         mask = (

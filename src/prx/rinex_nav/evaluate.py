@@ -1,5 +1,6 @@
 import multiprocessing
 
+import georinex
 import pandas as pd
 import numpy as np
 from pathlib import Path
@@ -8,7 +9,10 @@ from joblib import Parallel, delayed
 
 from prx import helpers
 from prx import constants
-from prx.helpers import timeit, parse_rinex_file
+from prx.helpers import (
+    timeit,
+    compute_gps_utc_leap_seconds,
+)
 
 log = helpers.get_logger(__name__)
 
@@ -17,23 +21,12 @@ log = helpers.get_logger(__name__)
 def parse_rinex_nav_file(rinex_file: Path):
     @helpers.disk_cache.cache(ignore=["rinex_file_path"])
     def cached_load(rinex_file_path: Path, file_hash: str):
-        ds = parse_rinex_file(rinex_file_path)
-        ds.attrs["utc_gpst_leap_seconds"] = helpers.get_gpst_utc_leap_seconds(
-            rinex_file_path
-        )
+        ds = georinex.load(rinex_file_path)
         df = convert_nav_dataset_to_dataframe(ds)
         df["ephemeris_hash"] = pd.util.hash_pandas_object(df, index=False).astype(str)
         return df
 
-    t0 = pd.Timestamp.now()
-
-    file_content_hash = helpers.hash_of_file_content(rinex_file)
-    hash_time = pd.Timestamp.now() - t0
-    if hash_time > pd.Timedelta(seconds=1):
-        log.info(
-            f"Hashing file content took {hash_time}, we might want to partially hash the file"
-        )
-    return cached_load(rinex_file, file_content_hash)
+    return cached_load(rinex_file, helpers.hash_of_file_content(rinex_file))
 
 
 def time_scale_integer_second_offset_wrt_gpst(time_scale, utc_gpst_leap_seconds=None):
@@ -393,6 +386,17 @@ def convert_nav_dataset_to_dataframe(nav_ds):
     # Drop ephemerides for which all parameters are NaN, as we cannot compute anything from those
     df = df.dropna(how="all")
     df = df.reset_index()
+    days = pd.concat(
+        [df.time.dt.year, df.time.dt.day_of_year], axis=1
+    ).drop_duplicates()
+    leap_seconds = days.apply(
+        lambda row: compute_gps_utc_leap_seconds(yyyy=row.iloc[0], doy=row.iloc[1]),
+        axis=1,
+    ).unique()
+    assert (
+        len(np.unique(leap_seconds)) == 1
+    ), "Multiple leap second values across set of ephemerides, this is untested, aborting."
+    df.attrs["utc_gpst_leap_seconds"] = leap_seconds[0]
     df["source"] = nav_ds.filename
     # georinex adds suffixes to satellite IDs if it sees multiple ephemerides (e.g. F/NAV, I/NAV) for the same
     # satellite and the same timestamp.
@@ -438,13 +442,13 @@ def convert_nav_dataset_to_dataframe(nav_ds):
         group["ephemeris_reference_time_isagpst"] = to_isagpst(
             group["ephemeris_reference_time_system_time"],
             group_time_scale,
-            int(nav_ds.attrs["utc_gpst_leap_seconds"]),
+            int(df.attrs["utc_gpst_leap_seconds"]),
         )
         group["clock_offset_reference_time_system_time"] = group["time"]
         group["clock_reference_time_isagpst"] = to_isagpst(
             group["clock_offset_reference_time_system_time"],
             group_time_scale,
-            int(nav_ds.attrs["utc_gpst_leap_seconds"]),
+            int(df.attrs["utc_gpst_leap_seconds"]),
         )
         group["validity_start"] = (
             group["ephemeris_reference_time_isagpst"]
@@ -580,28 +584,35 @@ def compute_clock_offsets(df):
     return df
 
 
-def compute_parallel(rinex_nav_file_path, per_signal_query):
+def compute_parallel(
+    rinex_nav_file_paths: Path | list[Path], per_signal_query: pd.DataFrame
+):
+    if isinstance(rinex_nav_file_paths, Path):
+        rinex_nav_file_paths = [rinex_nav_file_paths]
     # Warm up nav file parser cache so that we don't parse the file multiple times
-    _ = parse_rinex_nav_file(rinex_nav_file_path)
+    [parse_rinex_nav_file(file) for file in rinex_nav_file_paths]
     parallel = Parallel(n_jobs=round(multiprocessing.cpu_count() / 2), return_as="list")
     # split dataframe into `n_chunks` smaller dataframes
     n_chunks = min(len(per_signal_query.index), 4)
     chunks = np.array_split(per_signal_query, n_chunks)
     processed_chunks = parallel(
-        delayed(compute)(rinex_nav_file_path, chunk) for chunk in chunks
+        delayed(compute)(rinex_nav_file_paths, chunk) for chunk in chunks
     )
     return pd.concat(processed_chunks)
 
 
-def compute(rinex_nav_file_path, per_signal_query):
+def compute(rinex_nav_file_paths: Path | list[Path], per_signal_query: pd.DataFrame):
     # per_signal_query is a pd.DataFrame with the following columns
     #   - time_of_reception_in_receiver_time
     #   - observation_value
     #   - signal
     #   - sv
     #   - query_time_isagpst
-    rinex_nav_file_path = Path(rinex_nav_file_path)
-    ephemerides = parse_rinex_nav_file(rinex_nav_file_path)
+    if isinstance(rinex_nav_file_paths, Path):
+        rinex_nav_file_paths = [rinex_nav_file_paths]
+    ephemerides = pd.concat(
+        [parse_rinex_nav_file(file) for file in rinex_nav_file_paths], axis=0
+    )
     # Group delays and clock offsets can be signal-specific, so we need to match ephemerides to code signals,
     # not only to satellites
     # Example: Galileo transmits E5a clock and group delay parameters in the F/NAV message, but parameters for other
