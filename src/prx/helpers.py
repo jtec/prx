@@ -4,8 +4,8 @@ from functools import wraps
 from pathlib import Path
 import logging
 
-from prx.util import is_rinex_3_obs_file, is_rinex_3_nav_file
 from prx.rinex_obs.parser import parse as prx_obs_parse
+from prx import rinex_nav as rinex_nav
 import xarray
 from imohash import imohash
 from prx import constants
@@ -14,7 +14,6 @@ import pandas as pd
 import subprocess
 import math
 import joblib
-import georinex
 import os
 from astropy.utils import iers
 from astropy import time as astrotime
@@ -402,16 +401,6 @@ def obs_dataset_to_obs_dataframe(ds: xarray.Dataset):
     return flat_obs
 
 
-def parse_rinex_file(rinex_file_path: Path):
-    if is_rinex_3_obs_file(rinex_file_path):
-        return parse_rinex_obs_file(rinex_file_path)
-    elif is_rinex_3_nav_file(rinex_file_path):
-        return parse_rinex_nav_file(rinex_file_path)
-    assert (
-        False
-    ), f"File {rinex_file_path} appears to be neither RINEX 3 OBS nor NAV file."
-
-
 @timeit
 def parse_rinex_obs_file(rinex_file_path: Path):
     @disk_cache.cache(ignore=["rinex_file"])
@@ -423,52 +412,6 @@ def parse_rinex_obs_file(rinex_file_path: Path):
     return parse_rinex_obs_file_cached(
         rinex_file_path, hash_of_file_content(rinex_file_path)
     )
-
-
-@timeit
-def parse_rinex_nav_file(rinex_file_path: Path):
-    @disk_cache.cache(ignore=["rinex_file"])
-    def parse_rinex_nav_file_cached(rinex_file: Path, file_hash: str):
-        log.info(f"Parsing {rinex_file} (hash {file_hash}) ...")
-        repair_with_gfzrnx(rinex_file)
-        return georinex.load(rinex_file)
-
-    return parse_rinex_nav_file_cached(
-        rinex_file_path, hash_of_file_content(rinex_file_path)
-    )
-
-
-def get_gpst_utc_leap_seconds(rinex_file: Path):
-    leap_seconds_astropy = compute_gps_utc_leap_seconds(
-        yyyy=int(rinex_file.name[12:16]), doy=int(rinex_file.name[16:19])
-    )
-
-    # sanity check if leap second information is in the header of the RNX NAV file
-    # compare astropy leap and RNX NAV leap seconds
-    header = georinex.rinexheader(rinex_file)
-    if "LEAP SECONDS" in header:
-        ls_before = header["LEAP SECONDS"][0:6].strip()
-        assert (
-            0 < len(ls_before) < 3
-        ), f"Unexpected leap seconds {ls_before} in {rinex_file}"
-
-        ls_after = header["LEAP SECONDS"][6:12].strip()
-        if ls_after == "":
-            return int(ls_before)
-        assert (
-            0 < len(ls_after) < 3
-        ), f"Unexpected leap seconds {ls_after} in {rinex_file}"
-
-        assert (
-            ls_after == ls_before
-        ), f"Leap second change announcement in {rinex_file}, this case is not tested, aborting."
-
-        leap_seconds_rnx = int(ls_before)
-        assert (
-            leap_seconds_rnx == leap_seconds_astropy
-        ), "leap second computed from astropy is different from RINEX NAV header"
-
-    return leap_seconds_astropy
 
 
 def is_sorted(iterable):
