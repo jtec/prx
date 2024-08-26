@@ -564,6 +564,9 @@ def select_ephemerides(df, query):
     query["query_time_wrt_clock_reference_time_s"] = (
         query["query_time_isagpst"] - query["clock_reference_time_isagpst"]
     ).apply(helpers.timedelta_2_seconds)
+    query["ephemeris_valid"] = (query["query_time_isagpst"] < query["validity_end"]) & (
+        query["query_time_isagpst"] > query["validity_start"]
+    )
     return query
 
 
@@ -594,6 +597,7 @@ def compute_parallel(rinex_nav_file_path, per_signal_query):
 
 
 def compute(rinex_nav_file_path, per_signal_query):
+    query_columns = per_signal_query.columns
     # per_signal_query is a pd.DataFrame with the following columns
     #   - time_of_reception_in_receiver_time
     #   - observation_value
@@ -658,6 +662,12 @@ def compute(rinex_nav_file_path, per_signal_query):
     if "signal" in per_signal_query.columns:
         columns_to_keep = ["signal", "sat_code_bias_m"] + columns_to_keep
     columns_to_keep.append("frequency_slot")
+    computed_columns_to_keep = [
+        col for col in columns_to_keep if col not in query_columns
+    ]
+    per_signal_query.loc[
+        ~per_signal_query.ephemeris_valid, computed_columns_to_keep
+    ] = np.nan
     per_signal_query = per_signal_query[columns_to_keep].reset_index(drop=True)
     return per_signal_query
 
