@@ -387,6 +387,27 @@ def kepler_orbit_position_and_velocity(eph):
     return eph
 
 
+def set_time_of_validity(df):
+    def set_for_one_constellation(group):
+        group_constellation = group["constellation"].iloc[0]
+        group["validity_start"] = (
+            group["ephemeris_reference_time_isagpst"]
+            + constants.constellation_2_ephemeris_validity_interval[
+                group_constellation
+            ][0]
+        )
+        group["validity_end"] = (
+            group["ephemeris_reference_time_isagpst"]
+            + constants.constellation_2_ephemeris_validity_interval[
+                group_constellation
+            ][1]
+        )
+        return group
+
+    df = df.groupby("constellation").apply(set_for_one_constellation)
+    return df
+
+
 def convert_nav_dataset_to_dataframe(nav_ds):
     """convert ephemerides from xarray.Dataset to pandas.DataFrame"""
     df = nav_ds.to_dataframe()
@@ -418,7 +439,6 @@ def convert_nav_dataset_to_dataframe(nav_ds):
             "IRNSST": "GPSWeek",
         }
         group_time_scale = group["time_scale"].iloc[0]
-        group_constellation = group["constellation"].iloc[0]
         if group_time_scale not in ["GLONASST", "SBAST"]:
             full_seconds = (
                 group[week_field[group_time_scale]] * constants.cSecondsPerWeek
@@ -446,23 +466,14 @@ def convert_nav_dataset_to_dataframe(nav_ds):
             group_time_scale,
             int(nav_ds.attrs["utc_gpst_leap_seconds"]),
         )
-        group["validity_start"] = (
-            group["ephemeris_reference_time_isagpst"]
-            + constants.constellation_2_ephemeris_validity_interval[
-                group_constellation
-            ][0]
-        )
-        group["validity_end"] = (
-            group["ephemeris_reference_time_isagpst"]
-            + constants.constellation_2_ephemeris_validity_interval[
-                group_constellation
-            ][1]
-        )
         return group
 
-    df = df.groupby("constellation").apply(
-        compute_ephemeris_and_clock_offset_reference_times
+    df = (
+        df.groupby("constellation")
+        .apply(compute_ephemeris_and_clock_offset_reference_times)
+        .reset_index(drop=True)
     )
+    df = set_time_of_validity(df)
     df = df.rename(
         columns={
             "M0": "M_0",
