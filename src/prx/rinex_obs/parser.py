@@ -84,5 +84,5 @@ def parse(file_path):
         group_df = group_df.drop(columns=["constellation"])
         group_df = group_df[["time", "sv", "obs_value", "obs_type"]]
         group_dfs.append(group_df)
-    result = pd.concat(group_dfs).sort_values(by=["time"])
+    result = pd.concat(group_dfs).sort_values(by=["time"]).reset_index(drop=True)
     return result

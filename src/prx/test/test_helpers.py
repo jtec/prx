@@ -342,3 +342,9 @@ def test_compute_gps_leap_seconds():
         np.testing.assert_equal(
             helpers.compute_gps_utc_leap_seconds(year, doy), expected_leap_second
         )
+
+
+def test_timestamp_to_mid_day():
+    assert helpers.timestamp_to_mid_day(
+        pd.Timestamp("2023-01-01T01:02:03")
+    ) == pd.Timestamp("2023-01-01T12:00:00")
