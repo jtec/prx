@@ -17,7 +17,12 @@ def parse_prx_csv_file_metadata(prx_file: Path):
 
 
 def parse_prx_csv_file(prx_file: Path):
-    return pd.read_csv(prx_file, comment="#"), parse_prx_csv_file_metadata(prx_file)
+    df = pd.read_csv(prx_file, comment="#")
+    df.time_of_reception_in_receiver_time = pd.to_datetime(
+        df.time_of_reception_in_receiver_time
+    )
+    metadata = parse_prx_csv_file_metadata(prx_file)
+    return df, metadata
 
 
 def spp_vt_lsq(df, p_ecef_m):

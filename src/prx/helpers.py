@@ -105,6 +105,14 @@ def timestamp_2_timedelta(timestamp: pd.Timestamp, time_scale):
     assert False, f"Time scale {time_scale} not supported."
 
 
+def timestamp_to_mid_day(ts):
+    return (
+        pd.Timestamp(year=ts.year, month=1, day=1)
+        + pd.Timedelta(days=ts.day_of_year - 1)
+        + pd.Timedelta(hours=12)
+    )
+
+
 def timedelta_2_weeks_and_seconds(time_delta: pd.Timedelta):
     if pd.isnull(time_delta):
         return np.nan, np.nan

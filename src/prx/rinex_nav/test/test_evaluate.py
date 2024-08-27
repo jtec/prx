@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 from pathlib import Path
 
-from prx.rinex_nav.evaluate import select_ephemerides
+from prx.rinex_nav.evaluate import select_ephemerides, set_time_of_validity
 from prx.sp3 import evaluate as sp3_evaluate
 from prx.rinex_nav import evaluate as rinex_nav_evaluate
 from prx import constants, converters, helpers
@@ -82,6 +82,44 @@ def test_compare_rnx3_gps_sat_pos_with_magnitude(input_for_test):
 
     threshold_pos_error_m = 1e-3
     assert np.linalg.norm(sv_pos_prx - sv_pos_magnitude) < threshold_pos_error_m
+
+
+def test_expired_ephemeris_yields_nans(input_for_test):
+    path_to_rnx3_nav_file = converters.anything_to_rinex_3(
+        input_for_test["rinex_nav_file"]
+    )
+    # Computing satellite states for one time within the time of validity of the available ephemerides, and one far beyond
+    query = pd.DataFrame(
+        [
+            {
+                "sv": "G01",
+                "signal": "C1C",
+                "query_time_isagpst": week_and_seconds_2_timedelta(
+                    weeks=2190, seconds=523800
+                )
+                + constants.cGpstUtcEpoch,
+            },
+            {
+                "sv": "G01",
+                "signal": "C1C",
+                "query_time_isagpst": week_and_seconds_2_timedelta(
+                    weeks=2190, seconds=523800
+                )
+                + constants.cGpstUtcEpoch
+                + pd.Timedelta(days=10),
+            },
+        ]
+    )
+    rinex_sat_states = rinex_nav_evaluate.compute(path_to_rnx3_nav_file, query)
+    rinex_sat_states = rinex_sat_states.sort_values(by="query_time_isagpst")
+    # We expect to be the first row to be filled with values
+    assert not rinex_sat_states.iloc[0, :].isna().any()
+    # We expect all computed values in the second row to be filled with NaNs, because we have no ephemeris that is valid for the query time.
+    assert (
+        rinex_sat_states.iloc[1, :].isna().value_counts()[True]
+        == len(rinex_sat_states.columns) - 3
+    )
+    pass
 
 
 def generate_sat_query(sat_state_query_time_isagpst):
@@ -634,6 +672,8 @@ def test_select_ephemerides():
             "ephemeris_hash": [1, 2, 3, 4],
         }
     )
+    ephemerides["constellation"] = ephemerides.sv.str[0]
+    ephemerides = set_time_of_validity(ephemerides)
     query = pd.DataFrame(
         {
             "sv": ["E01", "G01", "G01"],

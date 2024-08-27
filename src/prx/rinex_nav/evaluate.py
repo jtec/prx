@@ -387,6 +387,27 @@ def kepler_orbit_position_and_velocity(eph):
     return eph
 
 
+def set_time_of_validity(df):
+    def set_for_one_constellation(group):
+        group_constellation = group["constellation"].iloc[0]
+        group["validity_start"] = (
+            group["ephemeris_reference_time_isagpst"]
+            + constants.constellation_2_ephemeris_validity_interval[
+                group_constellation
+            ][0]
+        )
+        group["validity_end"] = (
+            group["ephemeris_reference_time_isagpst"]
+            + constants.constellation_2_ephemeris_validity_interval[
+                group_constellation
+            ][1]
+        )
+        return group
+
+    df = df.groupby("constellation").apply(set_for_one_constellation)
+    return df
+
+
 def convert_nav_dataset_to_dataframe(nav_ds):
     """convert ephemerides from xarray.Dataset to pandas.DataFrame"""
     df = nav_ds.to_dataframe()
@@ -405,7 +426,8 @@ def convert_nav_dataset_to_dataframe(nav_ds):
 
     # Keep only SBAS ephemerides with low URA, these are based on SBAS message type 9, while those with large URA are
     # based on message type 17 which only contains almanac-like coarse satellite position estimates.
-    df = df[~((df.sv.str.startswith("S")) & (df.URA >= constants.cSbasURALimit))]
+    if "URA" in df.columns:
+        df = df[~((df.sv.str.startswith("S")) & (df.URA >= constants.cSbasURALimit))]
 
     def compute_ephemeris_and_clock_offset_reference_times(group):
         week_field = {
@@ -417,7 +439,6 @@ def convert_nav_dataset_to_dataframe(nav_ds):
             "IRNSST": "GPSWeek",
         }
         group_time_scale = group["time_scale"].iloc[0]
-        group_constellation = group["constellation"].iloc[0]
         if group_time_scale not in ["GLONASST", "SBAST"]:
             full_seconds = (
                 group[week_field[group_time_scale]] * constants.cSecondsPerWeek
@@ -445,23 +466,14 @@ def convert_nav_dataset_to_dataframe(nav_ds):
             group_time_scale,
             int(nav_ds.attrs["utc_gpst_leap_seconds"]),
         )
-        group["validity_start"] = (
-            group["ephemeris_reference_time_isagpst"]
-            + constants.constellation_2_ephemeris_validity_interval[
-                group_constellation
-            ][0]
-        )
-        group["validity_end"] = (
-            group["ephemeris_reference_time_isagpst"]
-            + constants.constellation_2_ephemeris_validity_interval[
-                group_constellation
-            ][1]
-        )
         return group
 
-    df = df.groupby("constellation").apply(
-        compute_ephemeris_and_clock_offset_reference_times
+    df = (
+        df.groupby("constellation")
+        .apply(compute_ephemeris_and_clock_offset_reference_times)
+        .reset_index(drop=True)
     )
+    df = set_time_of_validity(df)
     df = df.rename(
         columns={
             "M0": "M_0",
@@ -563,6 +575,9 @@ def select_ephemerides(df, query):
     query["query_time_wrt_clock_reference_time_s"] = (
         query["query_time_isagpst"] - query["clock_reference_time_isagpst"]
     ).apply(helpers.timedelta_2_seconds)
+    query["ephemeris_valid"] = (query["query_time_isagpst"] < query["validity_end"]) & (
+        query["query_time_isagpst"] > query["validity_start"]
+    )
     return query
 
 
@@ -593,6 +608,7 @@ def compute_parallel(rinex_nav_file_path, per_signal_query):
 
 
 def compute(rinex_nav_file_path, per_signal_query):
+    query_columns = per_signal_query.columns
     # per_signal_query is a pd.DataFrame with the following columns
     #   - time_of_reception_in_receiver_time
     #   - observation_value
@@ -657,6 +673,12 @@ def compute(rinex_nav_file_path, per_signal_query):
     if "signal" in per_signal_query.columns:
         columns_to_keep = ["signal", "sat_code_bias_m"] + columns_to_keep
     columns_to_keep.append("frequency_slot")
+    computed_columns_to_keep = [
+        col for col in columns_to_keep if col not in query_columns
+    ]
+    per_signal_query.loc[
+        ~per_signal_query.ephemeris_valid, computed_columns_to_keep
+    ] = np.nan
     per_signal_query = per_signal_query[columns_to_keep].reset_index(drop=True)
     return per_signal_query
 
