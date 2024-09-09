@@ -38,11 +38,14 @@ def test_compare_to_georinex():
         / "TLSE00FRA_R_20220010000_01D_30S_MO.rnx_slice_0.24h.rnx.gz"
     )
     repair_with_gfzrnx(file)
-    prx_output = (
-        prx_obs_parse(file)
-        .sort_values(by=["time", "sv", "obs_type"])
-        .reset_index(drop=True)
-    )
+    prx_output = prx_obs_parse(file).sort_values(by=["time", "sv", "obs_type"])
+    # remove lli from prx outputs
+    drop_lli = [
+        obs_type for obs_type in prx_output.obs_type.unique() if "lli" in obs_type
+    ]
+    prx_output = prx_output.loc[~prx_output.obs_type.isin(drop_lli), :]
+    prx_output = prx_output.reset_index(drop=True)
+
     georinex_output = (
         obs_dataset_to_obs_dataframe(georinex.load(file))
         .sort_values(by=["time", "sv", "obs_type"])
