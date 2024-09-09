@@ -106,7 +106,6 @@ def write_csv_file(
                 "tracking_id",
             ]
         ]
-        # obs[f"{obs_type}_obs_{type_2_unit[obs_type]}"] = obs.observation_value
         obs = obs.rename(
             columns={"observation_value": f"{obs_type}_obs_{type_2_unit[obs_type]}"}
         )
@@ -127,13 +126,6 @@ def write_csv_file(
                 how="left",
             )
             obs = obs.rename(columns={"observation_value": "LLI"})
-            obs["LLI"] = obs["LLI"].astype(int)
-
-        # obs = obs.drop(
-        #     columns=[
-        #         "observation_value",
-        #     ]
-        # )
         records = records.merge(
             obs,
             on=["satellite", "time_of_reception_in_receiver_time", "tracking_id"],

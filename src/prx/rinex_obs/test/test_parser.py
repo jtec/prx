@@ -67,18 +67,17 @@ def test_compare_to_georinex_with_lli(input_for_test_tlse):
         .reset_index(drop=True)
     )
     # remove zero lli rows
-    types_lli = set(
-        type_lli for type_lli in prx_output.obs_type.unique() if "lli" in type_lli
-    )
-    zero_lli = prx_output.obs_type.isin(types_lli) & (prx_output.obs_value == 0)
+    prx_lli_list = set([type for type in prx_output.obs_type.unique() if "lli" in type])
+    zero_lli = prx_output.obs_type.isin(prx_lli_list) & (prx_output.obs_value == 0)
     prx_output = prx_output.loc[~zero_lli, :]
 
+    # use the useindicators=True arg to parse lli and ssi indicators
     georinex_output = (
         obs_dataset_to_obs_dataframe(georinex.load(file, useindicators=True))
         .sort_values(by=["time", "sv", "obs_type"])
         .reset_index(drop=True)
     )
-
+    # remove ssi rows from georinex output
     drop_ssi = set(
         [
             obs_type
@@ -87,15 +86,15 @@ def test_compare_to_georinex_with_lli(input_for_test_tlse):
         ]
     )
     georinex_output = georinex_output.loc[~georinex_output.obs_type.isin(drop_ssi), :]
-
-    print("prx lli list:")
-    print([type for type in prx_output.obs_type.unique() if len(type) > 3])
-    print("georinex lli list:")
-    print([type for type in georinex_output.obs_type.unique() if len(type) > 3])
-
     geo_lli_list = set(
         [type for type in georinex_output.obs_type.unique() if "lli" in type]
     )
+    print("prx lli list:")
+    print(prx_lli_list)
+    print("georinex lli list:")
+    print(geo_lli_list)
+
+    # assert that lli flags are the same (same epoch, same prn, same signal) for each signal type
     for lli in geo_lli_list:
         geo_lli = georinex_output.loc[georinex_output.obs_type == lli, :].reset_index(
             drop=True
@@ -105,7 +104,6 @@ def test_compare_to_georinex_with_lli(input_for_test_tlse):
 
     # Negative assertion: I suspect a bug in georinex, that is not parsing all lli. If both prx and georinex parses
     # the same lli, this assertion will fail and we may want to update this test to remove it.
-    prx_lli_list = set([type for type in prx_output.obs_type.unique() if "lli" in type])
     assert (
         geo_lli_list != prx_lli_list
     ), "prx and georinex parse the same LLI! If georinex has been updated, you may want to remove this asssertion!!"
