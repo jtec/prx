@@ -1,7 +1,6 @@
 import json
 from pathlib import Path
 
-import numba
 import numpy as np
 import pandas as pd
 import georinex as gr
@@ -260,7 +259,6 @@ def compute_spp_base_obs(df_rover, p_base):
     return df_base
 
 
-@numba.jit(nopython=True, parallel=True)
 def solve_lsq(df):
     pass
 
@@ -301,7 +299,19 @@ def trajectory_pvt_lsq(
         df[["sat_pos_x_m_base", "sat_pos_y_m_base", "sat_pos_z_m_base"]].to_numpy()
         - p_base.T
     ) / df["broadcast_range_base"].to_numpy().reshape(-1, 1)
+    df = df.rename(columns={"constellation_rover": "constellation"})
+    df = df[
+        [
+            "time_of_reception_rounded",
+            "u_x",
+            "u_y",
+            "u_z",
+            "C_obs_m_sd",
+            "constellation",
+        ]
+    ]
 
+    epochs = list(df.groupby("time_of_reception_rounded"))[0]
     solve_lsq(
         df[["time_of_reception_in_receiver_time_rover", "u_x", "u_y", "u_z"]].to_numpy()
     )

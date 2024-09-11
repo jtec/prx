@@ -91,30 +91,14 @@ def dynamic_dataset():
         # test run having crashed:
         shutil.rmtree(test_directory)
     os.makedirs(test_directory)
-    datasets_directory = Path(__file__).parent / "datasets"
+    dataset_directory = (
+        Path(__file__).parent / "datasets" / "UrbanNav" / "Tokyo_Data" / "Odaiba"
+    )
     files = {
-        "rover_obs": (
-            datasets_directory
-            / "UrbanNav"
-            / "Tokyo_Data"
-            / "Odaiba"
-            / "rover_trimble.obs"
-        ),
-        "ephemerides_file": datasets_directory
-        / "UrbanNav"
-        / "Tokyo_Data"
-        / "Odaiba"
-        / "base.nav",
-        "base_obs": datasets_directory
-        / "UrbanNav"
-        / "Tokyo_Data"
-        / "Odaiba"
-        / "base_trimble.obs",
-        "ground_truth": datasets_directory
-        / "UrbanNav"
-        / "Tokyo_Data"
-        / "Odaiba"
-        / "reference.csv",
+        "rover_obs": (dataset_directory / "rover_trimble.obs"),
+        "ephemerides_file": dataset_directory / "base.nav",
+        "base_obs": dataset_directory / "base_trimble.obs",
+        "ground_truth": dataset_directory / "reference.csv",
     }
     for file in files.values():
         shutil.copy(
