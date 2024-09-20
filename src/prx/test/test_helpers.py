@@ -144,6 +144,72 @@ def test_ecef_to_geodetic():
     assert np.abs(expected_geodetic[2] - computed_geodetic[2]) < tolerance_alt
 
 
+def test_geodetic_2_ecef():
+    tolerance_ecef = 1e-3
+
+    expected_ecef = [6378137.0, 0.0, 0.0]
+    expected_geodetic = [0.0, 0.0, 0.0]
+    computed_ecef = helpers.geodetic_2_ecef(
+        expected_geodetic[0], expected_geodetic[1], expected_geodetic[2]
+    )
+    assert (
+        np.linalg.norm(np.array(expected_ecef) - np.array(computed_ecef))
+        < tolerance_ecef
+    )
+
+    expected_ecef = [0.0, 6378137.0, 0.0]
+    expected_geodetic = np.deg2rad([0.0, 90, 0.0])
+    computed_ecef = helpers.geodetic_2_ecef(
+        expected_geodetic[0], expected_geodetic[1], expected_geodetic[2]
+    )
+    assert (
+        np.linalg.norm(np.array(expected_ecef) - np.array(computed_ecef))
+        < tolerance_ecef
+    )
+
+    expected_ecef = [4624518, 116590, 4376497]  # Toulouse, France
+    expected_geodetic = [
+        np.deg2rad(43.604698100243851),
+        np.deg2rad(1.444193786348353),
+        151.9032,
+    ]
+    computed_ecef = helpers.geodetic_2_ecef(
+        expected_geodetic[0], expected_geodetic[1], expected_geodetic[2]
+    )
+    assert (
+        np.linalg.norm(np.array(expected_ecef) - np.array(computed_ecef))
+        < tolerance_ecef
+    )
+
+    expected_ecef = [
+        -4.646050004314417e06,
+        2.553206120634516e06,
+        -3.534374202256767e06,
+    ]  # Sidney
+    expected_geodetic = [np.deg2rad(-33.8688197), np.deg2rad(151.2092955), 0]
+    computed_ecef = helpers.geodetic_2_ecef(
+        expected_geodetic[0], expected_geodetic[1], expected_geodetic[2]
+    )
+    assert (
+        np.linalg.norm(np.array(expected_ecef) - np.array(computed_ecef))
+        < tolerance_ecef
+    )
+
+    expected_ecef = [
+        1.362205559782862e06,
+        -3.423584689115747e06,
+        -5.188704112366104e06,
+    ]  # Ushuaia, Argentina
+    expected_geodetic = [np.deg2rad(-54.8019121), np.deg2rad(-68.3029511), 0]
+    computed_ecef = helpers.geodetic_2_ecef(
+        expected_geodetic[0], expected_geodetic[1], expected_geodetic[2]
+    )
+    assert (
+        np.linalg.norm(np.array(expected_ecef) - np.array(computed_ecef))
+        < tolerance_ecef
+    )
+
+
 def test_satellite_elevation_and_azimuth():
     tolerance = np.deg2rad(1e-3)
 
