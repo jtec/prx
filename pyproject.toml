@@ -11,7 +11,7 @@ readme = "README.md"
 
 [tool.poetry.dependencies]
 python = ">=3.10,<3.13"
-pandas = "^2.2.0"
+pandas = "^2.2.3"
 numpy = "^2.0"
 joblib = "^1.3.2"
 imohash = "^1.0.5"
