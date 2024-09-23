@@ -59,7 +59,6 @@ def generate_data():
     for case in cases:
         for parser in [
             ("prx", prx_obs_parse),
-            ("georinex", georinex.load),
         ]:
             print(f"Processing {case}")
             helpers.disk_cache.clear()
