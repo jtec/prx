@@ -15,16 +15,16 @@ jobs:
       matrix:
         python-version: [ "3.12.1" ]
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v4
         with:
           python-version: ${{ matrix.python-version }}
-      - uses: abatilo/actions-poetry@v2.0.0
+      - uses: abatilo/actions-poetry@v3.0.0
         with:
           poetry-version: 1.7.1
       - name: Cache Poetry
-        uses: actions/cache@v2
+        uses: actions/cache@v4
         with:
           path: |
             ~/.local
@@ -46,16 +46,16 @@ jobs:
       matrix:
         python-version: [ "3.12.1" ]
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v4
         with:
           python-version: ${{ matrix.python-version }}
-      - uses: abatilo/actions-poetry@v2.0.0
+      - uses: abatilo/actions-poetry@v3.0.0
         with:
           poetry-version: 1.7.1
       - name: Cache Poetry
-        uses: actions/cache@v2
+        uses: actions/cache@v4
         with:
           path: |
             ~/.local
@@ -73,16 +73,16 @@ jobs:
       matrix:
         python-version: [ "3.12.1" ]
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v4
         with:
           python-version: ${{ matrix.python-version }}
-      - uses: abatilo/actions-poetry@v2.0.0
+      - uses: abatilo/actions-poetry@v3.0.0
         with:
           poetry-version: 1.7.1
       - name: Cache Poetry
-        uses: actions/cache@v2
+        uses: actions/cache@v4
         with:
           path: |
             ~/.local
