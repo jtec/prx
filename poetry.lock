@@ -524,13 +524,13 @@ files = [
 
 [[package]]
 name = "imohash"
-version = "1.0.5"
+version = "1.1.0"
 description = "Fast hashing for large files"
 optional = false
 python-versions = "*"
 files = [
-    {file = "imohash-1.0.5-py2.py3-none-any.whl", hash = "sha256:d37b3841281d125d3f35a41ce17490839e39a334e57be17cbe742a4203fc42a1"},
-    {file = "imohash-1.0.5.tar.gz", hash = "sha256:d5dd87468464fe0ad08f0ac952a54502051b911fbbc2b91066edc0533e0df637"},
+    {file = "imohash-1.1.0-py2.py3-none-any.whl", hash = "sha256:e93d70e5cbd7a4356df6289a0f3a5b44cded86d7ce6c1566bd215cebfb3e332a"},
+    {file = "imohash-1.1.0.tar.gz", hash = "sha256:087a608e88021b13967994ed2888d6f685943717f52afd16bb7f85105184ed6b"},
 ]
 
 [package.dependencies]
@@ -1810,4 +1810,4 @@ viz = ["matplotlib", "nc-time-axis", "seaborn"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.10,<3.13"
-content-hash = "56785d597fb78bba074bd5a2b0b4133da8b775bf6a53ee5281e59fa84e31ada6"
+content-hash = "a054343effcc018279901d2253e8843483745bc6d80194f12e921fb07afb72c3"

@@ -14,7 +14,7 @@ python = ">=3.10,<3.13"
 pandas = "^2.2.0"
 numpy = "^2.1"
 joblib = "^1.3.2"
-imohash = "^1.0.5"
+imohash = "^1.1.0"
 georinex = { git = "https://github.com/geospace-code/georinex.git", rev = "95ef1d8e7150f998a1b5a429090cadb429128648" }
 flake8 = "^7.1.1"
 dotmap = "^1.3.30"
