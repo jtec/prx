@@ -293,6 +293,7 @@ def test_csv_column_names(input_for_test_tlse):
     # Expected CSV column names
     expected_column_names = {
         "time_of_reception_in_receiver_time",
+        "time_of_emission_isagpst",
         "sat_clock_offset_m",
         "sat_clock_drift_mps",
         "sat_pos_x_m",

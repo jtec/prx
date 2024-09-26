@@ -120,7 +120,6 @@ def write_csv_file(
     records = records.drop(
         columns=[
             "satellite",
-            "time_of_emission_isagpst",
         ]
     )
     records = records.sort_values(
