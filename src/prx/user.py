@@ -263,13 +263,7 @@ def solve_lsq(df):
     pass
 
 
-def trajectory_pvt_lsq(
-    df_rover,
-    p_base,
-    df_base=None,
-):
-    if df_base is None:
-        df_base = compute_spp_base_obs(df_rover, p_base)
+def merge_rover_base(df_rover, df_base, p_base):
     for _df in [df_rover, df_base]:
         _df["time_of_reception_rounded"] = (
             _df.time_of_reception_in_receiver_time.dt.round("50ms")
@@ -310,8 +304,17 @@ def trajectory_pvt_lsq(
             "constellation",
         ]
     ]
+    return df
 
-    epochs = list(df.groupby("time_of_reception_rounded"))[0]
+
+def trajectory_pvt_lsq(
+    df_rover,
+    p_base,
+    df_base=None,
+):
+    if df_base is None:
+        df_base = compute_spp_base_obs(df_rover, p_base)
+    df = merge_rover_base(df_rover, df_base)
     solve_lsq(
         df[["time_of_reception_in_receiver_time_rover", "u_x", "u_y", "u_z"]].to_numpy()
     )
