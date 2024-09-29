@@ -26,7 +26,6 @@ def get_obs_types(header):
     return {content["constellation"]: content for content in types}
 
 
-# @profile
 def parse(file_path):
     df = pd.read_csv(file_path, sep="|", header=None)
     df.columns = ["lines"]
