@@ -66,8 +66,9 @@ def carrier_frequencies_hz():
         cf["R"]["L1"][frequency_slot] = (1602 + frequency_slot * 9 / 16) * cHzPerMhz
         cf["R"]["L2"][frequency_slot] = (1246 + frequency_slot * 7 / 16) * cHzPerMhz
     # Glonass CDMA signals
-    cf["R"]["L4"] = {int(1): 1600.995 * cHzPerMhz}
     cf["R"]["L3"] = {int(1): 1202.025 * cHzPerMhz}
+    cf["R"]["L4"] = {int(1): 1600.995 * cHzPerMhz}
+    cf["R"]["L6"] = {int(1): 1248.060 * cHzPerMhz}
     # Galileo
     cf["E"]["L1"] = {int(1): 1575.42 * cHzPerMhz}
     cf["E"]["L5"] = {int(1): 1176.45 * cHzPerMhz}
