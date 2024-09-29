@@ -9,6 +9,7 @@ import numpy as np
 import git
 
 from prx import atmospheric_corrections as atmo
+from prx.constants import carrier_frequencies_hz
 from prx.helpers import parse_rinex_file
 from prx.rinex_nav import nav_file_discovery
 from prx import constants, helpers, converters, user
@@ -405,25 +406,30 @@ def build_records(
         on=["satellite", "observation_type", "time_of_emission_isagpst"],
         how="left",
     )
+    # GLONASS satellites with both FDMA and CDMA signals have a frequency slot for FDMA signals,
+    # for CDMA signals we use the common carrier frequency of those signals.
+    glo_cdma = flat_obs[
+        (flat_obs.satellite.str[0] == "R")
+        & (flat_obs["observation_type"].str[1].astype(int) > 2)
+    ]
+    flat_obs.loc[glo_cdma.index, "frequency_slot"] = int(1)
 
-    carrier_freqs = constants.carrier_frequencies_hz()
+    def assign_carrier_frequencies(flat_obs):
+        freq_dict = pd.json_normalize(carrier_frequencies_hz(), sep="_").to_dict(
+            orient="records"
+        )[0]
+        assignable = flat_obs.frequency_slot.notna()
+        keys = (
+            flat_obs.satellite[assignable].str[0]
+            + "_L"
+            + flat_obs["observation_type"][assignable].str[1]
+            + "_"
+            + flat_obs.frequency_slot[assignable].astype(int).astype(str)
+        )
+        flat_obs.loc[:, "carrier_frequency_hz"] = keys.map(freq_dict)
+        return flat_obs
 
-    def signal_2_carrier_frequency(row):
-        constellation = row.satellite[0]
-        frequency = "L" + row.observation_type[1]
-        frequency_slot = row["frequency_slot"]
-        if np.isnan(row["frequency_slot"]):
-            return np.nan
-        # GLONASS satellites with both FDMA and CDMA signals have a frequency slot for FDMA signals,
-        # for CDMA signals we use the common carrier frequency of those signals
-        if len(carrier_freqs[constellation][frequency]) == 1:
-            return carrier_freqs[constellation][frequency][1]
-        else:
-            return carrier_freqs[constellation][frequency][frequency_slot]
-
-    flat_obs.loc[:, "carrier_frequency_hz"] = flat_obs.apply(
-        signal_2_carrier_frequency, axis=1
-    )
+    flat_obs = assign_carrier_frequencies(flat_obs)
     # create a dictionary containing the headers of the different NAV files.
     # The keys are the "YYYYDDD" (year and day of year) and are located at
     # [12:19] of the file name using RINEX naming convention
@@ -483,7 +489,7 @@ def build_records(
             flat_obs.loc[
                 mask,
                 "iono_delay_m",
-            ] = 0
+            ] = np.nan
 
     return flat_obs
 
