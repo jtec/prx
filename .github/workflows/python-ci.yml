@@ -1,24 +1,36 @@
 name: Python package
 
-on: [ push ]
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+    tags:
+      - "[0-9]+.[0-9]+.[0-9]+*"
+      - "v[0-9]+.[0-9]+.[0-9]+*"
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+  
 jobs:
-  linux-ci:
-    runs-on: ubuntu-latest
+  ci:
+    runs-on: ${{ matrix.os }}
     strategy:
       matrix:
+        os: [ ubuntu-latest, windows-latest, macos-latest ]
         python-version: [ "3.12.1" ]
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v4
         with:
           python-version: ${{ matrix.python-version }}
-      - uses: abatilo/actions-poetry@v2.0.0
+      - uses: abatilo/actions-poetry@v3.0.0
         with:
           poetry-version: 1.7.1
       - name: Cache Poetry
-        uses: actions/cache@v2
+        uses: actions/cache@v4
         with:
           path: |
             ~/.local
@@ -28,63 +40,11 @@ jobs:
         run:
           poetry install
       - name: Run ruff
+        if : ${{ matrix.os == 'ubuntu-latest' }}
         run: |
           poetry run ruff check --exit-non-zero-on-fix
           poetry run ruff format --check
       - name: Test with pytest
         run: |
           poetry run pytest -n auto --dist=loadfile --durations=10
-  windows-ci:
-    runs-on: windows-latest
-    strategy:
-      matrix:
-        python-version: [ "3.12.1" ]
-    steps:
-      - uses: actions/checkout@v3
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v4
-        with:
-          python-version: ${{ matrix.python-version }}
-      - uses: abatilo/actions-poetry@v2.0.0
-        with:
-          poetry-version: 1.7.1
-      - name: Cache Poetry
-        uses: actions/cache@v2
-        with:
-          path: |
-            ~/.local
-            ~/.cache/pypoetry
-          key: poetry-${{ runner.os }}-${{ hashFiles('**/poetry.lock') }}
-      - name: Create virtual environment with poetry
-        run:
-          poetry install
-      - name: Test with pytest
-        run: |
-          poetry run pytest -n auto --dist=loadfile --durations=10
-  macos-ci:
-    runs-on: macos-latest
-    strategy:
-      matrix:
-        python-version: [ "3.12.1" ]
-    steps:
-      - uses: actions/checkout@v3
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v4
-        with:
-          python-version: ${{ matrix.python-version }}
-      - uses: abatilo/actions-poetry@v2.0.0
-        with:
-          poetry-version: 1.7.1
-      - name: Cache Poetry
-        uses: actions/cache@v2
-        with:
-          path: |
-            ~/.local
-            ~/.cache/pypoetry
-          key: poetry-${{ runner.os }}-${{ hashFiles('**/poetry.lock') }}
-      - name: Create virtual environment with poetry
-        run:
-          poetry install
-      - name: Test with pytest
-        run: |
-          poetry run pytest -n auto --dist=loadfile --durations=10
+ 
