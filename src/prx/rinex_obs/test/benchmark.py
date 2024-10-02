@@ -25,8 +25,6 @@ def generate_data():
     )
     sweep_dir = base_file.parent / "sweep"
     results_file = sweep_dir / "benchmark.csv"
-    if results_file.exists():
-        return pd.read_csv(results_file)
     sweep_dir.mkdir(exist_ok=True)
     times = georinex.obstime3(base_file)
     header = georinex.rinexheader(base_file)
@@ -61,7 +59,6 @@ def generate_data():
     for case in cases:
         for parser in [
             ("prx", prx_obs_parse),
-            ("georinex", helpers.parse_rinex_obs_file),
         ]:
             print(f"Processing {case}")
             helpers.disk_cache.clear()
@@ -78,6 +75,7 @@ def generate_data():
             )
     df = pd.DataFrame(cases)
     df.to_csv(results_file, index=False)
+    return df
 
 
 if __name__ == "__main__":
