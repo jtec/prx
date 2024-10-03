@@ -17,8 +17,6 @@ def generate_query(n_epochs=1):
     for _, constellation_df in df.groupby("constellation"):
         constellation_sats = constellation_df["sv"].unique()
         sats.extend(constellation_sats[0 : min(10, len(constellation_sats))])
-    # Only Kepler orbits supported:
-    sats = [sat for sat in sats if sat[0] not in ["S", "R"]]
     query_template = pd.DataFrame(
         {
             "sv": sats,
@@ -49,7 +47,7 @@ if __name__ == "__main__":
     )
     p = cProfile.Profile()
     # Warm up cache: we are mainly interested in prx code's performance, not
-    # the RINEX parser's, whose ouput swill be cached this way:
+    # the RINEX parser's, whose output will be cached this way:
     result = benchmark(query, rinex_nav_file)
     p.enable()
     benchmark(query, rinex_nav_file)
