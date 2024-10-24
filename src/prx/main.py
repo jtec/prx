@@ -485,7 +485,7 @@ def build_records(
             flat_obs.loc[
                 mask,
                 "iono_delay_m",
-            ] = -atmo.compute_klobuchar_l1_correction(
+            ] = atmo.compute_klobuchar_l1_correction(
                 time_of_emission_weeksecond_isagpst,
                 nav_header_dict[f"{year:03d}" + f"{doy:03d}"]["IONOSPHERIC CORR"][
                     "GPSA"
