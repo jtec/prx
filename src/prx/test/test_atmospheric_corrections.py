@@ -262,7 +262,9 @@ def test_klobuchar_correction():
     )
 
     # compute iono correction from Klobuchar model
-    iono_corr = atmo.compute_l1_iono_delay_klobuchar(tow_s, gps_a, gps_b, el_s_rad, az_s_rad, lat_u_rad, lon_u_rad)
+    iono_corr = atmo.compute_l1_iono_delay_klobuchar(
+        tow_s, gps_a, gps_b, el_s_rad, az_s_rad, lat_u_rad, lon_u_rad
+    )
 
     assert np.max(np.fabs(iono_corr - iono_corr_magnitude)) < threshold_iono_error_m
 
