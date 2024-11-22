@@ -422,6 +422,36 @@ def test_group_delays(input_for_test):
     assert not rinex_sat_states["sat_code_bias_m"].isna().any()
 
 
+def test_group_delays_over_long_period(input_for_test):
+    """
+    Tests the computation of group delay over a long period, and check if there is a sudden jumps across two epochs
+    """
+    rinex_nav_file = converters.compressed_to_uncompressed(
+        input_for_test["rinex_nav_file"]
+    )
+    query_time_isagpst = pd.date_range(
+        "2022-01-01T00:00:00.000000000", "2022-01-01T12:00:00.000000000", freq="15min"
+    )
+    query = pd.concat(
+        [
+            pd.DataFrame(
+                {
+                    "sv": "G" + str(x).zfill(2),
+                    "signal": "C1C",
+                    "query_time_isagpst": query_time_isagpst,
+                }
+            )
+            for x in range(32)
+        ]
+    )
+    rinex_sat_states = rinex_nav_evaluate.compute(rinex_nav_file, query)
+    # Check that group delays are computed for all signals
+    assert not rinex_sat_states["sat_code_bias_m"].isna().any()
+    # Check that the group delays are not affected by a large jump
+    jump_tol = 1e-1  # this value lacks justification
+    assert rinex_sat_states.groupby("sv").sat_code_bias_m.diff().abs().max() < jump_tol
+
+
 def max_abs_diff_smaller_than(a, b, threshold):
     if isinstance(a, pd.Series):
         a = a.to_numpy()

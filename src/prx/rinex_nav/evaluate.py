@@ -711,8 +711,10 @@ def compute_total_group_delays(
     )
 
     def compute_tgds(df):
+        assert len(df.sv.unique()) == 1
         assert len(df.constellation.unique()) == 1
         assert len(df.signal.unique()) == 1
+
         df["gamma"] = np.nan
         df["tgd"] = np.nan
 
@@ -759,7 +761,7 @@ def compute_total_group_delays(
         df["sat_code_bias_m"] = df.tgd * df.gamma * df.speedOfLightIcd_mps
         return df
 
-    query = query.groupby(["signal", "constellation"]).apply(compute_tgds)
+    query = query.groupby(["sv", "signal", "constellation"]).apply(compute_tgds)
     return query
 
 
