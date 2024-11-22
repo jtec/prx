@@ -386,12 +386,9 @@ def build_records(
         __,
         __,
         __,
-    ) = atmo.compute_unb3m_correction(
-        latitude_user_rad * np.ones(days_of_year.shape),
-        height_user_m * np.ones(days_of_year.shape),
-        days_of_year,
-        sat_states.elevation_rad.to_numpy(),
-    )
+    ) = atmo.compute_tropo_delay_unb3m(latitude_user_rad * np.ones(days_of_year.shape),
+                                       height_user_m * np.ones(days_of_year.shape), days_of_year,
+                                       sat_states.elevation_rad.to_numpy())
     sat_states["tropo_delay_m"] = tropo_delay_m
 
     # Merge in all sat states that are not signal-specific, i.e. can be copied into
@@ -485,19 +482,15 @@ def build_records(
             flat_obs.loc[
                 mask,
                 "iono_delay_m",
-            ] = atmo.compute_klobuchar_l1_correction(
-                time_of_emission_weeksecond_isagpst,
-                nav_header_dict[f"{year:03d}" + f"{doy:03d}"]["IONOSPHERIC CORR"][
-                    "GPSA"
-                ],
-                nav_header_dict[f"{year:03d}" + f"{doy:03d}"]["IONOSPHERIC CORR"][
-                    "GPSB"
-                ],
-                flat_obs.loc[mask].elevation_rad,
-                flat_obs.loc[mask].azimuth_rad,
-                latitude_user_rad,
-                longitude_user_rad,
-            ) * (
+            ] = atmo.compute_l1_iono_delay_klobuchar(time_of_emission_weeksecond_isagpst,
+                                                     nav_header_dict[f"{year:03d}" + f"{doy:03d}"]["IONOSPHERIC CORR"][
+                                                         "GPSA"
+                                                     ],
+                                                     nav_header_dict[f"{year:03d}" + f"{doy:03d}"]["IONOSPHERIC CORR"][
+                                                                     "GPSB"
+                                                                 ], flat_obs.loc[mask].elevation_rad,
+                                                     flat_obs.loc[mask].azimuth_rad, latitude_user_rad,
+                                                     longitude_user_rad) * (
                 constants.carrier_frequencies_hz()["G"]["L1"][1] ** 2
                 / flat_obs.loc[mask].carrier_frequency_hz ** 2
             )
