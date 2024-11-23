@@ -541,6 +541,37 @@ def test_gps_group_delay(input_for_test):
     assert np.all(np.isnan(tgds[tgds.signal == "C5X"]["sat_code_bias_m"].to_numpy()))
 
 
+def test_gps_group_delay_multi_prn(input_for_test):
+    """
+    Computes the total group delay (TGD) for GPS from a RNX3 NAV file containing the ephemerides pasted below.
+    The RINEX navigation message field containing TGD is highlighted between **
+
+    This tests also validates
+    - the choice of the right ephemeris for the correct time: 3 epochs are used
+    - the scaling of the TGD with the carrier frequency: the 3 observations types considered in IS-GPS-200N are tested (
+    C1C, C1P, C2P) and 1 not considered shall return NaN (C1Y)
+
+    """
+    rinex_3_navigation_file = converters.anything_to_rinex_3(
+        input_for_test["rinex_nav_file"]
+    )
+    # Retrieve total group delays for 2 different SVs
+    svs = ["G02", "G03"]
+    time = pd.Timestamp("2022-01-01T00:00:00.000000000")
+    query = pd.concat(
+        [
+            pd.DataFrame([{"sv": sv, "signal": "C1C", "query_time_isagpst": time}])
+            for sv in svs
+        ]
+    )
+    tgds = rinex_nav_evaluate.compute(rinex_3_navigation_file, query)
+    assert np.all(
+        tgds.sat_code_bias_m.values
+        == constants.cGpsSpeedOfLight_mps
+        * np.array([-1.769512891770e-08, 1.862645149231e-09])
+    )
+
+
 def test_gal_group_delay(input_for_test):
     """
     Note that both ephemerides have the same Toe (reference time), but one is I/NAV, the
