@@ -51,11 +51,11 @@ def test_get_klobuchar_parameters_from_rinex3(rnx3_input_for_test):
     assert (gps_b == gps_b_expected).all()
 
 
-def test_klobuchar_correction():
+def test_klobuchar_delay():
     threshold_iono_error_m = 0.001
 
     # expected iono correction
-    iono_corr_magnitude = np.array(
+    iono_delay_magnitude = np.array(
         [
             [
                 3.11827805725116,
@@ -262,11 +262,11 @@ def test_klobuchar_correction():
     )
 
     # compute iono correction from Klobuchar model
-    iono_corr = atmo.compute_l1_iono_delay_klobuchar(
+    iono_delay = atmo.compute_l1_iono_delay_klobuchar(
         tow_s, gps_a, gps_b, el_s_rad, az_s_rad, lat_u_rad, lon_u_rad
     )
-
-    assert np.max(np.fabs(iono_corr - iono_corr_magnitude)) < threshold_iono_error_m
+    assert (iono_delay > 0).all()
+    assert np.max(np.fabs(iono_delay - iono_delay_magnitude)) < threshold_iono_error_m
 
 
 def test_unb3m_corrections():
