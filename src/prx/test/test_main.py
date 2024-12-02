@@ -223,6 +223,8 @@ def run_rinex_through_prx(rinex_obs_file: Path):
 
 def test_spp_lsq_nist(input_for_test_nist):
     df, metadata = run_rinex_through_prx(input_for_test_nist)
+    assert (df.iono_delay_m > 0).all()
+    assert (df.tropo_delay_m > 0).all()
     df["sv"] = df["constellation"].astype(str) + df["prn"].astype(str)
     df_first_epoch = df[
         df.time_of_reception_in_receiver_time
