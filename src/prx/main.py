@@ -386,7 +386,7 @@ def build_records(
         __,
         __,
         __,
-    ) = atmo.compute_unb3m_correction(
+    ) = atmo.compute_tropo_delay_unb3m(
         latitude_user_rad * np.ones(days_of_year.shape),
         height_user_m * np.ones(days_of_year.shape),
         days_of_year,
@@ -485,7 +485,7 @@ def build_records(
             flat_obs.loc[
                 mask,
                 "iono_delay_m",
-            ] = -atmo.compute_klobuchar_l1_correction(
+            ] = atmo.compute_l1_iono_delay_klobuchar(
                 time_of_emission_weeksecond_isagpst,
                 nav_header_dict[f"{year:03d}" + f"{doy:03d}"]["IONOSPHERIC CORR"][
                     "GPSA"
