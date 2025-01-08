@@ -4,7 +4,7 @@ from prx.helpers import deg_2_rad
 import prx.constants as constants
 
 
-def compute_klobuchar_l1_correction(
+def compute_l1_iono_delay_klobuchar(
     tow_s, gps_a, gps_b, elevation_rad, azimuth_rad, lat_user_rad, lon_user_rad
 ):
     """compute the ionospheric corrections using the Klobuchar model
@@ -80,7 +80,7 @@ def compute_klobuchar_l1_correction(
     return iono_correction_l1_m
 
 
-def compute_unb3m_correction(
+def compute_tropo_delay_unb3m(
     latitude_user_rad, height_user_m, day_of_year, elevation_sat_rad
 ):
     # This function is the python version of the matlab function UNB3M.m provided in the UNB3m_pack [1]

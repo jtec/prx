@@ -96,7 +96,10 @@ def write_csv_file(
     records = records.drop(columns=["observation_value", "observation_type"])
     type_2_unit = {"D": "hz", "L": "cycles", "S": "dBHz", "C": "m"}
     for obs_type in ["D", "L", "S"]:
-        obs = flat_records.loc[flat_records.observation_type.str.startswith(obs_type)][
+        obs = flat_records.loc[
+            (flat_records.observation_type.str.startswith(obs_type))
+            & (flat_records.observation_type.str.len() == 3)
+        ][
             [
                 "satellite",
                 "time_of_reception_in_receiver_time",
@@ -104,12 +107,26 @@ def write_csv_file(
                 "tracking_id",
             ]
         ]
-        obs[f"{obs_type}_obs_{type_2_unit[obs_type]}"] = obs.observation_value
-        obs = obs.drop(
-            columns=[
-                "observation_value",
-            ]
+        obs = obs.rename(
+            columns={"observation_value": f"{obs_type}_obs_{type_2_unit[obs_type]}"}
         )
+        if obs_type == "L":
+            # add LLI as new column
+            obs_lli = flat_records.loc[
+                flat_records.observation_type.str.contains("lli"),
+                [
+                    "satellite",
+                    "time_of_reception_in_receiver_time",
+                    "observation_value",
+                    "tracking_id",
+                ],
+            ]
+            obs = obs.merge(
+                obs_lli,
+                on=["satellite", "time_of_reception_in_receiver_time", "tracking_id"],
+                how="left",
+            )
+            obs = obs.rename(columns={"observation_value": "LLI"})
         records = records.merge(
             obs,
             on=["satellite", "time_of_reception_in_receiver_time", "tracking_id"],
@@ -369,7 +386,7 @@ def build_records(
         __,
         __,
         __,
-    ) = atmo.compute_unb3m_correction(
+    ) = atmo.compute_tropo_delay_unb3m(
         latitude_user_rad * np.ones(days_of_year.shape),
         height_user_m * np.ones(days_of_year.shape),
         days_of_year,
@@ -468,7 +485,7 @@ def build_records(
             flat_obs.loc[
                 mask,
                 "iono_delay_m",
-            ] = -atmo.compute_klobuchar_l1_correction(
+            ] = atmo.compute_l1_iono_delay_klobuchar(
                 time_of_emission_weeksecond_isagpst,
                 nav_header_dict[f"{year:03d}" + f"{doy:03d}"]["IONOSPHERIC CORR"][
                     "GPSA"

@@ -152,6 +152,49 @@ def test_prx_function_call_with_csv_output(input_for_test_tlse):
     ).abs().max() < 0.3
 
 
+def test_prx_lli_parsing(input_for_test_tlse):
+    test_file = input_for_test_tlse
+    main.process(observation_file_path=test_file, output_format="csv")
+    expected_prx_file = Path(
+        str(test_file).replace("crx.gz", constants.cPrxCsvFileExtension)
+    )
+    df = pd.read_csv(expected_prx_file, comment="#")
+    # LLI check - CS expected (LLI = 1)
+    assert (
+        df.loc[
+            (df.time_of_reception_in_receiver_time == "2023-01-01 01:00:01.000000")
+            & (df.rnx_obs_identifier == "7D")
+            & (df.constellation == "C")
+            & (df.prn == 30),
+            "LLI",
+        ]
+        == 1
+    ).all()
+    assert (
+        df.loc[
+            (df.time_of_reception_in_receiver_time == "2023-01-01 01:00:07.000000")
+            & (df.rnx_obs_identifier.isin(["2W", "1C"]))
+            & (df.constellation == "G")
+            & (df.prn == 17),
+            "LLI",
+        ]
+        == 1
+    ).all()
+    # LLI check - no CS (LLI = 0)
+    assert (
+        df.loc[
+            (df.time_of_reception_in_receiver_time == "2023-01-01 01:00:07.000000")
+            & (df.rnx_obs_identifier == "2I")
+            & (df.constellation == "C")
+            & (df.prn == 5),
+            "LLI",
+        ]
+        == 0
+    ).all()
+    # LLI check - no phase tracking (L_obs_cycles = NaN and LLI = NaN)
+    assert df.loc[df.L_obs_cycles.isnull(), "LLI"].isnull().all()
+
+
 def test_prx_function_call_for_obs_file_across_two_days(
     input_for_test_with_first_epoch_at_midnight,
 ):
@@ -180,6 +223,8 @@ def run_rinex_through_prx(rinex_obs_file: Path):
 
 def test_spp_lsq_nist(input_for_test_nist):
     df, metadata = run_rinex_through_prx(input_for_test_nist)
+    assert (df.iono_delay_m > 0).all()
+    assert (df.tropo_delay_m > 0).all()
     df["sv"] = df["constellation"].astype(str) + df["prn"].astype(str)
     df_first_epoch = df[
         df.time_of_reception_in_receiver_time

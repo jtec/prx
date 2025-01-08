@@ -72,15 +72,35 @@ def parse(file_path):
     obs["sv"] = df.sv
     obs["constellation"] = df.sv.str[0]
     obs["time"] = df.time
+
+    # retrieve loss of lock indicator
+    lli = (
+        df.records.str.split("|", expand=True)
+        .stack()
+        .str[block_length - 2 : block_length - 1]
+        .str.strip()
+        .replace({"": "0"})
+        .unstack()
+        .astype(int)
+    )
+    lli["constellation"] = df.sv.str[0]
+
     group_dfs = []
     for constellation, group_df in obs.groupby("constellation"):
         group_df.set_index(["time", "constellation", "sv"], inplace=True)
         types = obs_types[constellation]["obs_types"]
         group_df = group_df.iloc[:, : len(types)]
         group_df.columns = types
+        types_lli = [type + "lli" for type in types]
+        group_lli = lli.groupby("constellation").get_group(constellation)
+        group_lli = group_lli.iloc[:, : len(types)]
+        group_lli.columns = types_lli
+        group_lli.set_index(group_df.index, inplace=True)
+        columns_to_drop = [type for type in types_lli if type[0] != "L"]
+        group_lli = group_lli.drop(columns=columns_to_drop)
+        group_df = pd.concat([group_df, group_lli], axis=1)
         group_df = group_df.stack().reset_index(drop=False)
         group_df.columns = ["time", "constellation", "sv", "obs_type", "obs_value"]
-        group_df = group_df.drop(columns=["constellation"])
         group_df = group_df[["time", "sv", "obs_value", "obs_type"]]
         group_dfs.append(group_df)
     result = pd.concat(group_dfs).sort_values(by=["time"]).reset_index(drop=True)
