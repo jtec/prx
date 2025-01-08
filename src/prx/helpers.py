@@ -364,6 +364,19 @@ def compute_satellite_elevation_and_azimuth(sat_pos_ecef, receiver_pos_ecef):
     return elevation_rad, azimuth_rad
 
 
+def geodetic_2_ecef(lat_rad, lon_rad, altitude_m):
+    """Reference:
+    GNSS Data Processing, Vol. I: Fundamentals and Algorithms. Equations (B.1),(B.2),(B.3)
+    """
+    n = constants.cWgs84EarthSemiMajorAxis_m / np.sqrt(
+        1 - constants.cWgs84EarthEccentricity**2 * np.sin(lat_rad) ** 2
+    )
+    x = (n + altitude_m) * np.cos(lat_rad) * np.cos(lon_rad)
+    y = (n + altitude_m) * np.cos(lat_rad) * np.sin(lon_rad)
+    z = ((1 - constants.cWgs84EarthEccentricity**2) * n + altitude_m) * np.sin(lat_rad)
+    return [x, y, z]
+
+
 def ecef_2_geodetic(pos_ecef):
     """Reference:
     GNSS Data Processing, Vol. I: Fundamentals and Algorithms. Equations (B.4),(B.5),(B.6)

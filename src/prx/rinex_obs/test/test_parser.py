@@ -38,17 +38,85 @@ def test_compare_to_georinex():
         / "TLSE00FRA_R_20220010000_01D_30S_MO.rnx_slice_0.24h.rnx.gz"
     )
     repair_with_gfzrnx(file)
-    prx_output = (
-        prx_obs_parse(file)
-        .sort_values(by=["time", "sv", "obs_type"])
-        .reset_index(drop=True)
-    )
+    prx_output = prx_obs_parse(file).sort_values(by=["time", "sv", "obs_type"])
+    # remove lli from prx outputs
+    drop_lli = [
+        obs_type for obs_type in prx_output.obs_type.unique() if "lli" in obs_type
+    ]
+    prx_output = prx_output.loc[~prx_output.obs_type.isin(drop_lli), :]
+    prx_output = prx_output.reset_index(drop=True)
+
     georinex_output = (
         obs_dataset_to_obs_dataframe(georinex.load(file))
         .sort_values(by=["time", "sv", "obs_type"])
         .reset_index(drop=True)
     )
     assert georinex_output.equals(prx_output)
+
+
+def test_compare_to_georinex_with_lli(input_for_test_tlse):
+    file = converters.anything_to_rinex_3(
+        Path(__file__).parent
+        / "datasets"
+        / "TLSE00FRA_R_20220010000_01D_30S_MO.rnx_slice_0.24h.rnx.gz"
+    )
+    repair_with_gfzrnx(file)
+    prx_output = (
+        prx_obs_parse(file)
+        .sort_values(by=["time", "sv", "obs_type"])
+        .reset_index(drop=True)
+    )
+    # remove zero lli rows
+    prx_lli_list = set([type for type in prx_output.obs_type.unique() if "lli" in type])
+    zero_lli = prx_output.obs_type.isin(prx_lli_list) & (prx_output.obs_value == 0)
+    prx_output = prx_output.loc[~zero_lli, :]
+
+    # use the useindicators=True arg to parse lli and ssi indicators
+    georinex_output = (
+        obs_dataset_to_obs_dataframe(georinex.load(file, useindicators=True))
+        .sort_values(by=["time", "sv", "obs_type"])
+        .reset_index(drop=True)
+    )
+    # remove ssi rows from georinex output
+    drop_ssi = set(
+        [
+            obs_type
+            for obs_type in georinex_output.obs_type.unique()
+            if "ssi" in obs_type
+        ]
+    )
+    georinex_output = georinex_output.loc[~georinex_output.obs_type.isin(drop_ssi), :]
+    geo_lli_list = set(
+        [type for type in georinex_output.obs_type.unique() if "lli" in type]
+    )
+    print("prx lli list:")
+    print(prx_lli_list)
+    print("georinex lli list:")
+    print(geo_lli_list)
+
+    # assert that lli flags are the same (same epoch, same prn, same signal) for each signal type
+    for lli in geo_lli_list:
+        geo_lli = georinex_output.loc[georinex_output.obs_type == lli, :].reset_index(
+            drop=True
+        )
+        prx_lli = prx_output.loc[prx_output.obs_type == lli, :].reset_index(drop=True)
+        assert geo_lli.equals(prx_lli)
+
+    # Negative assertion: I suspect a bug in georinex, that is not parsing all lli. If both prx and georinex parses
+    # the same lli, this assertion will fail and we may want to update this test to remove it.
+    assert (
+        geo_lli_list != prx_lli_list
+    ), "prx and georinex parse the same LLI! If georinex has been updated, you may want to remove this asssertion!!"
+    for lli in prx_lli_list:
+        if lli not in geo_lli_list:
+            prx_lli = prx_output.loc[prx_output.obs_type == lli, :].reset_index(
+                drop=True
+            )
+            geo_lli = georinex_output.loc[
+                georinex_output.obs_type == lli, :
+            ].reset_index(drop=True)
+            print(f"prx      has parsed {len(prx_lli)} CSs for obs {lli[0:3]}")
+            print(f"georinex has parsed {len(geo_lli)} CSs for obs {lli[0:3]}")
 
 
 def test_basic_check_on_rinex(input_for_test_tlse):
