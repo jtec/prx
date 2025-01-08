@@ -12,7 +12,7 @@ readme = "README.md"
 [tool.poetry.dependencies]
 python = ">=3.10,<3.13"
 pandas = "^2.2.3"
-numpy = "^2.1"
+numpy = "^2.02"
 joblib = "^1.4.2"
 imohash = "^1.1.0"
 georinex = { git = "https://github.com/geospace-code/georinex.git", rev = "95ef1d8e7150f998a1b5a429090cadb429128648" }
