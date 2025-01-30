@@ -835,7 +835,7 @@ wheels = [
 [[package]]
 name = "prx"
 version = "0.0.1"
-source = { virtual = "." }
+source = { editable = "." }
 dependencies = [
     { name = "astropy" },
     { name = "dotmap" },
