@@ -117,9 +117,9 @@ def timedelta_2_weeks_and_seconds(time_delta: pd.Timedelta):
     if pd.isnull(time_delta):
         return np.nan, np.nan
 
-    assert isinstance(
-        time_delta, pd.Timedelta
-    ), "time_delta must be of type pd.Timedelta"
+    assert isinstance(time_delta, pd.Timedelta), (
+        "time_delta must be of type pd.Timedelta"
+    )
     in_nanoseconds = time_delta / pd.Timedelta(1, "ns")
     weeks = math.floor(in_nanoseconds / constants.cNanoSecondsPerWeek)
     week_nanoseconds = in_nanoseconds - weeks * constants.cNanoSecondsPerWeek
@@ -133,9 +133,9 @@ def week_and_seconds_2_timedelta(weeks, seconds):
 def timedelta_2_seconds(time_delta: pd.Timedelta):
     if pd.isnull(time_delta):
         return np.nan
-    assert isinstance(
-        time_delta, pd.Timedelta
-    ), "time_delta must be of type pd.Timedelta"
+    assert isinstance(time_delta, pd.Timedelta), (
+        "time_delta must be of type pd.Timedelta"
+    )
     integer_seconds = np.float64(round(time_delta.total_seconds()))
     fractional_seconds = (
         np.float64(
@@ -148,9 +148,9 @@ def timedelta_2_seconds(time_delta: pd.Timedelta):
 
 
 def timedelta_2_nanoseconds(time_delta: pd.Timedelta):
-    assert isinstance(
-        time_delta, pd.Timedelta
-    ), "time_delta must be of type pd.Timedelta"
+    assert isinstance(time_delta, pd.Timedelta), (
+        "time_delta must be of type pd.Timedelta"
+    )
     return np.float64(time_delta / pd.Timedelta(1, "ns"))
 
 
@@ -283,16 +283,16 @@ def build_glonass_slot_dictionary(header_line):
 
 
 def satellite_id_2_system_time_scale(satellite_id):
-    assert (
-        len(satellite_id) == 3
-    ), f"Satellite ID unexpectedly not three characters long: {satellite_id}"
+    assert len(satellite_id) == 3, (
+        f"Satellite ID unexpectedly not three characters long: {satellite_id}"
+    )
     return constants.constellation_2_system_time_scale[constellation(satellite_id)]
 
 
 def constellation(satellite_id: str):
-    assert (
-        len(satellite_id) == 3
-    ), f"Satellite ID unexpectedly not three characters long: {satellite_id}"
+    assert len(satellite_id) == 3, (
+        f"Satellite ID unexpectedly not three characters long: {satellite_id}"
+    )
     return satellite_id[0]
 
 
@@ -420,9 +420,9 @@ def parse_rinex_file(rinex_file_path: Path):
         return parse_rinex_obs_file(rinex_file_path)
     elif is_rinex_3_nav_file(rinex_file_path):
         return parse_rinex_nav_file(rinex_file_path)
-    assert (
-        False
-    ), f"File {rinex_file_path} appears to be neither RINEX 3 OBS nor NAV file."
+    assert False, (
+        f"File {rinex_file_path} appears to be neither RINEX 3 OBS nor NAV file."
+    )
 
 
 @timeit
@@ -461,25 +461,25 @@ def get_gpst_utc_leap_seconds(rinex_file: Path):
     header = georinex.rinexheader(rinex_file)
     if "LEAP SECONDS" in header:
         ls_before = header["LEAP SECONDS"][0:6].strip()
-        assert (
-            0 < len(ls_before) < 3
-        ), f"Unexpected leap seconds {ls_before} in {rinex_file}"
+        assert 0 < len(ls_before) < 3, (
+            f"Unexpected leap seconds {ls_before} in {rinex_file}"
+        )
 
         ls_after = header["LEAP SECONDS"][6:12].strip()
         if ls_after == "":
             return int(ls_before)
-        assert (
-            0 < len(ls_after) < 3
-        ), f"Unexpected leap seconds {ls_after} in {rinex_file}"
+        assert 0 < len(ls_after) < 3, (
+            f"Unexpected leap seconds {ls_after} in {rinex_file}"
+        )
 
-        assert (
-            ls_after == ls_before
-        ), f"Leap second change announcement in {rinex_file}, this case is not tested, aborting."
+        assert ls_after == ls_before, (
+            f"Leap second change announcement in {rinex_file}, this case is not tested, aborting."
+        )
 
         leap_seconds_rnx = int(ls_before)
-        assert (
-            leap_seconds_rnx == leap_seconds_astropy
-        ), "leap second computed from astropy is different from RINEX NAV header"
+        assert leap_seconds_rnx == leap_seconds_astropy, (
+            "leap second computed from astropy is different from RINEX NAV header"
+        )
 
     return leap_seconds_astropy
 
