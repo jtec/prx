@@ -100,9 +100,9 @@ def try_downloading_ephemerides(mid_day: pd.Timestamp, folder: Path):
 def rinex_3_ephemerides_file_coverage_time(ephemerides_file: Path):
     parts = str(ephemerides_file).split("_")
     start_time = pd.to_datetime(parts[-3], format="%Y%j%H%M")
-    assert (
-        parts[-2][-1] == "D"
-    ), f"Was expecting 'D' (days) as duration unit in Rinex ephemerides file name: {ephemerides_file}"
+    assert parts[-2][-1] == "D", (
+        f"Was expecting 'D' (days) as duration unit in Rinex ephemerides file name: {ephemerides_file}"
+    )
     duration = parts[-2][:-1]
     duration_unit = parts[-2][-1]
     end_time = start_time + pd.Timedelta(int(duration), duration_unit.lower())
@@ -204,7 +204,7 @@ if __name__ == "__main__":
         "--observation_file_path", type=str, help="Observation file path", required=True
     )
     args = parser.parse_args()
-    assert Path(
-        args.observation_file_path
-    ).exists(), f"Cannot find observation file {args.observation_file_path}"
+    assert Path(args.observation_file_path).exists(), (
+        f"Cannot find observation file {args.observation_file_path}"
+    )
     discover_or_download_auxiliary_files(Path(args.observation_file_path))

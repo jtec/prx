@@ -42,9 +42,9 @@ def time_scale_integer_second_offset_wrt_gpst(time_scale, utc_gpst_leap_seconds=
     if time_scale == "BDT":
         return pd.Timedelta(seconds=-14)
     if time_scale == "GLONASST":
-        assert (
-            utc_gpst_leap_seconds is not None
-        ), "Need GPST-UTC leap seconds to compute GLONASST integer second offset w.r.t. GPST"
+        assert utc_gpst_leap_seconds is not None, (
+            "Need GPST-UTC leap seconds to compute GLONASST integer second offset w.r.t. GPST"
+        )
         return pd.Timedelta(seconds=-utc_gpst_leap_seconds)
     assert False, f"Unexpected time scale: {time_scale}"
 
@@ -518,9 +518,9 @@ def compute_gal_inav_fnav_indicators(df):
     )
     # We expect only the following navigation message types for Galileo:
     indicators = set(df[is_gal].fnav_or_inav_indicator.unique())
-    assert len(indicators.intersection({1, 2, 4, 5})) == len(
-        indicators
-    ), f"Unexpected Galileo navigation message type: {indicators}"
+    assert len(indicators.intersection({1, 2, 4, 5})) == len(indicators), (
+        f"Unexpected Galileo navigation message type: {indicators}"
+    )
     df.loc[is_gal & (df.fnav_or_inav_indicator == 1), "fnav_or_inav"] = "inav"
     df.loc[is_gal & (df.fnav_or_inav_indicator == 2), "fnav_or_inav"] = "fnav"
     df.loc[is_gal & (df.fnav_or_inav_indicator == 4), "fnav_or_inav"] = "inav"
@@ -542,9 +542,9 @@ def to_isagpst(time, timescale, gpst_utc_leapseconds):
             )
         )
 
-    assert (
-        False
-    ), f"Unexpected types: time is {type(time)}, timescale is {type(timescale)}"
+    assert False, (
+        f"Unexpected types: time is {type(time)}, timescale is {type(timescale)}"
+    )
 
 
 @timeit

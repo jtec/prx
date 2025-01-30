@@ -96,15 +96,15 @@ def compute_tropo_delay_unb3m(
     #
     # [1] https://gge.ext.unb.ca/Resources/unb3m/unb3m.html
 
-    assert (
-        latitude_user_rad.shape == height_user_m.shape
-    ), "Input arguments should be arrays of the same shape"
-    assert (
-        latitude_user_rad.shape == day_of_year.shape
-    ), "Input arguments should be arrays of the same shape"
-    assert (
-        latitude_user_rad.shape == elevation_sat_rad.shape
-    ), "Input arguments should be arrays of the same shape"
+    assert latitude_user_rad.shape == height_user_m.shape, (
+        "Input arguments should be arrays of the same shape"
+    )
+    assert latitude_user_rad.shape == day_of_year.shape, (
+        "Input arguments should be arrays of the same shape"
+    )
+    assert latitude_user_rad.shape == elevation_sat_rad.shape, (
+        "Input arguments should be arrays of the same shape"
+    )
 
     # Initialize UNB3m look-up table
     avg = np.array(
