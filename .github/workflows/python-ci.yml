@@ -12,39 +12,39 @@ on:
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
-  
+
 jobs:
   ci:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         os: [ ubuntu-latest, windows-latest, macos-latest ]
-        python-version: [ "3.12.1" ]
     steps:
-      - uses: actions/checkout@v4
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v4
+      - name: "Check out repository"
+        uses: actions/checkout@v4
+
+      - name: "Install uv"
+        uses: astral-sh/setup-uv@v5
         with:
-          python-version: ${{ matrix.python-version }}
-      - uses: abatilo/actions-poetry@v3.0.1
+          # Install a specific version of uv.
+          version: "0.5.25"
+
+      - name: "Set up Python"
+        uses: actions/setup-python@v5
         with:
-          poetry-version: 1.7.1
-      - name: Cache Poetry
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.local
-            ~/.cache/pypoetry
-          key: poetry-${{ runner.os }}-${{ hashFiles('**/poetry.lock') }}
-      - name: Create virtual environment with poetry
+          python-version-file: ".python-version"
+
+      - name: Create virtual environment
         run:
-          poetry install
+          uv sync
+
       - name: Run ruff
-        if : ${{ matrix.os == 'ubuntu-latest' }}
+        if: ${{ matrix.os == 'ubuntu-latest' }}
         run: |
-          poetry run ruff check --exit-non-zero-on-fix
-          poetry run ruff format --check
+          uv run ruff check --exit-non-zero-on-fix
+          uv run ruff format --check
+
       - name: Test with pytest
         run: |
-          poetry run pytest -n auto --dist=loadfile --durations=10
+          uv run pytest -n auto --dist=loadfile --durations=10
  
