@@ -104,9 +104,9 @@ def test_compare_to_georinex_with_lli(input_for_test_tlse):
 
     # Negative assertion: I suspect a bug in georinex, that is not parsing all lli. If both prx and georinex parses
     # the same lli, this assertion will fail and we may want to update this test to remove it.
-    assert (
-        geo_lli_list != prx_lli_list
-    ), "prx and georinex parse the same LLI! If georinex has been updated, you may want to remove this asssertion!!"
+    assert geo_lli_list != prx_lli_list, (
+        "prx and georinex parse the same LLI! If georinex has been updated, you may want to remove this asssertion!!"
+    )
     for lli in prx_lli_list:
         if lli not in geo_lli_list:
             prx_lli = prx_output.loc[prx_output.obs_type == lli, :].reset_index(

@@ -44,9 +44,9 @@ def process_gsdc2021_dataset(path_dataset: Path):
             shutil.move(Path(file_gz.name), new_path)
         local_gz_list.append(new_path)
 
-    assert (
-        len(local_gz_list) == 121
-    ), "Something wrong went with the local copy of the GSDC2021 database"
+    assert len(local_gz_list) == 121, (
+        "Something wrong went with the local copy of the GSDC2021 database"
+    )
 
     for i, file in enumerate(local_gz_list[:]):
         main.process(

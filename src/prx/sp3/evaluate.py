@@ -97,12 +97,12 @@ def interpolate(df, query_time_gpst_s, plot_interpolation=False):
     closest_sample_index = np.argmin(np.abs(df["gpst_s"] - query_time_gpst_s))
     start_index = closest_sample_index - n_samples_each_side
     end_index = closest_sample_index + n_samples_each_side
-    assert (
-        start_index >= 0
-    ), f"We need at least {n_samples_each_side} before the sample closest to the query time to interpolate"
-    assert (
-        end_index < len(df.index)
-    ), f"We need at least {n_samples_each_side} after the sample closest to the query time to interpolate"
+    assert start_index >= 0, (
+        f"We need at least {n_samples_each_side} before the sample closest to the query time to interpolate"
+    )
+    assert end_index < len(df.index), (
+        f"We need at least {n_samples_each_side} after the sample closest to the query time to interpolate"
+    )
     columns_to_interpolate = [
         "sat_pos_x_m",
         "sat_pos_y_m",
