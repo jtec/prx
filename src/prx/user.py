@@ -109,9 +109,9 @@ def spp_pt_lsq(df, dx_convergence_l2=1e-6, max_iterations=10):
         solution_increment_l2 = np.linalg.norm(x_lsq)
         x_linearization += x_lsq
         n_iterations += 1
-        assert (
-            n_iterations <= max_iterations
-        ), "LSQ did not converge in allowed number of iterations"
+        assert n_iterations <= max_iterations, (
+            "LSQ did not converge in allowed number of iterations"
+        )
     return x_linearization
 
 

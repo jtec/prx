@@ -275,9 +275,9 @@ def test_compare_to_sp3(input_for_test):
         expected_max_difference,
     ) in expected_max_differences_broadcast_vs_precise.items():
         assert not diff[column].isnull().values.any()
-        assert (
-            diff[column].max() < expected_max_difference
-        ), f"Expected maximum difference {expected_max_difference} for column {column}, but got {diff[column].max()}"
+        assert diff[column].max() < expected_max_difference, (
+            f"Expected maximum difference {expected_max_difference} for column {column}, but got {diff[column].max()}"
+        )
 
 
 def test_sbas(input_for_test):
@@ -356,9 +356,9 @@ def test_2023_beidou_c27(set_up_test_2023):
     )
 
     rinex_sat_states = rinex_nav_evaluate.compute_parallel(rinex_nav_file, query.copy())
-    assert (
-        len(rinex_sat_states.index) == 1
-    ), "Was expecting only one row, make sure to sort before comparing to sp3 with more than one row"
+    assert len(rinex_sat_states.index) == 1, (
+        "Was expecting only one row, make sure to sort before comparing to sp3 with more than one row"
+    )
     rinex_sat_states = (
         rinex_sat_states.reset_index()
         .drop(
@@ -390,9 +390,9 @@ def test_2023_beidou_c27(set_up_test_2023):
         column,
         expected_max_difference,
     ) in expected_max_differences_broadcast_vs_precise.items():
-        assert (
-            diff[column].max() < expected_max_difference
-        ), f"Expected maximum difference {expected_max_difference} for column {column}, but got {diff[column].max()}"
+        assert diff[column].max() < expected_max_difference, (
+            f"Expected maximum difference {expected_max_difference} for column {column}, but got {diff[column].max()}"
+        )
 
 
 def test_group_delays(input_for_test):
