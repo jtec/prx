@@ -713,13 +713,14 @@ def compute_total_group_delays(
     def compute_tgds(df):
         assert len(df.constellation.unique()) == 1
         assert len(df.signal.unique()) == 1
+
         df["gamma"] = np.nan
         df["tgd"] = np.nan
 
-        match df.constellation.values[0]:
+        match df.at[df.index[0], "constellation"]:
             case "G":
-                df.tgd = df.TGD.values[0]
-                match df.frequency_code.values[0]:
+                df.tgd = df.TGD.values
+                match df.at[df.index[0], "frequency_code"]:
                     case "1":
                         df.gamma = 1
                     case "2":
@@ -728,32 +729,32 @@ def compute_total_group_delays(
                             / constants.carrier_frequencies_hz()["G"]["L2"][1]
                         ) ** 2
             case "J":
-                df.tgd = df.TGD.values[0]
+                df.tgd = df.TGD.values
                 df.gamma = 1
             case "E":
-                match df.frequency_code.values[0]:
+                match df.at[df.index[0], "frequency_code"]:
                     case "1":
-                        df.tgd = df.BGDe5b.values[0]
+                        df.tgd = df.BGDe5b.values
                         df.gamma = 1
                     case "5":
-                        df.tgd = df.BGDe5a.values[0]
+                        df.tgd = df.BGDe5a.values
                         df.gamma = (
                             constants.carrier_frequencies_hz()["E"]["L1"][1]
                             / constants.carrier_frequencies_hz()["E"]["L5"][1]
                         ) ** 2
                     case "7":
-                        df.tgd = df.BGDe5b.values[0]
+                        df.tgd = df.BGDe5b.values
                         df.gamma = (
                             constants.carrier_frequencies_hz()["E"]["L1"][1]
                             / constants.carrier_frequencies_hz()["E"]["L7"][1]
                         ) ** 2
             case "C":
                 df.gamma = 1
-                match df.signal.values[0]:
+                match df.at[df.index[0], "signal"]:
                     case "C2I":  # called B1I in Beidou ICD
-                        df.tgd = df.TGD1.values[0]
+                        df.tgd = df.TGD1.values
                     case "C7I":  # called B2I in Beidou ICD
-                        df.tgd = df.TGD2.values[0]
+                        df.tgd = df.TGD2.values
                     case "C6I":  # called B3I in Beidou ICD
                         df.tgd = 0
         df["sat_code_bias_m"] = df.tgd * df.gamma * df.speedOfLightIcd_mps

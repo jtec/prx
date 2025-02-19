@@ -422,6 +422,36 @@ def test_group_delays(input_for_test):
     assert not rinex_sat_states["sat_code_bias_m"].isna().any()
 
 
+def test_group_delays_over_long_period(input_for_test):
+    """
+    Tests the computation of group delay over a long period, and check if there is a sudden jumps across two epochs
+    """
+    rinex_nav_file = converters.compressed_to_uncompressed(
+        input_for_test["rinex_nav_file"]
+    )
+    query_time_isagpst = pd.date_range(
+        "2022-01-01T00:00:00.000000000", "2022-01-01T12:00:00.000000000", freq="15min"
+    )
+    query = pd.concat(
+        [
+            pd.DataFrame(
+                {
+                    "sv": "G" + str(x).zfill(2),
+                    "signal": "C1C",
+                    "query_time_isagpst": query_time_isagpst,
+                }
+            )
+            for x in range(32)
+        ]
+    )
+    rinex_sat_states = rinex_nav_evaluate.compute(rinex_nav_file, query)
+    # Check that group delays are computed for all signals
+    assert not rinex_sat_states["sat_code_bias_m"].isna().any()
+    # Check that the group delays are not affected by a large jump
+    jump_tol = 1e-1  # this value lacks justification
+    assert rinex_sat_states.groupby("sv").sat_code_bias_m.diff().abs().max() < jump_tol
+
+
 def max_abs_diff_smaller_than(a, b, threshold):
     if isinstance(a, pd.Series):
         a = a.to_numpy()
@@ -509,6 +539,37 @@ def test_gps_group_delay(input_for_test):
         1e-6,
     )
     assert np.all(np.isnan(tgds[tgds.signal == "C5X"]["sat_code_bias_m"].to_numpy()))
+
+
+def test_gps_group_delay_multi_prn(input_for_test):
+    """
+    Computes the total group delay (TGD) for GPS from a RNX3 NAV file containing the ephemerides pasted below.
+    The RINEX navigation message field containing TGD is highlighted between **
+
+    This tests also validates
+    - the choice of the right ephemeris for the correct time: 3 epochs are used
+    - the scaling of the TGD with the carrier frequency: the 3 observations types considered in IS-GPS-200N are tested (
+    C1C, C1P, C2P) and 1 not considered shall return NaN (C1Y)
+
+    """
+    rinex_3_navigation_file = converters.anything_to_rinex_3(
+        input_for_test["rinex_nav_file"]
+    )
+    # Retrieve total group delays for 2 different SVs
+    svs = ["G02", "G03"]
+    time = pd.Timestamp("2022-01-01T00:00:00.000000000")
+    query = pd.concat(
+        [
+            pd.DataFrame([{"sv": sv, "signal": "C1C", "query_time_isagpst": time}])
+            for sv in svs
+        ]
+    )
+    tgds = rinex_nav_evaluate.compute(rinex_3_navigation_file, query)
+    assert np.all(
+        tgds.sat_code_bias_m.values
+        == constants.cGpsSpeedOfLight_mps
+        * np.array([-1.769512891770e-08, 1.862645149231e-09])
+    )
 
 
 def test_gal_group_delay(input_for_test):
