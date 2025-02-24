@@ -32,7 +32,7 @@ into import errors.
 We use `uv` to make sure every developer and user of prx runs the same python version
 and the same set of dependencies such as `numpy` and `pandas`.
 
-To install `uv see https://docs.astral.sh/uv/getting-started/installation/
+To install `uv` see https://docs.astral.sh/uv/getting-started/installation/
 
 To create the virtual environment, run
 `uv sync` in the `prx` repository root. This has to be run every time `pyproject.toml` or
