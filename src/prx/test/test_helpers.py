@@ -1,6 +1,7 @@
 import logging
 import platform
 import numpy as np
+import prx.util
 import pytest
 from prx import helpers
 from prx import constants
@@ -267,11 +268,11 @@ def test_gfzrnx_function_call(input_for_test):
     file_obs = converters.anything_to_rinex_3(input_for_test["obs"])
     file_sp3 = input_for_test["sp3"]
 
-    file_nav = helpers.repair_with_gfzrnx(file_nav)
-    file_obs = helpers.repair_with_gfzrnx(file_obs)
+    file_nav = prx.util.repair_with_gfzrnx(file_nav)
+    file_obs = prx.util.repair_with_gfzrnx(file_obs)
     # running gfzrnx on a file that is not a RNX file should result in an error
     try:
-        file_sp3 = helpers.repair_with_gfzrnx(file_sp3)
+        file_sp3 = prx.util.repair_with_gfzrnx(file_sp3)
     except AssertionError:
         log.info(f"gfzrnx binary did not execute with file {file_sp3}")
     assert True
