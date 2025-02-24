@@ -1,3 +1,4 @@
+import logging
 import multiprocessing
 
 import pandas as pd
@@ -5,19 +6,20 @@ import numpy as np
 from pathlib import Path
 import scipy
 from joblib import Parallel, delayed
-
+import georinex
 from prx import helpers
 from prx import constants
-from prx.helpers import timeit, parse_rinex_file
+from prx.util import timeit, repair_with_gfzrnx
 
-log = helpers.get_logger(__name__)
+log = logging.getLogger(__name__)
 
 
 @timeit
 def parse_rinex_nav_file(rinex_file: Path):
     @helpers.disk_cache.cache(ignore=["rinex_file_path"])
     def cached_load(rinex_file_path: Path, file_hash: str):
-        ds = parse_rinex_file(rinex_file_path)
+        repair_with_gfzrnx(rinex_file)
+        ds = georinex.load(rinex_file)
         ds.attrs["utc_gpst_leap_seconds"] = helpers.get_gpst_utc_leap_seconds(
             rinex_file_path
         )

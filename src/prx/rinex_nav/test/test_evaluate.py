@@ -514,7 +514,7 @@ def test_gps_group_delay(input_for_test):
 def test_gal_group_delay(input_for_test):
     """
     Note that both ephemerides have the same Toe (reference time), but one is I/NAV, the
-    other F/NAV. This test implicitly checks whether the right ephemeris is used wben computing
+    other F/NAV. This test implicitly checks whether the right ephemeris is used when computing
     TGDs.
 
     E25 2022 01 01 00 00 00-5.587508785538e-04-1.278976924368e-12 0.000000000000e+00

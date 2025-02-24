@@ -1,17 +1,16 @@
-import platform
-import re
-from functools import wraps
 from pathlib import Path
 import logging
 
-from prx.util import is_rinex_3_obs_file, is_rinex_3_nav_file
+from prx.util import (
+    timeit,
+    repair_with_gfzrnx,
+)
 from prx.rinex_obs.parser import parse as prx_obs_parse
 import xarray
 from imohash import imohash
 from prx import constants
 import numpy as np
 import pandas as pd
-import subprocess
 import math
 import joblib
 import georinex
@@ -25,19 +24,6 @@ logging.basicConfig(
     level=logging.DEBUG,
 )
 log = logging.getLogger(__name__)
-
-
-def timeit(func):
-    @wraps(func)
-    def timeit_wrapper(*args, **kwargs):
-        start_time = pd.Timestamp.now()
-        result = func(*args, **kwargs)
-        end_time = pd.Timestamp.now()
-        total_time = end_time - start_time
-        log.info(f"Function {func.__name__} took {total_time} to run.")
-        return result
-
-    return timeit_wrapper
 
 
 def parse_boolean_env_variable(env_variable_name: str, value_if_not_set: bool):
@@ -169,51 +155,6 @@ def rinex_header_time_string_2_timestamp_ns(time_string: str) -> pd.Timestamp:
     )
     timestamp = pd.Timestamp(np.datetime64(datetime64_string))
     return timestamp
-
-
-@timeit
-def repair_with_gfzrnx(file):
-    with open(file) as f:
-        if "gfzrnx" in f.read():
-            logging.warning(f"File {file} already contains 'gfzrnx', skipping repair.")
-            return file
-    path_folder_gfzrnx = Path(__file__).parent.joinpath("tools", "gfzrnx")
-    path_binary = path_folder_gfzrnx.joinpath(
-        constants.gfzrnx_binary[platform.system()]
-    )
-    command = [
-        str(path_binary),
-        "-finp",
-        str(file),
-        "-fout",
-        str(file),
-        "-chk",
-        "-kv",
-        "-f",
-    ]
-    result = subprocess.run(
-        command,
-        capture_output=True,
-    )
-    if result.returncode == 0:
-        log.info(f"Ran gfzrnx file repair on {file}")
-        with open(file, "r") as f:
-            file_content = f.read()
-            file_content = re.sub(
-                r"gfzrnx-(.*?)FILE PROCESSING(.*)UTC COMMENT",
-                r"gfzrnx-\1FILE PROCESSING (timestamp removed by prx) UTC COMMENT",
-                file_content,
-                count=1,
-            )
-        with open(file, "w") as f:
-            f.write(file_content)
-            log.info(
-                f"Removed repair timestamp from gfzrnx file {file} to avoid content hash changes."
-            )
-    else:
-        log.info(f"gfzrnx file repair run failed: {result}")
-        assert False
-    return file
 
 
 def deg_2_rad(angle_deg):
@@ -415,16 +356,6 @@ def obs_dataset_to_obs_dataframe(ds: xarray.Dataset):
     return flat_obs
 
 
-def parse_rinex_file(rinex_file_path: Path):
-    if is_rinex_3_obs_file(rinex_file_path):
-        return parse_rinex_obs_file(rinex_file_path)
-    elif is_rinex_3_nav_file(rinex_file_path):
-        return parse_rinex_nav_file(rinex_file_path)
-    assert False, (
-        f"File {rinex_file_path} appears to be neither RINEX 3 OBS nor NAV file."
-    )
-
-
 @timeit
 def parse_rinex_obs_file(rinex_file_path: Path):
     @disk_cache.cache(ignore=["rinex_file"])
@@ -434,19 +365,6 @@ def parse_rinex_obs_file(rinex_file_path: Path):
         return prx_obs_parse(rinex_file)
 
     return parse_rinex_obs_file_cached(
-        rinex_file_path, hash_of_file_content(rinex_file_path)
-    )
-
-
-@timeit
-def parse_rinex_nav_file(rinex_file_path: Path):
-    @disk_cache.cache(ignore=["rinex_file"])
-    def parse_rinex_nav_file_cached(rinex_file: Path, file_hash: str):
-        log.info(f"Parsing {rinex_file} (hash {file_hash}) ...")
-        repair_with_gfzrnx(rinex_file)
-        return georinex.load(rinex_file)
-
-    return parse_rinex_nav_file_cached(
         rinex_file_path, hash_of_file_content(rinex_file_path)
     )
 
