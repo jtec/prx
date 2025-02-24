@@ -47,6 +47,8 @@ def input_for_test():
     os.makedirs(test_directory)
     test_files = {
         "rinex_nav_file": test_directory / "BRDC00IGS_R_20220010000_01D_MN.zip",
+        "short_rinex_nav_file": test_directory
+        / "BRDC00IGS_R_20220010000_01D_MN_short_excerpt.rnx",
         "sp3_file": test_directory / "WUM0MGXULT_20220010000_01D_05M_ORB.SP3",
     }
     for key, test_file_path in test_files.items():
@@ -761,9 +763,9 @@ def test_select_ephemerides():
 
 
 def test_time_of_transmission(input_for_test):
-    raise NotImplementedError("Test not implemented")
     rinex_3_navigation_file = converters.anything_to_rinex_3(
-        input_for_test["rinex_nav_file"]
+        input_for_test["short_rinex_nav_file"]
     )
     ephs = parse_rinex_nav_file(rinex_3_navigation_file)
-    pass
+
+    raise NotImplementedError("Test not implemented")

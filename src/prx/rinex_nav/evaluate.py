@@ -441,6 +441,7 @@ def convert_nav_dataset_to_dataframe(nav_ds):
             "IRNSST": "GPSWeek",
         }
         group_time_scale = group["time_scale"].iloc[0]
+        Compute Time of transmission in ISAGPST
         if group_time_scale not in ["GLONASST", "SBAST"]:
             full_seconds = (
                 group[week_field[group_time_scale]] * constants.cSecondsPerWeek
