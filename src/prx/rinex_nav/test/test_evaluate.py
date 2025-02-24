@@ -2,7 +2,11 @@ import numpy as np
 import pandas as pd
 from pathlib import Path
 
-from prx.rinex_nav.evaluate import select_ephemerides, set_time_of_validity
+from prx.rinex_nav.evaluate import (
+    select_ephemerides,
+    set_time_of_validity,
+    parse_rinex_nav_file,
+)
 from prx.sp3 import evaluate as sp3_evaluate
 from prx.rinex_nav import evaluate as rinex_nav_evaluate
 from prx import constants, converters, helpers
@@ -754,3 +758,12 @@ def test_select_ephemerides():
         pd.Series([pd.Timedelta("100s"), pd.Timedelta("50s"), pd.Timedelta("90s")])
     )
     assert query_with_ephemerides.ephemeris_hash.equals(pd.Series([1, 2, 2]))
+
+
+def test_time_of_transmission(input_for_test):
+    raise NotImplementedError("Test not implemented")
+    rinex_3_navigation_file = converters.anything_to_rinex_3(
+        input_for_test["rinex_nav_file"]
+    )
+    ephs = parse_rinex_nav_file(rinex_3_navigation_file)
+    pass
