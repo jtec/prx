@@ -7,18 +7,21 @@ import georinex
 import pandas as pd
 import numpy as np
 import git
+import prx.util
 
 from prx import atmospheric_corrections as atmo
 from prx.constants import carrier_frequencies_hz
-from prx.helpers import parse_rinex_file
+from prx.helpers import parse_rinex_obs_file
+from prx.util import is_rinex_3_obs_file, is_rinex_3_nav_file
 from prx.rinex_nav import nav_file_discovery
 from prx import constants, helpers, converters, user
 from prx.rinex_nav import evaluate as rinex_evaluate
+from prx.rinex_nav.evaluate import parse_rinex_nav_file
 
 log = helpers.get_logger(__name__)
 
 
-@helpers.timeit
+@prx.util.timeit
 def write_prx_file(
     prx_header: dict,
     prx_records: pd.DataFrame,
@@ -221,11 +224,21 @@ def check_assumptions(
     )
 
 
+def parse_rinex_nav_or_obs_file(rinex_file_path: Path):
+    if is_rinex_3_obs_file(rinex_file_path):
+        return parse_rinex_obs_file(rinex_file_path)
+    elif is_rinex_3_nav_file(rinex_file_path):
+        return parse_rinex_nav_file(rinex_file_path)
+    assert False, (
+        f"File {rinex_file_path} appears to be neither RINEX 3 OBS nor NAV file."
+    )
+
+
 def warm_up_parser_cache(rinex_files):
-    _ = [parse_rinex_file(file) for file in rinex_files]
+    _ = [parse_rinex_nav_or_obs_file(file) for file in rinex_files]
 
 
-@helpers.timeit
+@prx.util.timeit
 def build_records(
     rinex_3_obs_file,
     rinex_3_ephemerides_files,
@@ -513,7 +526,7 @@ def build_records(
     return flat_obs
 
 
-@helpers.timeit
+@prx.util.timeit
 def process(observation_file_path: Path, output_format="csv"):
     t0 = pd.Timestamp.now()
     # We expect a Path, but might get a string here:
@@ -522,7 +535,7 @@ def process(observation_file_path: Path, output_format="csv"):
         f"Starting processing {observation_file_path.name} (full path {observation_file_path})"
     )
     rinex_3_obs_file = converters.anything_to_rinex_3(observation_file_path)
-    rinex_3_obs_file = helpers.repair_with_gfzrnx(rinex_3_obs_file)
+    rinex_3_obs_file = prx.util.repair_with_gfzrnx(rinex_3_obs_file)
     prx_file = rinex_3_obs_file.with_suffix("")
     aux_files = nav_file_discovery.discover_or_download_auxiliary_files(
         rinex_3_obs_file
@@ -531,7 +544,7 @@ def process(observation_file_path: Path, output_format="csv"):
         {"obs_file": rinex_3_obs_file, "nav_file": aux_files["broadcast_ephemerides"]}
     )
     metadata["processing_start_time"] = t0
-    helpers.repair_with_gfzrnx(rinex_3_obs_file)
+    prx.util.repair_with_gfzrnx(rinex_3_obs_file)
     records = build_records(
         rinex_3_obs_file,
         aux_files["broadcast_ephemerides"],
