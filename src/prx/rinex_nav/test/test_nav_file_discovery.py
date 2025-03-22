@@ -1,10 +1,12 @@
 import os
 from pathlib import Path
 import shutil
+
+import pandas as pd
 import pytest
 import subprocess
 from prx.rinex_nav import nav_file_discovery as aux
-from prx import helpers
+from prx import helpers, converters
 
 
 @pytest.fixture
@@ -58,3 +60,43 @@ def test_command_line_call(set_up_test):
         command, capture_output=True, shell=True, cwd=str(test_file.parent)
     )
     assert result.returncode == 0
+
+
+def test_wrong_name_for_local_nav(set_up_test):
+    """
+    Create a file in the same folder that has a non-conventional RNX3 NAV filename.
+    Assert that prx will use a local or downloaded valid RNX NAV file.
+    """
+    # rename the nav file with a non-conventional name
+    set_up_test["test_nav_file"].rename(
+        Path(set_up_test["test_nav_file"].parent, "myfile.rnx")
+    )
+    aux_files = aux.discover_or_download_auxiliary_files(set_up_test["test_obs_file"])
+    assert isinstance(aux_files, dict)
+    assert "20230010000_01D_MN.rnx" in aux_files["broadcast_ephemerides"][0].name
+
+
+def test_use_local_nav(set_up_test):
+    """
+    If the OBS file's folder contains a valid NAV folder, prx should choose the local NAV from the user folder rather
+    than the one coming from its local database
+    """
+    local_file = converters.compressed_to_uncompressed(set_up_test["test_nav_file"])
+    # rename the nav file with a different RNX3-compliant name: 'TLSE00IGS_R_20230010000_01D_MN.rnx'
+    new_local_file = Path(local_file.parent, "TLSE" + local_file.name[4:])
+    assert aux.is_rinex_3_mixed_mgex_broadcast_ephemerides_file(new_local_file)
+    local_file.rename(new_local_file)
+    aux_files = aux.discover_or_download_auxiliary_files(set_up_test["test_obs_file"])
+
+    # get NAV file in local database
+    local_database_file = aux.get_local_ephemerides(
+        pd.Timestamp(year=int(local_file.name[12:16]), month=1, day=1)
+        + pd.Timedelta(value=int(local_file.name[16:19]) - 1, unit="days")
+    )
+    if local_database_file is not None:  # if BRDC NAV file is in local database
+        assert local_database_file.exists()
+
+    # whether a NAV file exists in the local database, the local user NAV file should be chosen if it is compliant with
+    # RNX3 naming convention
+    assert isinstance(aux_files, dict)
+    assert new_local_file.name == aux_files["broadcast_ephemerides"][0].name
