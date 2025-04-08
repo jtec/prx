@@ -5,6 +5,7 @@ import shutil
 import pandas as pd
 import pytest
 import subprocess
+import georinex
 from prx.rinex_nav import nav_file_discovery as aux
 from prx import helpers, converters
 
@@ -93,8 +94,17 @@ def test_use_local_nav(set_up_test):
         pd.Timestamp(year=int(local_file.name[12:16]), month=1, day=1)
         + pd.Timedelta(value=int(local_file.name[16:19]) - 1, unit="days")
     )
-    if local_database_file is not None:  # if BRDC NAV file is in local database
-        assert local_database_file.exists()
+    if local_database_file is None:  # if BRDC NAV file is in local database
+        # download BRDC Nav file
+        header = georinex.rinexheader(set_up_test["test_obs_file"])
+        t_start = helpers.rinex_header_time_string_2_timestamp_ns(
+            header["TIME OF FIRST OBS"]
+        ) - pd.Timedelta(200, unit="milliseconds")
+        t_end = helpers.rinex_header_time_string_2_timestamp_ns(
+            header["TIME OF LAST OBS"]
+        )
+        aux.update_local_database(t_start, t_end)
+    assert local_database_file.exists()
 
     # whether a NAV file exists in the local database, the local user NAV file should be chosen if it is compliant with
     # RNX3 naming convention
