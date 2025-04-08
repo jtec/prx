@@ -67,6 +67,13 @@ Run `uv run pytest ---durations=10` to run all tests and have pytest list the 10
 
 We use https://google.github.io/styleguide/pyguide.html as our python style guide.
 
+
+## Frequently Asked Questions
+### How can I use my own RINEX NAV file?
+When processing your own GNSS data, your receiver may provide you both the RINEX OBS and NAV files. If you want to specifically use your own RINEX NAV file, it shall be in the same folder as your OBS file and follow the RINEX 3 file naming convention. This can be achieved by passing your RINEX NAV file in `gfzrnx`:
+
+`.\src\prx\tools\gfzrnx\gfzrnx_217_win64.exe -finp <RINEX_OBS_filepath> -fout ::RX3::` (on Windows, or use the adequate `gfzrnx`binary)
+
 ## Acronyms
 
 See the [Rinex 3.05 spec](https://files.igs.org/pub/data/format/rinex305.pdf), page 5, for a list of most acronyms used
