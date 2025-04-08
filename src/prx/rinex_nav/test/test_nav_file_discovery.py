@@ -94,7 +94,7 @@ def test_use_local_nav(set_up_test):
         pd.Timestamp(year=int(local_file.name[12:16]), month=1, day=1)
         + pd.Timedelta(value=int(local_file.name[16:19]) - 1, unit="days")
     )
-    if local_database_file is None:  # if BRDC NAV file is in local database
+    if local_database_file is None:  # if BRDC NAV file is not in local database
         # download BRDC Nav file
         header = georinex.rinexheader(set_up_test["test_obs_file"])
         t_start = helpers.rinex_header_time_string_2_timestamp_ns(
