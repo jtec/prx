@@ -1,5 +1,4 @@
 version = 1
-revision = 1
 requires-python = ">=3.10, <3.13"
 resolution-markers = [
     "python_full_version >= '3.12'",
@@ -873,13 +872,13 @@ requires-dist = [
     { name = "matplotlib", specifier = ">=3.10.0,<4.0.0" },
     { name = "numpy", specifier = ">=2.2,<3.0" },
     { name = "pandas", specifier = ">=2.2.3,<3.0.0" },
-    { name = "plotly", specifier = ">=5.24.1,<6.0.0" },
+    { name = "plotly", specifier = ">=5.24.1,<7.0.0" },
     { name = "pytest", specifier = ">=8.3.4,<9.0.0" },
     { name = "pytest-xdist", specifier = ">=3.5.0,<4.0.0" },
     { name = "requests", specifier = ">=2.32.3,<3.0.0" },
     { name = "ruff", specifier = ">=0.11.2,<1.0.0" },
     { name = "scipy", specifier = ">=1.14.1,<2.0.0" },
-    { name = "setuptools", specifier = ">=75.6.0,<76.0.0" },
+    { name = "setuptools", specifier = ">=75.6.0,<79.0.0" },
     { name = "snakeviz", specifier = ">=2.2.2,<3.0.0" },
     { name = "viztracer", specifier = ">=1.0.0,<2.0.0" },
 ]
