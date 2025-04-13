@@ -9,16 +9,16 @@ import numpy as np
 import git
 import prx.util
 
-from prx import atmospheric_corrections as atmo
+from prx import atmospheric_corrections as atmo, util
 from prx.constants import carrier_frequencies_hz
-from prx.helpers import parse_rinex_obs_file
+from prx.util import parse_rinex_obs_file
 from prx.util import is_rinex_3_obs_file, is_rinex_3_nav_file
 from prx.rinex_nav import nav_file_discovery
-from prx import constants, helpers, converters, user
+from prx import constants, converters, user
 from prx.rinex_nav import evaluate as rinex_evaluate
 from prx.rinex_nav.evaluate import parse_rinex_nav_file
 
-log = helpers.get_logger(__name__)
+log = util.get_logger(__name__)
 
 
 @prx.util.timeit
@@ -201,7 +201,7 @@ def build_metadata(input_files):
     prx_metadata["input_files"] = [
         {
             "name": file.name,
-            "murmur3_hash": helpers.hash_of_file_content(file),
+            "murmur3_hash": util.hash_of_file_content(file),
         }
         for file in files
     ]
@@ -249,7 +249,7 @@ def build_records(
         approximate_receiver_ecef_position_m
     )
     check_assumptions(rinex_3_obs_file)
-    flat_obs = helpers.parse_rinex_obs_file(rinex_3_obs_file)
+    flat_obs = util.parse_rinex_obs_file(rinex_3_obs_file)
 
     flat_obs.time = pd.to_datetime(flat_obs.time, format="%Y-%m-%dT%H:%M:%S")
     flat_obs.obs_value = flat_obs.obs_value.astype(float)
@@ -370,17 +370,15 @@ def build_records(
         how="left",
     )
     # Compute anything else that is satellite-specific
-    sat_states["relativistic_clock_effect_m"] = (
-        helpers.compute_relativistic_clock_effect(
-            sat_states[["sat_pos_x_m", "sat_pos_y_m", "sat_pos_z_m"]].to_numpy(),
-            sat_states[["sat_vel_x_mps", "sat_vel_y_mps", "sat_vel_z_mps"]].to_numpy(),
-        )
+    sat_states["relativistic_clock_effect_m"] = util.compute_relativistic_clock_effect(
+        sat_states[["sat_pos_x_m", "sat_pos_y_m", "sat_pos_z_m"]].to_numpy(),
+        sat_states[["sat_vel_x_mps", "sat_vel_y_mps", "sat_vel_z_mps"]].to_numpy(),
     )
-    sat_states["sagnac_effect_m"] = helpers.compute_sagnac_effect(
+    sat_states["sagnac_effect_m"] = util.compute_sagnac_effect(
         sat_states[["sat_pos_x_m", "sat_pos_y_m", "sat_pos_z_m"]].to_numpy(),
         approximate_receiver_ecef_position_m,
     )
-    [latitude_user_rad, longitude_user_rad, height_user_m] = helpers.ecef_2_geodetic(
+    [latitude_user_rad, longitude_user_rad, height_user_m] = util.ecef_2_geodetic(
         approximate_receiver_ecef_position_m
     )
     days_of_year = np.array(
@@ -391,7 +389,7 @@ def build_records(
     (
         sat_states["elevation_rad"],
         sat_states["azimuth_rad"],
-    ) = helpers.compute_satellite_elevation_and_azimuth(
+    ) = util.compute_satellite_elevation_and_azimuth(
         sat_states[["sat_pos_x_m", "sat_pos_y_m", "sat_pos_z_m"]].to_numpy(),
         approximate_receiver_ecef_position_m,
     )
@@ -488,7 +486,7 @@ def build_records(
             time_of_emission_weeksecond_isagpst = (
                 flat_obs.loc[mask]
                 .apply(
-                    lambda row: helpers.timedelta_2_weeks_and_seconds(
+                    lambda row: util.timedelta_2_weeks_and_seconds(
                         row.time_of_emission_isagpst
                         - constants.system_time_scale_rinex_utc_epoch["GPST"]
                     )[1],

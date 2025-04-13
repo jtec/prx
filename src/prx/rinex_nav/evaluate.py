@@ -7,7 +7,7 @@ from pathlib import Path
 import scipy
 from joblib import Parallel, delayed
 import georinex
-from prx import helpers
+from prx import util
 from prx import constants
 from prx.util import timeit, repair_with_gfzrnx
 
@@ -16,11 +16,11 @@ log = logging.getLogger(__name__)
 
 @timeit
 def parse_rinex_nav_file(rinex_file: Path):
-    @helpers.disk_cache.cache(ignore=["rinex_file_path"])
+    @util.disk_cache.cache(ignore=["rinex_file_path"])
     def cached_load(rinex_file_path: Path, file_hash: str):
         repair_with_gfzrnx(rinex_file)
         ds = georinex.load(rinex_file)
-        ds.attrs["utc_gpst_leap_seconds"] = helpers.get_gpst_utc_leap_seconds(
+        ds.attrs["utc_gpst_leap_seconds"] = util.get_gpst_utc_leap_seconds(
             rinex_file_path
         )
         df = convert_nav_dataset_to_dataframe(ds)
@@ -29,7 +29,7 @@ def parse_rinex_nav_file(rinex_file: Path):
 
     t0 = pd.Timestamp.now()
 
-    file_content_hash = helpers.hash_of_file_content(rinex_file)
+    file_content_hash = util.hash_of_file_content(rinex_file)
     hash_time = pd.Timestamp.now() - t0
     if hash_time > pd.Timedelta(seconds=1):
         log.info(
@@ -180,7 +180,7 @@ def is_bds_geo(constellation, inclination_rad, semi_major_axis_m):
     # use that as a threshold to distinguish GEO from IGSO satellites.
     # TODO Ok to ignore eccentricity here?
     # From BDS-SIS-ICD-2.0, 2013-12, section 3.1
-    inclination_igso_and_meo_rad = helpers.deg_2_rad(55)
+    inclination_igso_and_meo_rad = util.deg_2_rad(55)
     geo_and_igso_approximate_radius_m = (
         35786 * constants.cMetersPerKilometer + constants.cBdsCgcs2000SmiMajorAxis_m
     )
@@ -309,7 +309,7 @@ def handle_bds_geos(eph):
     z_angles = geos.OmegaEarthIcd_rps * geos.t_k
     rotation_matrices = []
     for i, z_angle in enumerate(z_angles):
-        x_angle = helpers.deg_2_rad(-5.0)
+        x_angle = util.deg_2_rad(-5.0)
         Rx = np.array(
             [
                 [1, 0, 0],
@@ -574,10 +574,10 @@ def select_ephemerides(df, query):
     # Compute times w.r.t. orbit and clock reference times used by downstream computations
     query["query_time_wrt_ephemeris_reference_time_s"] = (
         query["query_time_isagpst"] - query["ephemeris_reference_time_isagpst"]
-    ).apply(helpers.timedelta_2_seconds)
+    ).apply(util.timedelta_2_seconds)
     query["query_time_wrt_clock_reference_time_s"] = (
         query["query_time_isagpst"] - query["clock_reference_time_isagpst"]
-    ).apply(helpers.timedelta_2_seconds)
+    ).apply(util.timedelta_2_seconds)
     query["ephemeris_valid"] = (query["query_time_isagpst"] < query["validity_end"]) & (
         query["query_time_isagpst"] > query["validity_start"]
     )
