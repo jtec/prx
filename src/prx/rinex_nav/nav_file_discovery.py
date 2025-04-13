@@ -17,7 +17,8 @@ log = util.get_logger(__name__)
 
 
 def is_rinex_3_mixed_mgex_broadcast_ephemerides_file(file: Path):
-    return str(file).endswith("MN.rnx")
+    pattern = r"^[A-Za-z0-9]{9}_[A-Za-z]_\d{11}_[A-Za-z0-9]{3}_[A-Za-z]N\.rnx.*"
+    return bool(re.match(pattern, file.name))
 
 
 def try_downloading_ephemerides_http(day: pd.Timestamp, local_destination_folder: Path):
