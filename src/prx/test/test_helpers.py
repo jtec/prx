@@ -3,8 +3,7 @@ import platform
 import numpy as np
 from prx.util import repair_with_gfzrnx
 import pytest
-from prx import helpers
-from prx import constants
+from prx import constants, util
 from prx import converters
 import pandas as pd
 from pathlib import Path
@@ -76,26 +75,26 @@ coords = {
 
 
 def test_rinex_header_time_string_2_timestamp_ns():
-    assert helpers.timestamp_2_timedelta(
-        helpers.rinex_header_time_string_2_timestamp_ns(
+    assert util.timestamp_2_timedelta(
+        util.rinex_header_time_string_2_timestamp_ns(
             "  1980     1     6     0     0    0.0000000     GPS"
         ),
         "GPST",
     ) == pd.Timedelta(0)
-    assert helpers.timestamp_2_timedelta(
-        helpers.rinex_header_time_string_2_timestamp_ns(
+    assert util.timestamp_2_timedelta(
+        util.rinex_header_time_string_2_timestamp_ns(
             "  1980     1     6     0     0    1.0000000     GPS"
         ),
         "GPST",
     ) == pd.Timedelta(constants.cNanoSecondsPerSecond, unit="ns")
-    timestamp = helpers.rinex_header_time_string_2_timestamp_ns(
+    timestamp = util.rinex_header_time_string_2_timestamp_ns(
         "  1980     1     6     0     0    1.0000001     GPS"
     )
-    timedelta = helpers.timestamp_2_timedelta(timestamp, "GPST")
+    timedelta = util.timestamp_2_timedelta(timestamp, "GPST")
 
     assert timedelta == pd.Timedelta(constants.cNanoSecondsPerSecond + 100, unit="ns")
-    assert helpers.timestamp_2_timedelta(
-        helpers.rinex_header_time_string_2_timestamp_ns(
+    assert util.timestamp_2_timedelta(
+        util.rinex_header_time_string_2_timestamp_ns(
             "  1980     1     7     0     0    0.0000000     GPS"
         ),
         "GPST",
@@ -109,7 +108,7 @@ def test_ecef_to_geodetic():
     tolerance_alt = 1e-3
 
     for coord in coords.values():
-        computed_geodetic = helpers.ecef_2_geodetic(coord["ecef"])
+        computed_geodetic = util.ecef_2_geodetic(coord["ecef"])
         assert (
             np.abs(np.array(coord["geodetic"][:2]) - np.array(computed_geodetic[:2]))
             < tolerance_rad
@@ -121,7 +120,7 @@ def test_geodetic_2_ecef():
     tolerance_ecef = 1e-3
 
     for coord in coords.values():
-        computed_ecef = helpers.geodetic_2_ecef(
+        computed_ecef = util.geodetic_2_ecef(
             coord["geodetic"][0], coord["geodetic"][1], coord["geodetic"][2]
         )
         assert (
@@ -136,7 +135,7 @@ def test_satellite_elevation_and_azimuth():
     sat_pos_ecef = np.array([[26600e3, 0.0, 0.0]])
     rx_pos_ecef = np.array([6400e3, 0.0, 0.0])
     expected_el, expected_az = np.deg2rad(90), np.deg2rad(0)
-    computed_el, computed_az = helpers.compute_satellite_elevation_and_azimuth(
+    computed_el, computed_az = util.compute_satellite_elevation_and_azimuth(
         sat_pos_ecef, rx_pos_ecef
     )
     assert np.abs(expected_el - computed_el) < tolerance
@@ -145,7 +144,7 @@ def test_satellite_elevation_and_azimuth():
     sat_pos_ecef = np.array([[2.066169397996826e07, 0.0, 1.428355697996826e07]])
     rx_pos_ecef = np.array([6378137.0, 0.0, 0.0])
     expected_el, expected_az = np.deg2rad(45), np.deg2rad(0)
-    computed_el, computed_az = helpers.compute_satellite_elevation_and_azimuth(
+    computed_el, computed_az = util.compute_satellite_elevation_and_azimuth(
         sat_pos_ecef, rx_pos_ecef
     )
     assert np.abs(expected_el - computed_el) < tolerance
@@ -156,7 +155,7 @@ def test_satellite_elevation_and_azimuth():
     )
     rx_pos_ecef = np.array([6378137.0, 0.0, 0.0])
     expected_el, expected_az = np.deg2rad(45), np.deg2rad(30)
-    computed_el, computed_az = helpers.compute_satellite_elevation_and_azimuth(
+    computed_el, computed_az = util.compute_satellite_elevation_and_azimuth(
         sat_pos_ecef, rx_pos_ecef
     )
     assert np.abs(expected_el - computed_el) < tolerance
@@ -166,8 +165,7 @@ def test_satellite_elevation_and_azimuth():
 def test_sagnac_effect():
     # load validation data
     path_to_validation_file = (
-        helpers.prx_repository_root()
-        / "src/prx/tools/validation_data/sagnac_effect.csv"
+        util.prx_repository_root() / "src/prx/tools/validation_data/sagnac_effect.csv"
     )
 
     # satellite position (from reference CSV header)
@@ -185,7 +183,7 @@ def test_sagnac_effect():
     for ind in range(data.shape[0]):
         rx_pos = data[ind, 0:3]
         sagnac_effect_reference[ind] = data[ind, 3]
-        sagnac_effect_computed[ind] = helpers.compute_sagnac_effect(sat_pos, rx_pos)
+        sagnac_effect_computed[ind] = util.compute_sagnac_effect(sat_pos, rx_pos)
 
     # errors come from the approximation of cos and sin for small angles
     # millimeter accuracy should be sufficient
@@ -194,12 +192,12 @@ def test_sagnac_effect():
 
 
 def test_is_sorted():
-    assert helpers.is_sorted([1, 2, 3, 4, 5])
-    assert not helpers.is_sorted([1, 2, 3, 5, 4])
-    assert not helpers.is_sorted([5, 4, 3, 2, 1])
-    assert helpers.is_sorted([1, 1, 1, 1, 1])
-    assert helpers.is_sorted([1])
-    assert helpers.is_sorted([])
+    assert util.is_sorted([1, 2, 3, 4, 5])
+    assert not util.is_sorted([1, 2, 3, 5, 4])
+    assert not util.is_sorted([5, 4, 3, 2, 1])
+    assert util.is_sorted([1, 1, 1, 1, 1])
+    assert util.is_sorted([1])
+    assert util.is_sorted([])
 
 
 def test_gfzrnx_execution_on_obs_file(input_for_test):
@@ -207,7 +205,7 @@ def test_gfzrnx_execution_on_obs_file(input_for_test):
     # convert test file to RX3 format
     file_obs = converters.anything_to_rinex_3(input_for_test["obs"])
     # list all gfzrnx binaries contained in the folder "prx/tools/gfzrnx/"
-    path_folder_gfzrnx = helpers.prx_repository_root() / "src/prx/tools/gfzrnx"
+    path_folder_gfzrnx = util.prx_repository_root() / "src/prx/tools/gfzrnx"
     path_binary = path_folder_gfzrnx.joinpath(
         constants.gfzrnx_binary[platform.system()]
     )
@@ -236,7 +234,7 @@ def test_gfzrnx_execution_on_obs_file(input_for_test):
 def test_gfzrnx_execution_on_nav_file(input_for_test):
     """Check execution of gfzrnx on a RNX NAV file and check"""
     file_nav = converters.anything_to_rinex_3(input_for_test["nav"])
-    path_folder_gfzrnx = helpers.prx_repository_root() / "src/prx/tools/gfzrnx"
+    path_folder_gfzrnx = util.prx_repository_root() / "src/prx/tools/gfzrnx"
     path_binary = path_folder_gfzrnx.joinpath(
         constants.gfzrnx_binary[platform.system()]
     )
@@ -301,7 +299,7 @@ def test_timedelta_2_weeks_and_seconds():
         tested_timedelta = (
             timestamp - constants.system_time_scale_rinex_utc_epoch["GPST"]
         )
-        w, s = helpers.timedelta_2_weeks_and_seconds(tested_timedelta)
+        w, s = util.timedelta_2_weeks_and_seconds(tested_timedelta)
         week_computed.append(w)
         seconds_of_week_computed.append(s)
 
@@ -326,11 +324,11 @@ def test_compute_gps_leap_seconds():
     ]
     for year, doy, expected_leap_second in test_cases:
         np.testing.assert_equal(
-            helpers.compute_gps_utc_leap_seconds(year, doy), expected_leap_second
+            util.compute_gps_utc_leap_seconds(year, doy), expected_leap_second
         )
 
 
 def test_timestamp_to_mid_day():
-    assert helpers.timestamp_to_mid_day(
+    assert util.timestamp_to_mid_day(
         pd.Timestamp("2023-01-01T01:02:03")
     ) == pd.Timestamp("2023-01-01T12:00:00")

@@ -5,9 +5,9 @@ import gzip
 import argparse
 import sys
 from prx.util import timeit
-from prx import helpers, main
+from prx import main, util
 
-log = helpers.get_logger(__name__)
+log = util.get_logger(__name__)
 
 
 @timeit

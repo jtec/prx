@@ -1,6 +1,6 @@
 import numpy as np
 
-from prx.helpers import deg_2_rad
+from prx.util import deg_2_rad
 import prx.constants as constants
 
 

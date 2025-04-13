@@ -1,11 +1,11 @@
 import numpy as np
 
-from prx import atmospheric_corrections as atmo
+from prx import atmospheric_corrections as atmo, util
 from pathlib import Path
 import shutil
 import pytest
 import os
-from prx import helpers, converters
+from prx import converters
 from prx.rinex_nav.evaluate import parse_rinex_nav_file
 
 
@@ -20,7 +20,7 @@ def rnx3_input_for_test():
 
     rnx3_nav_test_file = test_directory.joinpath("BRDC00IGS_R_20220010000_01D_MN.zip")
     shutil.copy(
-        helpers.prx_repository_root()
+        util.prx_repository_root()
         / f"src/prx/test/datasets/TLSE_2022001/{rnx3_nav_test_file.name}",
         rnx3_nav_test_file,
     )
@@ -278,7 +278,7 @@ def test_unb3m_corrections():
     tol = 1e-3
 
     tropo_expected = np.genfromtxt(
-        helpers.prx_repository_root() / "src/prx/tools/UNB3m_pack/tunb3m_.txt",
+        util.prx_repository_root() / "src/prx/tools/UNB3m_pack/tunb3m_.txt",
         skip_header=3,
     )
 

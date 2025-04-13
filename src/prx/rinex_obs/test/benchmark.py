@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 from pathlib import Path
 
-from prx import helpers, converters, constants
+from prx import converters, constants, util
 from prx.rinex_obs.parser import parse as prx_obs_parse
 from plotly.subplots import make_subplots
 import plotly.graph_objects as go
@@ -13,7 +13,7 @@ import georinex
 import platform
 
 path_gfzrnx_binary = (
-    helpers.prx_repository_root()
+    util.prx_repository_root()
     .joinpath("tools", "gfzrnx")
     .joinpath(constants.gfzrnx_binary[platform.system()])
 )
@@ -61,7 +61,7 @@ def generate_data():
             ("prx", prx_obs_parse),
         ]:
             print(f"Processing {case}")
-            helpers.disk_cache.clear()
+            util.disk_cache.clear()
             case[f"{parser[0]}_parsing_s"] = timeit.timeit(
                 lambda: parser[1](case["file"]), number=1
             )

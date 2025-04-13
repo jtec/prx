@@ -4,7 +4,7 @@ import shutil
 import os
 import pandas as pd
 
-from prx.helpers import obs_dataset_to_obs_dataframe
+from prx.util import obs_dataset_to_obs_dataframe
 from prx.util import repair_with_gfzrnx
 from prx.rinex_obs.parser import parse as prx_obs_parse
 from prx import converters
