@@ -7,8 +7,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from prx import helpers
-from prx import constants
+from prx import constants, util
 from prx import main
 from prx.user import (
     parse_prx_csv_file,
@@ -18,7 +17,7 @@ from prx.user import (
 )
 from prx.rinex_nav import nav_file_discovery
 
-log = helpers.get_logger(__name__)
+log = util.get_logger(__name__)
 
 
 # This function sets up a temporary directory, copies a rinex observations file into that directory
@@ -122,7 +121,7 @@ def input_for_test_with_first_epoch_at_midnight():
 
 def test_prx_command_line_call_with_csv_output(input_for_test_tlse):
     test_file = input_for_test_tlse
-    prx_path = helpers.prx_repository_root() / "src/prx/main.py"
+    prx_path = util.prx_repository_root() / "src/prx/main.py"
     command = (
         f"python {prx_path} --observation_file_path {test_file} --output_format csv"
     )
@@ -145,7 +144,7 @@ def test_prx_function_call_with_csv_output(input_for_test_tlse):
     assert expected_prx_file.exists()
     df = pd.read_csv(expected_prx_file, comment="#")
     assert not df.empty
-    assert helpers.is_sorted(df.time_of_reception_in_receiver_time)
+    assert util.is_sorted(df.time_of_reception_in_receiver_time)
     # Elevation sanity check
     assert (
         df[(df.prn == 14) & (df.constellation == "C")].sat_elevation_deg - 34.86

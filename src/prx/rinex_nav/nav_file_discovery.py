@@ -6,13 +6,14 @@ from pathlib import Path
 import georinex
 import urllib.request
 import pandas as pd
+import prx.util
 import requests
 
-from prx import converters, helpers
-from prx.helpers import timestamp_to_mid_day
+from prx import converters, util
+from prx.util import timestamp_to_mid_day
 from prx.util import is_rinex_3_nav_file
 
-log = helpers.get_logger(__name__)
+log = util.get_logger(__name__)
 
 
 def is_rinex_3_mixed_mgex_broadcast_ephemerides_file(file: Path):
@@ -41,7 +42,7 @@ def try_downloading_ephemerides_http(day: pd.Timestamp, local_destination_folder
         local_file = converters.compressed_to_uncompressed(local_compressed_file)
         os.remove(local_compressed_file)
         log.info(f"Downloaded broadcast ephemerides file from {url}")
-        helpers.repair_with_gfzrnx(local_file)
+        prx.util.repair_with_gfzrnx(local_file)
         return local_file
     except Exception as e:
         log.warning(f"Could not download broadcast ephemerides file for {day}: {e}")
@@ -84,7 +85,7 @@ def try_downloading_ephemerides_ftp(day: pd.Timestamp, folder: Path):
     local_file = converters.compressed_to_uncompressed(local_compressed_file)
     os.remove(local_compressed_file)
     log.info(f"Downloaded broadcast ephemerides file {ftp_file}")
-    helpers.repair_with_gfzrnx(local_file)
+    prx.util.repair_with_gfzrnx(local_file)
     return local_file
 
 
@@ -185,9 +186,9 @@ def discover_or_download_auxiliary_files(observation_file_path=Path()):
     #   + max sat clock offset (37 ms)
     #   + 43 ms for receiver clock offset + margin
     ephs = discover_or_download_ephemerides(
-        helpers.rinex_header_time_string_2_timestamp_ns(header["TIME OF FIRST OBS"])
+        util.rinex_header_time_string_2_timestamp_ns(header["TIME OF FIRST OBS"])
         - pd.Timedelta(200, unit="milliseconds"),
-        helpers.rinex_header_time_string_2_timestamp_ns(header["TIME OF LAST OBS"]),
+        util.rinex_header_time_string_2_timestamp_ns(header["TIME OF LAST OBS"]),
         rinex_3_obs_file.parent,
         list(header["fields"].keys()),
     )

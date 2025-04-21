@@ -1,11 +1,12 @@
 import numpy as np
 
-from prx import atmospheric_corrections as atmo
+from prx import atmospheric_corrections as atmo, util
 from pathlib import Path
 import shutil
 import pytest
 import os
-from prx import helpers, converters
+from prx import converters
+from prx.rinex_nav.evaluate import parse_rinex_nav_file
 
 
 @pytest.fixture
@@ -19,7 +20,7 @@ def rnx3_input_for_test():
 
     rnx3_nav_test_file = test_directory.joinpath("BRDC00IGS_R_20220010000_01D_MN.zip")
     shutil.copy(
-        helpers.prx_repository_root()
+        util.prx_repository_root()
         / f"src/prx/test/datasets/TLSE_2022001/{rnx3_nav_test_file.name}",
         rnx3_nav_test_file,
     )
@@ -41,11 +42,11 @@ def test_get_klobuchar_parameters_from_rinex3(rnx3_input_for_test):
 
     # Compute RNX3 satellite position
     # load RNX3 NAV file
-    nav_ds = helpers.parse_rinex_file(path_to_rnx3_nav_file)
+    nav_df = parse_rinex_nav_file(path_to_rnx3_nav_file)
 
     # recover klobuchar parameters
-    gps_a = nav_ds.ionospheric_corr_GPS[0:4]
-    gps_b = nav_ds.ionospheric_corr_GPS[4:9]
+    gps_a = nav_df.attrs["ionospheric_corr_GPS"][0:4]
+    gps_b = nav_df.attrs["ionospheric_corr_GPS"][4:9]
 
     assert (gps_a == gps_a_expected).all()
     assert (gps_b == gps_b_expected).all()
@@ -277,7 +278,7 @@ def test_unb3m_corrections():
     tol = 1e-3
 
     tropo_expected = np.genfromtxt(
-        helpers.prx_repository_root() / "src/prx/tools/UNB3m_pack/tunb3m_.txt",
+        util.prx_repository_root() / "src/prx/tools/UNB3m_pack/tunb3m_.txt",
         skip_header=3,
     )
 

@@ -4,13 +4,13 @@ import shutil
 import gzip
 import argparse
 import sys
+from prx.util import timeit
+from prx import main, util
 
-from prx import helpers, main
-
-log = helpers.get_logger(__name__)
+log = util.get_logger(__name__)
 
 
-@helpers.timeit
+@timeit
 def process_gsdc2021_dataset(path_dataset: Path):
     """
     This script creates a local copy of gunzipped RINEX files from the GSDC2021 data set and process them with prx
