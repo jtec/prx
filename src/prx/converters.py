@@ -4,7 +4,7 @@ import itertools
 import subprocess
 import gzip
 import zipfile
-from prx.helpers import get_logger
+from prx.util import get_logger
 from prx.util import (
     is_rinex_2_obs_file,
     is_rinex_2_nav_file,

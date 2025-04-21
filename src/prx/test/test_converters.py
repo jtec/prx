@@ -4,7 +4,7 @@ import shutil
 
 import pytest
 
-from prx import helpers, converters
+from prx import converters, util
 
 
 @pytest.fixture
@@ -23,7 +23,7 @@ def set_up_test():
 def test_compressed_crx_to_rnx(set_up_test):
     compressed_compact_rinex_file = "TLSE00FRA_R_20230010100_10S_01S_MO.crx.gz"
     shutil.copy(
-        helpers.prx_repository_root()
+        util.prx_repository_root()
         / f"src/prx/test/datasets/TLSE_2023001/{compressed_compact_rinex_file}",
         set_up_test["test_directory"].joinpath(compressed_compact_rinex_file),
     )
@@ -42,11 +42,11 @@ def test_converting_file_that_cannot_be_converted(set_up_test):
     # When trying to convert a file that cannot be converted into RINEX 3, expect the converter to return None
     does_not_contain_rinex_3 = "igs21906.sp3"
     assert (
-        helpers.prx_repository_root()
+        util.prx_repository_root()
         / f"src/prx/test/datasets/TLSE_2022001/{does_not_contain_rinex_3}"
     ).exists()
     shutil.copy(
-        helpers.prx_repository_root()
+        util.prx_repository_root()
         / f"src/prx/test/datasets/TLSE_2022001/{does_not_contain_rinex_3}",
         set_up_test["test_directory"].joinpath(does_not_contain_rinex_3),
     )

@@ -7,7 +7,7 @@ import georinex as gr
 from prx.constants import cGpsSpeedOfLight_mps
 import prx.constants
 import prx.rinex_nav.evaluate
-import prx.helpers
+import prx.util
 
 
 def parse_prx_csv_file_metadata(prx_file: Path):
@@ -178,7 +178,7 @@ def bootstrap_coarse_receiver_position(filepath_obs, filepath_nav):
         }
     )
     sat_states["relativistic_clock_effect_m"] = (
-        prx.helpers.compute_relativistic_clock_effect(
+        prx.util.compute_relativistic_clock_effect(
             sat_states[["sat_pos_x_m", "sat_pos_y_m", "sat_pos_z_m"]].to_numpy(),
             sat_states[["sat_vel_x_mps", "sat_vel_y_mps", "sat_vel_z_mps"]].to_numpy(),
         )

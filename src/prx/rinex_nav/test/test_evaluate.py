@@ -5,8 +5,8 @@ from pathlib import Path
 from prx.rinex_nav.evaluate import select_ephemerides, set_time_of_validity
 from prx.sp3 import evaluate as sp3_evaluate
 from prx.rinex_nav import evaluate as rinex_nav_evaluate
-from prx import constants, converters, helpers
-from prx.helpers import week_and_seconds_2_timedelta
+from prx import constants, converters, util
+from prx.util import week_and_seconds_2_timedelta
 import shutil
 import pytest
 import os
@@ -333,7 +333,7 @@ def set_up_test_2023():
 
     for key, test_file in test_files.items():
         shutil.copy(
-            helpers.prx_repository_root()
+            util.prx_repository_root()
             / f"src/prx/test/datasets/TLSE_2023001/{test_file.name}",
             test_file,
         )
@@ -575,7 +575,7 @@ def test_gps_group_delay_multi_prn(input_for_test):
 def test_gal_group_delay(input_for_test):
     """
     Note that both ephemerides have the same Toe (reference time), but one is I/NAV, the
-    other F/NAV. This test implicitly checks whether the right ephemeris is used wben computing
+    other F/NAV. This test implicitly checks whether the right ephemeris is used when computing
     TGDs.
 
     E25 2022 01 01 00 00 00-5.587508785538e-04-1.278976924368e-12 0.000000000000e+00
