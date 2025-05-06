@@ -7,8 +7,6 @@ authors = [
     { name = "Jan Bolting", email = "janbolting@gmail.com" },
     { name = "Paul Thevenon", email = "paul.thevenon@gmail.com" },
 ]
-[project.urls]
-Repository = "https://github.com/jtec/prx.git"
 license = { text = "MIT" }
 requires-python = "<3.13,>=3.10"
 dependencies = [
@@ -34,6 +32,9 @@ dependencies = [
     "hatchling>=1.27.0",
     "georinex>=1.16.2",
 ]
+
+[project.urls]
+Repository = "https://github.com/jtec/prx.git"
 
 [project.scripts]
 prx = "prx:main"
