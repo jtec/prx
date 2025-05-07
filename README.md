@@ -1,4 +1,5 @@
 # prx
+![prx test status](https://github.com/jtec/prx/actions/workflows/python-ci.yml/badge.svg)
 
 prx reads a RINEX 3.05 observation file and outputs a CSV file of the following format
 
