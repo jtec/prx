@@ -29,8 +29,8 @@ dependencies = [
     "plotly>=5.24.1,<7.0.0",
     "line-profiler<5.0.0,>=4.2.0",
     "requests<3.0.0,>=2.32.3",
-    "georinex>=1.16.2",
     "hatchling>=1.27.0",
+    "georinex",
 ]
 
 [project.scripts]
@@ -43,6 +43,9 @@ log_cli = 1
 [tool.uv]
 package = true
 python-preference = "only-managed"
+
+[tool.uv.sources]
+georinex = { git = "https://github.com/geospace-code/georinex", rev = "95ef1d8e7150f998a1b5a429090cadb429128648" }
 
 [build-system]
 requires = ["hatchling", "uv-dynamic-versioning"]
