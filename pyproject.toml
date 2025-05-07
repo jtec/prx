@@ -33,9 +33,6 @@ dependencies = [
     "georinex>=1.16.2",
 ]
 
-[project.urls]
-Repository = "https://github.com/jtec/prx.git"
-
 [project.scripts]
 prx = "prx:main"
 
