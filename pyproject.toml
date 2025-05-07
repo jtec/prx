@@ -29,8 +29,8 @@ dependencies = [
     "plotly>=5.24.1,<7.0.0",
     "line-profiler<5.0.0,>=4.2.0",
     "requests<3.0.0,>=2.32.3",
-    "hatchling>=1.27.0",
     "georinex>=1.16.2",
+    "hatchling>=1.27.0",
 ]
 
 [project.scripts]
@@ -42,10 +42,26 @@ log_cli = 1
 
 [tool.uv]
 package = true
+python-preference = "only-managed"
 
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling", "uv-dynamic-versioning"]
 build-backend = "hatchling.build"
 
+[tool.hatch.build.targets.sdist]
+include = [
+    "src/prx",
+]
+exclude = [
+    "src/prx/test",
+    "src/prx/sp3/test",
+    "src/prx/rinex_nav/test",
+    "src/prx/rinex_obs/test",
+]
 [tool.hatch.build.targets.wheel]
-only-include = ["src/prx/*.py", "src/prx/tools/*"]
+include = [
+    "src/prx",
+]
+
+[tool.hatch.version]
+source = "uv-dynamic-versioning"
