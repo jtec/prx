@@ -52,22 +52,10 @@ build-backend = "hatchling.build"
 include = [
     "src/prx",
 ]
-exclude = [
-    "src/prx/test",
-    "src/prx/sp3/test",
-    "src/prx/rinex_nav/test",
-    "src/prx/rinex_obs/test",
-]
 
 [tool.hatch.build.targets.wheel]
 include = [
     "src/prx",
-]
-exclude = [
-    "src/prx/test",
-    "src/prx/sp3/test",
-    "src/prx/rinex_nav/test",
-    "src/prx/rinex_obs/test",
 ]
 
 [tool.hatch.version]
