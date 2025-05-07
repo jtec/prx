@@ -625,12 +625,18 @@ def compute(rinex_nav_file_path, per_signal_query):
     # Example: Galileo transmits E5a clock and group delay parameters in the F/NAV message, but parameters for other
     # signals in the I/NAV message
     per_signal_query = select_ephemerides(ephemerides, per_signal_query)
-    per_signal_query = compute_clock_offsets(per_signal_query)
+
+    # compute satellite clock offset iteratively
+    t = per_signal_query.query_time_wrt_clock_reference_time_s
+    for _ in range(2):
+        per_signal_query = compute_clock_offsets(per_signal_query)
+        per_signal_query.query_time_wrt_clock_reference_time_s = t - per_signal_query.sat_clock_offset_m / constants.cGpsSpeedOfLight_mps
 
     # Apply sat clock correction to the query time for satellite position computation
     per_signal_query.query_time_wrt_ephemeris_reference_time_s -= (
         per_signal_query.sat_clock_offset_m / constants.cGpsSpeedOfLight_mps
     )
+
     # Compute orbital states for each satellite only once:
     per_sat_query = (
         per_signal_query.groupby(["sv", "query_time_isagpst"]).first().reset_index()
