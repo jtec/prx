@@ -630,7 +630,9 @@ def compute(rinex_nav_file_path, per_signal_query):
     t = per_signal_query.query_time_wrt_clock_reference_time_s
     for _ in range(2):
         per_signal_query = compute_clock_offsets(per_signal_query)
-        per_signal_query.query_time_wrt_clock_reference_time_s = t - per_signal_query.sat_clock_offset_m / constants.cGpsSpeedOfLight_mps
+        per_signal_query.query_time_wrt_clock_reference_time_s = (
+            t - per_signal_query.sat_clock_offset_m / constants.cGpsSpeedOfLight_mps
+        )
 
     # Apply sat clock correction to the query time for satellite position computation
     per_signal_query.query_time_wrt_ephemeris_reference_time_s -= (
