@@ -597,7 +597,9 @@ def compute_clock_offsets(df):
     return df
 
 
-def compute_parallel(rinex_nav_file_path, per_signal_query):
+def compute_parallel(
+    rinex_nav_file_path, per_signal_query, is_query_corrected_by_sat_clock_offset=False
+):
     # Warm up nav file parser cache so that we don't parse the file multiple times
     _ = parse_rinex_nav_file(rinex_nav_file_path)
     parallel = Parallel(n_jobs=round(multiprocessing.cpu_count() / 2), return_as="list")
@@ -605,12 +607,17 @@ def compute_parallel(rinex_nav_file_path, per_signal_query):
     n_chunks = min(len(per_signal_query.index), 4)
     chunks = np.array_split(per_signal_query, n_chunks)
     processed_chunks = parallel(
-        delayed(compute)(rinex_nav_file_path, chunk) for chunk in chunks
+        delayed(compute)(
+            rinex_nav_file_path, chunk, is_query_corrected_by_sat_clock_offset
+        )
+        for chunk in chunks
     )
     return pd.concat(processed_chunks)
 
 
-def compute(rinex_nav_file_path, per_signal_query):
+def compute(
+    rinex_nav_file_path, per_signal_query, is_query_corrected_by_sat_clock_offset=False
+):
     query_columns = per_signal_query.columns
     # per_signal_query is a pd.DataFrame with the following columns
     #   - time_of_reception_in_receiver_time
@@ -626,18 +633,20 @@ def compute(rinex_nav_file_path, per_signal_query):
     # signals in the I/NAV message
     per_signal_query = select_ephemerides(ephemerides, per_signal_query)
 
-    # compute satellite clock offset iteratively
-    t = per_signal_query.query_time_wrt_clock_reference_time_s
-    for _ in range(2):
+    # compute satellite clock bias
+    if is_query_corrected_by_sat_clock_offset:
         per_signal_query = compute_clock_offsets(per_signal_query)
-        per_signal_query.query_time_wrt_clock_reference_time_s = (
-            t - per_signal_query.sat_clock_offset_m / constants.cGpsSpeedOfLight_mps
+    else:  # compute satellite clock offset iteratively
+        t = per_signal_query.query_time_wrt_clock_reference_time_s
+        for _ in range(2):
+            per_signal_query = compute_clock_offsets(per_signal_query)
+            per_signal_query.query_time_wrt_clock_reference_time_s = (
+                t - per_signal_query.sat_clock_offset_m / constants.cGpsSpeedOfLight_mps
+            )
+        # Apply sat clock correction to the query time for satellite position computation
+        per_signal_query.query_time_wrt_ephemeris_reference_time_s -= (
+            per_signal_query.sat_clock_offset_m / constants.cGpsSpeedOfLight_mps
         )
-
-    # Apply sat clock correction to the query time for satellite position computation
-    per_signal_query.query_time_wrt_ephemeris_reference_time_s -= (
-        per_signal_query.sat_clock_offset_m / constants.cGpsSpeedOfLight_mps
-    )
 
     # Compute orbital states for each satellite only once:
     per_sat_query = (
