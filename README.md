@@ -73,9 +73,13 @@ We use https://google.github.io/styleguide/pyguide.html as our python style guid
 
 Please open a PR adding with a unit test that reproduces the issue. No need to be a python developer: If you don't know how to write the test, a PR with a comment describing what you envision the test to do - then ping a few people you think can help to get the actual implementation going.
 
+If you don't know how to open a PR, feel free to open an issue instead.
+
 ### I have an idea for a new feature that will make prx even more useful and/or easier to use
 
 Please open a PR adding with at a minimum a unit test that tests the new feature. No need to be a python developer: If you don't know how to implement the feature or write the test, a PR with a comment describing what the test will do can be enough - then ping a few people you think can help to get the actual implementation going.
+
+If you don't know how to open a PR, feel free to open an issue instead.
 
 ## Frequently Asked Questions
 ### How can I use my own RINEX NAV file?
