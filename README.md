@@ -71,13 +71,13 @@ We use https://google.github.io/styleguide/pyguide.html as our python style guid
 
 ### I ran a file through prx and it did not do what I expected
 
-Please open a PR adding with a unit test that reproduces the issue. No need to be a python developer: If you don't know how to write the test, a PR with a comment describing what you envision the test to do - then ping a few people you think can help to get the actual implementation going.
+Please open a PR adding a unit test that reproduces the issue, ideally with an input that is as small as possible to keep our tests lean and fast. No need to be a python developer: If you don't know how to write the test, a PR with a comment describing what you envision the test to do will do - then simply tag a few people on the PR you think can help to get the actual implementation going.
 
-If you don't know how to open a PR, feel free to open an issue instead.
+If you don't know how to open a PR, feel free to open an issue instead, describing how to reproduce the unexpected behaviour you are seeing and uploading or linking to the data needed.
 
 ### I have an idea for a new feature that will make prx even more useful and/or easier to use
 
-Please open a PR adding with at a minimum a unit test that tests the new feature. No need to be a python developer: If you don't know how to implement the feature or write the test, a PR with a comment describing what the test will do can be enough - then ping a few people you think can help to get the actual implementation going.
+Please open a PR adding with a unit test that tests the new feature. No need to be a python developer: If you don't know how to implement the feature or write the test, a PR with a comment describing what the test will do can be enough - then tag a few people you think can help to get the actual implementation going.
 
 If you don't know how to open a PR, feel free to open an issue instead.
 
