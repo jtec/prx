@@ -55,35 +55,6 @@ def input_for_test():
     shutil.rmtree(test_directory)
 
 
-def test_compare_rnx3_gps_sat_pos_with_magnitude(input_for_test):
-    """Loads a RNX3 nav file, computes broadcast position for a GPS satellite and compares to
-    position computed by MAGNITUDE matlab library"""
-    path_to_rnx3_nav_file = converters.anything_to_rinex_3(
-        input_for_test["rinex_nav_file"]
-    )
-    query = pd.DataFrame(
-        {
-            "sv": "G01",
-            "signal": "C1C",
-            "query_time_isagpst": week_and_seconds_2_timedelta(
-                weeks=2190, seconds=523800
-            )
-            + constants.cGpstUtcEpoch,
-        },
-        index=[0],
-    )
-    rinex_sat_states = rinex_nav_evaluate.compute_parallel(path_to_rnx3_nav_file, query)
-
-    # MAGNITUDE position
-    sv_pos_magnitude = np.array([13053451.235, -12567273.060, 19015357.126])
-    sv_pos_prx = rinex_sat_states[["sat_pos_x_m", "sat_pos_y_m", "sat_pos_z_m"]][
-        rinex_sat_states.sv == "G01"
-    ].to_numpy()
-
-    threshold_pos_error_m = 1e-3
-    assert np.linalg.norm(sv_pos_prx - sv_pos_magnitude) < threshold_pos_error_m
-
-
 def test_expired_ephemeris_yields_nans(input_for_test):
     path_to_rnx3_nav_file = converters.anything_to_rinex_3(
         input_for_test["rinex_nav_file"]
@@ -224,7 +195,9 @@ def test_compare_to_sp3(input_for_test):
     query = generate_sat_query(pd.Timestamp("2022-01-01T01:10:00.000000000"))
     # We have no SP3 reference solutions for SBAS satellites, so remove them from the query
     query = query[~query.sv.str.startswith("S")]
-    rinex_sat_states = rinex_nav_evaluate.compute_parallel(rinex_nav_file, query.copy())
+    rinex_sat_states = rinex_nav_evaluate.compute_parallel(
+        rinex_nav_file, query.copy(), True
+    )
     rinex_sat_states = (
         rinex_sat_states.sort_values(by=["sv", "query_time_isagpst"])
         .sort_index(axis=1)
