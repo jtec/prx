@@ -406,36 +406,22 @@ def build_records(
         sat_states.elevation_rad.to_numpy(),
     )
     sat_states["tropo_delay_m"] = tropo_delay_m
-
-    # Merge in all sat states that are not signal-specific, i.e. can be copied into
-    # rows with Doppler and carrier phase observations
-    # TODO understand why dropping duplicates with
-    #  subset=['satellite', 'time_of_emission_isagpst']
-    #  leads to fewer rows here, looks like there are multiple position/velocity/clock values for
-    #  the same satellite and the same time of emission
-    sat_specific = sat_states[
-        sat_states.columns.drop(
-            [
-                "observation_type",
-                "sat_code_bias_m",
-                "time_of_reception_in_receiver_time",
-            ]
-        )
-    ].drop_duplicates(subset=["satellite", "time_of_emission_isagpst"])
-    # Group delays are signal-specific, so we merge them in separately
-    code_specific = sat_states[
-        ["satellite", "observation_type", "time_of_emission_isagpst", "sat_code_bias_m"]
-    ].drop_duplicates(
-        subset=["satellite", "observation_type", "time_of_emission_isagpst"]
+    # Merge sat states into observation dataframe. Due to Galileo's FNAV/INAV ephemerides
+    # being signal-specific, we merge on the code identifier here and not only the satellite
+    sat_states["code_id"] = sat_states["observation_type"].str[1:3]
+    flat_obs["code_id"] = flat_obs["observation_type"].str[1:3]
+    sat_states = sat_states.drop(
+        columns=["observation_type", "time_of_reception_in_receiver_time"]
     )
     flat_obs = flat_obs.merge(
-        sat_specific, on=["satellite", "time_of_emission_isagpst"], how="left"
-    )
-    flat_obs = flat_obs.merge(
-        code_specific,
-        on=["satellite", "observation_type", "time_of_emission_isagpst"],
+        sat_states,
+        on=["satellite", "code_id", "time_of_emission_isagpst"],
         how="left",
     )
+    # Fix code biases being merged into lines with signals that are not code signals
+    flat_obs.loc[
+        ~(flat_obs.observation_type.str.startswith("C")), "sat_code_bias_m"
+    ] = np.nan
     # GLONASS satellites with both FDMA and CDMA signals have a frequency slot for FDMA signals,
     # for CDMA signals we use the common carrier frequency of those signals.
     glo_cdma = flat_obs[
