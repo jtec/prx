@@ -44,9 +44,9 @@ def time_scale_integer_second_offset_wrt_gpst(time_scale, utc_gpst_leap_seconds=
     if time_scale == "BDT":
         return pd.Timedelta(seconds=-14)
     if time_scale == "GLONASST":
-        assert utc_gpst_leap_seconds is not None, (
-            "Need GPST-UTC leap seconds to compute GLONASST integer second offset w.r.t. GPST"
-        )
+        assert (
+            utc_gpst_leap_seconds is not None
+        ), "Need GPST-UTC leap seconds to compute GLONASST integer second offset w.r.t. GPST"
         return pd.Timedelta(seconds=-utc_gpst_leap_seconds)
     assert False, f"Unexpected time scale: {time_scale}"
 
@@ -521,9 +521,9 @@ def compute_gal_inav_fnav_indicators(df):
     )
     # We expect only the following navigation message types for Galileo:
     indicators = set(df[is_gal].fnav_or_inav_indicator.unique())
-    assert len(indicators.intersection({1, 2, 4, 5})) == len(indicators), (
-        f"Unexpected Galileo navigation message type: {indicators}"
-    )
+    assert len(indicators.intersection({1, 2, 4, 5})) == len(
+        indicators
+    ), f"Unexpected Galileo navigation message type: {indicators}"
     df.loc[is_gal & (df.fnav_or_inav_indicator == 1), "fnav_or_inav"] = "inav"
     df.loc[is_gal & (df.fnav_or_inav_indicator == 2), "fnav_or_inav"] = "fnav"
     df.loc[is_gal & (df.fnav_or_inav_indicator == 4), "fnav_or_inav"] = "inav"
@@ -545,9 +545,9 @@ def to_isagpst(time, timescale, gpst_utc_leapseconds):
             )
         )
 
-    assert False, (
-        f"Unexpected types: time is {type(time)}, timescale is {type(timescale)}"
-    )
+    assert (
+        False
+    ), f"Unexpected types: time is {type(time)}, timescale is {type(timescale)}"
 
 
 @timeit
@@ -566,7 +566,7 @@ def select_ephemerides(df, query):
     query = pd.merge_asof(
         query,
         df,
-        left_on="query_time_isagpst",
+        left_on="ephemeris_selection_time_isagpst",
         right_on="ephemeris_reference_time_isagpst",
         by=["sv", "fnav_or_inav"],
         direction="backward",
@@ -597,20 +597,25 @@ def compute_clock_offsets(df):
     return df
 
 
-def compute_parallel(rinex_nav_file_path, per_signal_query):
+def compute_parallel(rinex_nav_file_paths, per_signal_query):
+    if not isinstance(rinex_nav_file_paths, list):
+        rinex_nav_file_paths = [rinex_nav_file_paths]
     # Warm up nav file parser cache so that we don't parse the file multiple times
-    _ = parse_rinex_nav_file(rinex_nav_file_path)
+    for rinex_nav_file_path in rinex_nav_file_paths:
+        _ = parse_rinex_nav_file(rinex_nav_file_path)
     parallel = Parallel(n_jobs=round(multiprocessing.cpu_count() / 2), return_as="list")
     # split dataframe into `n_chunks` smaller dataframes
     n_chunks = min(len(per_signal_query.index), 4)
     chunks = np.array_split(per_signal_query, n_chunks)
     processed_chunks = parallel(
-        delayed(compute)(rinex_nav_file_path, chunk) for chunk in chunks
+        delayed(compute)(rinex_nav_file_paths, chunk) for chunk in chunks
     )
     return pd.concat(processed_chunks)
 
 
-def compute(rinex_nav_file_path, per_signal_query):
+def compute(rinex_nav_file_paths, per_signal_query):
+    if not isinstance(rinex_nav_file_paths, list):
+        rinex_nav_file_paths = [rinex_nav_file_paths]
     query_columns = per_signal_query.columns
     # per_signal_query is a pd.DataFrame with the following columns
     #   - time_of_reception_in_receiver_time
@@ -618,12 +623,23 @@ def compute(rinex_nav_file_path, per_signal_query):
     #   - signal
     #   - sv
     #   - query_time_isagpst
-    rinex_nav_file_path = Path(rinex_nav_file_path)
-    ephemerides = parse_rinex_nav_file(rinex_nav_file_path)
+    rinex_nav_file_paths = [Path(path) for path in rinex_nav_file_paths]
+    ephemeris_blocks = []
+    for path in rinex_nav_file_paths:
+        block = parse_rinex_nav_file(path)
+        # Not using iono model parameters here, removing them from dataframe attributes to
+        # enable concatenation
+        block.attrs.pop("ionospheric_corr_GPS", None)
+        ephemeris_blocks.append(block)
+    ephemerides = pd.concat(ephemeris_blocks)
     # Group delays and clock offsets can be signal-specific, so we need to match ephemerides to code signals,
     # not only to satellites
     # Example: Galileo transmits E5a clock and group delay parameters in the F/NAV message, but parameters for other
     # signals in the I/NAV message
+    if "ephemeris_selection_time_isagpst" not in per_signal_query.columns:
+        per_signal_query["ephemeris_selection_time_isagpst"] = per_signal_query[
+            "query_time_isagpst"
+        ]
     per_signal_query = select_ephemerides(ephemerides, per_signal_query)
     per_signal_query = compute_clock_offsets(per_signal_query)
     # Compute orbital states for each (satellite,ephemeris) pair only once:
@@ -681,9 +697,9 @@ def compute(rinex_nav_file_path, per_signal_query):
     computed_columns_to_keep = [
         col for col in columns_to_keep if col not in query_columns
     ]
-    per_signal_query.loc[
-        ~per_signal_query.ephemeris_valid, computed_columns_to_keep
-    ] = np.nan
+    # per_signal_query.loc[
+    #    ~per_signal_query.ephemeris_valid, computed_columns_to_keep
+    # ] = np.nan
     per_signal_query = per_signal_query[columns_to_keep].reset_index(drop=True)
     return per_signal_query
 
