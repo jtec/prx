@@ -41,10 +41,8 @@ jobs:
       - name: Run ruff
         if: ${{ matrix.os == 'ubuntu-latest' }}
         run: |
-          uv run ruff check --exit-non-zero-on-fix
-          uv run ruff format --check
+          make format-lint-check
 
       - name: Test with pytest
         run: |
-          uv run pytest -n auto --dist=loadfile --durations=10
- 
+          make test 
