@@ -8,6 +8,7 @@ import pandas as pd
 import numpy as np
 import git
 import prx.util
+from prx.util import add_range_column
 
 from prx import atmospheric_corrections as atmo, util
 from prx.constants import carrier_frequencies_hz
@@ -30,9 +31,7 @@ def write_prx_file(
 ):
     output_writers = {"jsonseq": write_json_text_sequence_file, "csv": write_csv_file}
     if output_format not in output_writers.keys():
-        assert False, (
-            f"Output format {output_format} not supported,  we can do {list(output_writers.keys())}"
-        )
+        assert False, f"Output format {output_format} not supported,  we can do {list(output_writers.keys())}"
     return output_writers[output_format](
         prx_header, prx_records, file_name_without_extension
     )
@@ -216,12 +215,12 @@ def check_assumptions(
 ):
     obs_header = georinex.rinexheader(rinex_3_obs_file)
     if "RCV CLOCK OFFS APPL" in obs_header.keys():
-        assert obs_header["RCV CLOCK OFFS APPL"].strip() == "0", (
-            "Handling of 'RCV CLOCK OFFS APPL' != 0 not implemented yet."
-        )
-    assert obs_header["TIME OF FIRST OBS"].split()[-1].strip() == "GPS", (
-        "Handling of observation files using time scales other than GPST not implemented yet."
-    )
+        assert (
+            obs_header["RCV CLOCK OFFS APPL"].strip() == "0"
+        ), "Handling of 'RCV CLOCK OFFS APPL' != 0 not implemented yet."
+    assert (
+        obs_header["TIME OF FIRST OBS"].split()[-1].strip() == "GPS"
+    ), "Handling of observation files using time scales other than GPST not implemented yet."
 
 
 def parse_rinex_nav_or_obs_file(rinex_file_path: Path):
@@ -229,13 +228,80 @@ def parse_rinex_nav_or_obs_file(rinex_file_path: Path):
         return parse_rinex_obs_file(rinex_file_path)
     elif is_rinex_3_nav_file(rinex_file_path):
         return parse_rinex_nav_file(rinex_file_path)
-    assert False, (
-        f"File {rinex_file_path} appears to be neither RINEX 3 OBS nor NAV file."
-    )
+    assert (
+        False
+    ), f"File {rinex_file_path} appears to be neither RINEX 3 OBS nor NAV file."
 
 
 def warm_up_parser_cache(rinex_files):
     _ = [parse_rinex_nav_or_obs_file(file) for file in rinex_files]
+
+
+def compute_ephemeris_discontinuities(
+    rinex_3_ephemerides_files: list[Path],
+    sat_states: pd.DataFrame,
+    approximate_receiver_ecef_position_m: np.ndarray,
+):
+    # Extract observations right after a change in ephemeris
+    sat_states = sat_states.sort_values("query_time_isagpst")
+    sat_states["after_discontinuity"] = False
+    for _, group_df in sat_states.groupby(["sv", "signal"]):
+        after_discontinuity = group_df.ephemeris_hash != group_df.ephemeris_hash.shift(
+            1
+        )
+        # The very first of a signal's sat states can't be after a discontinuity
+        after_discontinuity.iloc[0] = False
+        before_discontinuity = group_df.ephemeris_hash != group_df.ephemeris_hash.shift(
+            -1
+        )
+        sat_states.loc[group_df.index, "after_discontinuity"] = (
+            after_discontinuity.values
+        )
+        # The very last of a signal's sat states can't be before a discontinuity
+        before_discontinuity.iloc[-1] = False
+        sat_states.loc[group_df.index, "before_discontinuity"] = (
+            before_discontinuity.values
+        )
+    # Satellite states with ephemeris after the discontinuity
+    df_new_ephemeris = (
+        sat_states[sat_states.after_discontinuity]
+        .copy()
+        .drop(columns=["after_discontinuity"])
+        .reset_index(drop=True)
+    )
+    # Now compute satellite states after discontinuity with ephemeris before the discontinuity
+    query = sat_states.loc[
+        sat_states.before_discontinuity, ["sv", "signal", "query_time_isagpst"]
+    ].drop_duplicates()
+    # Use the query time from before the discontinuity to select the previous ephemeris
+    query["ephemeris_selection_time_isagpst"] = query.query_time_isagpst
+    # But still compute satellite states for after the discontinuity
+    query.query_time_isagpst = df_new_ephemeris.query_time_isagpst.values
+    query = query.sort_values("ephemeris_selection_time_isagpst")
+    df_previous_ephemeris = rinex_evaluate.compute(
+        rinex_3_ephemerides_files, query
+    ).reset_index(drop=True)
+    shared_columns = ["sv", "signal", "query_time_isagpst"]
+    df_new_ephemeris = df_new_ephemeris.sort_values(by=shared_columns).reset_index(
+        drop=True
+    )
+    df_previous_ephemeris = df_previous_ephemeris.sort_values(
+        by=shared_columns
+    ).reset_index(drop=True)
+    df_new_ephemeris = add_range_column(
+        df_new_ephemeris, approximate_receiver_ecef_position_m
+    )
+    df_previous_ephemeris = add_range_column(
+        df_previous_ephemeris, approximate_receiver_ecef_position_m
+    )
+    assert df_new_ephemeris[shared_columns].equals(
+        df_previous_ephemeris[shared_columns]
+    )
+    numeric_columns = df_new_ephemeris.select_dtypes(include=np.number).columns.tolist()
+    dsc = df_new_ephemeris
+    dsc[numeric_columns] -= df_previous_ephemeris[numeric_columns]
+    dsc["previous_ephemeris_hash"] = df_previous_ephemeris.ephemeris_hash
+    return dsc
 
 
 @prx.util.timeit
@@ -325,31 +391,30 @@ def build_records(
         },
     )
 
-    sat_states_per_day = []
-    for file in rinex_3_ephemerides_files:
-        # get year and doy from NAV filename
-        year = int(file.name[12:16])
-        doy = int(file.name[16:19])
-        day_query = query.loc[
-            (
-                query.query_time_isagpst
-                >= pd.Timestamp(year=year, month=1, day=1) + pd.Timedelta(days=doy - 1)
-            )
-            & (
-                query.query_time_isagpst
-                < pd.Timestamp(year=year, month=1, day=1) + pd.Timedelta(days=doy)
-            )
+    sat_states = rinex_evaluate.compute_parallel(
+        rinex_3_ephemerides_files,
+        query,
+    ).reset_index(drop=True)
+
+    discontinuities = compute_ephemeris_discontinuities(
+        rinex_3_ephemerides_files, sat_states, approximate_receiver_ecef_position_m
+    )
+    discontinuities = discontinuities[
+        [
+            "sv",
+            "signal",
+            "query_time_isagpst",
+            "ephemeris_hash",
+            "previous_ephemeris_hash",
+            "range_m",
+            "sat_clock_offset_m",
         ]
-        if day_query.empty:
-            continue
-        log.info(f"Computing satellite states for {year}-{doy:03d}")
-        sat_states_per_day.append(
-            rinex_evaluate.compute_parallel(
-                file,
-                day_query,
-            )
-        )
-    sat_states = pd.concat(sat_states_per_day)
+    ]
+    discontinuities.query_time_isagpst = discontinuities.query_time_isagpst.dt.strftime(
+        "%Y:%m:%dT%H:%M:%S.%f"
+    )
+    discontinuities = discontinuities.to_dict("records")
+
     sat_states = sat_states.rename(
         columns={
             "sv": "satellite",
@@ -507,7 +572,7 @@ def build_records(
                 "iono_delay_m",
             ] = np.nan
 
-    return flat_obs
+    return flat_obs, discontinuities
 
 
 @prx.util.timeit
@@ -529,11 +594,12 @@ def process(observation_file_path: Path, output_format="csv"):
     )
     metadata["processing_start_time"] = t0
     prx.util.repair_with_gfzrnx(rinex_3_obs_file)
-    records = build_records(
+    records, discontinuities = build_records(
         rinex_3_obs_file,
         aux_files["broadcast_ephemerides"],
         metadata["approximate_receiver_ecef_position_m"],
     )
+    metadata["discontinuities"] = discontinuities
     return write_prx_file(
         metadata,
         records,
