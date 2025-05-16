@@ -418,6 +418,10 @@ def build_records(
         on=["satellite", "code_id", "time_of_emission_isagpst"],
         how="left",
     )
+    # Fix code biases being merged into lines with signals that are not code signals
+    flat_obs.loc[
+        ~(flat_obs.observation_type.str.startswith("C")), "sat_code_bias_m"
+    ] = np.nan
     # GLONASS satellites with both FDMA and CDMA signals have a frequency slot for FDMA signals,
     # for CDMA signals we use the common carrier frequency of those signals.
     glo_cdma = flat_obs[
