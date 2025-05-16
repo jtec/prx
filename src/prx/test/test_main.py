@@ -149,11 +149,11 @@ def test_prx_function_call_with_csv_output(input_for_test_tlse):
     assert (
         df[(df.prn == 14) & (df.constellation == "C")].sat_elevation_deg - 34.86
     ).abs().max() < 0.3
+    # In such as short period we expect at most one transition from one ephemeris to the next one
     for signal, group_df in df.groupby(["constellation", "prn", "rnx_obs_identifier"]):
         n_ephemeris_changes = sum(
             group_df.ephemeris_hash.astype(float).diff().dropna().abs() > 0
         )
-        # In such as short period we expect at most one transition from one ephemeris to the next one
         assert n_ephemeris_changes <= 1
 
 

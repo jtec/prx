@@ -905,7 +905,7 @@ requires-dist = [
     { name = "requests", specifier = ">=2.32.3,<3.0.0" },
     { name = "ruff", specifier = ">=0.11.2,<1.0.0" },
     { name = "scipy", specifier = ">=1.14.1,<2.0.0" },
-    { name = "setuptools", specifier = ">=75.6.0,<79.0.0" },
+    { name = "setuptools", specifier = ">=75.6.0,<81.0.0" },
     { name = "snakeviz", specifier = ">=2.2.2,<3.0.0" },
     { name = "viztracer", specifier = ">=1.0.0,<2.0.0" },
 ]
