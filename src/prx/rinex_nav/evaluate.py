@@ -435,7 +435,7 @@ def set_time_of_validity(df):
         return group
 
     df = (
-        df.groupby("constellation")
+        df.groupby("constellation")[df.columns]
         .apply(set_for_one_constellation)
         .reset_index(drop=True)
     )
@@ -704,7 +704,9 @@ def compute(
             sub_df[["x_m", "y_m", "z_m", "dx_mps", "dy_mps", "dz_mps"]] = np.nan
         return sub_df
 
-    per_sat_query = per_sat_query.groupby("orbit_type").apply(evaluate_orbit)
+    per_sat_query = per_sat_query.groupby("orbit_type")[per_sat_query.columns].apply(
+        evaluate_orbit
+    )
     per_sat_query = per_sat_query.reset_index(drop=True)
     columns_to_keep = [
         "sv",
@@ -818,7 +820,9 @@ def compute_total_group_delays(
         df["sat_code_bias_m"] = df.tgd * df.gamma * df.speedOfLightIcd_mps
         return df
 
-    query = query.groupby(["signal", "constellation"]).apply(compute_tgds)
+    query = query.groupby(["signal", "constellation"])[query.columns].apply(
+        compute_tgds
+    )
     return query
 
 
