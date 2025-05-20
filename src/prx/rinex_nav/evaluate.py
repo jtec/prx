@@ -38,6 +38,34 @@ def parse_rinex_nav_file(rinex_file: Path):
     return cached_load(rinex_file, file_content_hash)
 
 
+def remove_duplicate_ephemerides(eph, interval_s=60):
+    """
+    Remove ephemerides covering the same time span, due to re-upload by the segment control.
+    The comparison is based on the 'time of ephemeris' and 'time of transmission' parameters.
+    """
+    idx_rmv = []
+
+    for sv, group in eph.groupby("sv"):
+        if sv[0] == "E":
+            continue
+        else:
+            # find positional index for ephemerides with toe difference smaller than threshold
+            idx_close = [
+                group.index.get_loc(idx_val)
+                for idx_val in group.loc[group.t_oe.diff().abs() < interval_s].index
+            ]
+            # for each case, chose the one with the largest ttr
+            for idx_val in idx_close:
+                if group.TransTime.iloc[idx_val] < group.TransTime.iloc[idx_val - 1]:
+                    idx_rmv.append(group.index.to_list()[idx_val])
+                else:
+                    idx_rmv.append(group.index.to_list()[idx_val - 1])
+    log.info(
+        f"{remove_duplicate_ephemerides.__name__} removed {len(idx_rmv)} ephemerides datasets"
+    )
+    return eph.drop(index=idx_rmv).reset_index(drop=True)
+
+
 def time_scale_integer_second_offset_wrt_gpst(time_scale, utc_gpst_leap_seconds=None):
     if time_scale in ["GPST", "SBAST", "QZSST", "IRNSST", "GST"]:
         return pd.Timedelta(seconds=0)
@@ -391,7 +419,7 @@ def kepler_orbit_position_and_velocity(eph):
 
 def set_time_of_validity(df):
     def set_for_one_constellation(group):
-        group_constellation = group["constellation"].iloc[0]
+        group_constellation = group["constellation"].iat[0]
         group["validity_start"] = (
             group["ephemeris_reference_time_isagpst"]
             + constants.constellation_2_ephemeris_validity_interval[
@@ -406,7 +434,11 @@ def set_time_of_validity(df):
         )
         return group
 
-    df = df.groupby("constellation").apply(set_for_one_constellation)
+    df = (
+        df.groupby("constellation")
+        .apply(set_for_one_constellation)
+        .reset_index(drop=True)
+    )
     return df
 
 
@@ -627,6 +659,7 @@ def compute(
     #   - query_time_isagpst
     rinex_nav_file_path = Path(rinex_nav_file_path)
     ephemerides = parse_rinex_nav_file(rinex_nav_file_path)
+    ephemerides = remove_duplicate_ephemerides(ephemerides)
     # Group delays and clock offsets can be signal-specific, so we need to match ephemerides to code signals,
     # not only to satellites
     # Example: Galileo transmits E5a clock and group delay parameters in the F/NAV message, but parameters for other

@@ -2,9 +2,14 @@ import numpy as np
 import pandas as pd
 from pathlib import Path
 
-from prx.rinex_nav.evaluate import select_ephemerides, set_time_of_validity
+from prx.rinex_nav.evaluate import (
+    select_ephemerides,
+    set_time_of_validity,
+    remove_duplicate_ephemerides,
+)
 from prx.sp3 import evaluate as sp3_evaluate
 from prx.rinex_nav import evaluate as rinex_nav_evaluate
+from prx.rinex_obs import parser as parser_obs
 from prx import constants, converters, util
 from prx.util import week_and_seconds_2_timedelta
 import shutil
@@ -42,6 +47,8 @@ def input_for_test():
         shutil.rmtree(test_directory)
     os.makedirs(test_directory)
     test_files = {
+        "rinex_obs_file": test_directory
+        / "TLSE00FRA_R_20220010000_01D_30S_MO.rnx_slice_0.24h.rnx",
         "rinex_nav_file": test_directory / "BRDC00IGS_R_20220010000_01D_MN.zip",
         "sp3_file": test_directory / "WUM0MGXULT_20220010000_01D_05M_ORB.SP3",
     }
@@ -690,6 +697,7 @@ def test_select_ephemerides():
     ephemerides = pd.DataFrame(
         {
             "sv": ["E01", "G01", "G01", "G01"],
+            "constellation": ["E", "G", "G", "G"],
             "ephemeris_reference_time_isagpst": [
                 pd.Timedelta("10s"),
                 pd.Timedelta("10s"),
@@ -706,7 +714,6 @@ def test_select_ephemerides():
             "ephemeris_hash": [1, 2, 3, 4],
         }
     )
-    ephemerides["constellation"] = ephemerides.sv.str[0]
     ephemerides = set_time_of_validity(ephemerides)
     query = pd.DataFrame(
         {
@@ -727,3 +734,62 @@ def test_select_ephemerides():
         pd.Series([pd.Timedelta("100s"), pd.Timedelta("50s"), pd.Timedelta("90s")])
     )
     assert query_with_ephemerides.ephemeris_hash.equals(pd.Series([1, 2, 2]))
+
+
+def test_select_ephemerides_based_on_ttr():
+    """
+    Test ephemerides selection and duplicate ephemerides removal
+    See: https://github.com/tomojitakasu/RTKLIB/issues/765
+
+    Create a minimal ephemerides dataframe containing 2 datasets with:
+        - close time of ephemeris (t_oe)
+        - different time of transmission (TransTime)
+        - a different ordering between t_oe and TransTime
+        - different ephemeris_hash for validating the selected ephemeris
+    """
+    ephemerides = pd.DataFrame(
+        {
+            "sv": [
+                "G15",
+                "G15",
+            ],
+            "constellation": ["G", "G"],
+            "t_oe": [115184, 115200],
+            "TransTime": [114666, 108018],
+            "ephemeris_reference_time_isagpst": [
+                pd.Timestamp("2024-06-24 07:59:44"),
+                pd.Timestamp("2024-06-24 08:00:00"),
+            ],
+            "clock_reference_time_isagpst": [
+                pd.Timestamp("2024-06-24 07:59:44"),
+                pd.Timestamp("2024-06-24 08:00:00"),
+            ],
+            "ephemeris_hash": [
+                1,
+                2,
+            ],
+            "fnav_or_inav": ["", ""],
+        }
+    )
+    ephemerides = set_time_of_validity(ephemerides)
+
+    query = pd.DataFrame(
+        {
+            "sv": ["G15"],
+            "query_time_isagpst": [pd.Timestamp("2024-06-24 08:20:00")],
+            "signal": [
+                "C1C",
+            ],
+        }
+    )
+    query_with_ephemerides = select_ephemerides(ephemerides, query)
+    # The selected ephemerides should be the second one (ephemeris_hash=2), based on t_oe comparison,
+    # despite the fact that the first one has transmitted later (ttr larger for ephemeris_hash=1)
+    assert query_with_ephemerides.ephemeris_hash.equals(pd.Series([2]))
+
+    # Remove duplicate ephemerides
+    ephemerides_rmv = remove_duplicate_ephemerides(ephemerides)
+    assert len(ephemerides_rmv) == 1
+    query_with_ephemerides_rmv = select_ephemerides(ephemerides_rmv, query)
+    # The selected ephemerides should be the first one (ephemeris_hash=1)
+    assert query_with_ephemerides_rmv.ephemeris_hash.equals(pd.Series([1]))
