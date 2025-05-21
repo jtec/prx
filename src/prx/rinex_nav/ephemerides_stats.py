@@ -39,6 +39,15 @@ def main(t1: pd.Timestamp, t2: pd.Timestamp) -> None:
                     color=health2color[health],
                     size=5,
                 ),
+                customdata=group_df[["TransTime", "ephemeris_hash"]],
+                hovertemplate="<br>".join(
+                    [
+                        "timestamp: %{x}",
+                        "PRN: %{y:.0f}",
+                        "time of transmission [tow]: %{customdata[0]}",
+                        "ephemeris_hash [-]: %{customdata[1]}",
+                    ]
+                ),
                 name=sv,
                 legendgroup=sv,
                 showlegend=bool(health == 0),
