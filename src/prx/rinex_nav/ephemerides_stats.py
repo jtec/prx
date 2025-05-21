@@ -23,13 +23,18 @@ def main(t1: pd.Timestamp, t2: pd.Timestamp) -> None:
     )
     fig = make_subplots(rows=1, cols=1)
 
-    health2color = {
-        0: "green",
-        1: "red",
+    flag2string = {
+        0: "healthy",
+        1: "unhealthy",
     }
+    health2color = {
+        "healthy": "green",
+        "unhealthy": "red",
+    }
+    ephemerides.SatH1 = ephemerides.SatH1.map(flag2string)
     for (sv, health), group_df in ephemerides.groupby(["sv", "SatH1"]):
         prn = float(sv[1:])
-        offset = 0 if health == 0 else 0.1
+        offset = 0 if health == "healthy" else 0.1
         fig.add_trace(
             go.Scatter(
                 x=group_df["time"],
@@ -48,9 +53,9 @@ def main(t1: pd.Timestamp, t2: pd.Timestamp) -> None:
                         "ephemeris_hash [-]: %{customdata[1]}",
                     ]
                 ),
-                name=sv,
+                name=f"{sv} {health}",
                 legendgroup=sv,
-                showlegend=bool(health == 0),
+                showlegend=True,
             )
         )
     fig.update_xaxes(title="ephemeris time stamp")
