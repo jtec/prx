@@ -553,7 +553,7 @@ def to_isagpst(time, timescale, gpst_utc_leapseconds):
 @timeit
 def select_ephemerides(df, query):
     df = df[df.ephemeris_reference_time_isagpst.notna()]
-    query = query.sort_values(by="query_time_isagpst")
+    query = query.sort_values(by="ephemeris_selection_time_isagpst")
     df = df.sort_values(by="ephemeris_reference_time_isagpst")
     # Add fnav/inav indicator to query for to select the FNAV ephemeris for E5b signals, and INAV for other signals
     query["fnav_or_inav"] = ""

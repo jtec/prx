@@ -8,7 +8,7 @@ import pandas as pd
 import numpy as np
 import git
 import prx.util
-from prx.util import add_range_column
+from prx.util import add_range_column, timedelta_2_seconds, timestamp_2_timedelta
 
 from prx import atmospheric_corrections as atmo, util
 from prx.constants import carrier_frequencies_hz
@@ -251,16 +251,8 @@ def compute_ephemeris_discontinuities(
         )
         # The very first of a signal's sat states can't be after a discontinuity
         after_discontinuity.iloc[0] = False
-        before_discontinuity = group_df.ephemeris_hash != group_df.ephemeris_hash.shift(
-            -1
-        )
         sat_states.loc[group_df.index, "after_discontinuity"] = (
             after_discontinuity.values
-        )
-        # The very last of a signal's sat states can't be before a discontinuity
-        before_discontinuity.iloc[-1] = False
-        sat_states.loc[group_df.index, "before_discontinuity"] = (
-            before_discontinuity.values
         )
     # Satellite states with ephemeris after the discontinuity
     df_new_ephemeris = (
@@ -271,17 +263,18 @@ def compute_ephemeris_discontinuities(
     )
     # Now compute satellite states after discontinuity with ephemeris before the discontinuity
     query = sat_states.loc[
-        sat_states.before_discontinuity, ["sv", "signal", "query_time_isagpst"]
+        sat_states.after_discontinuity, ["sv", "signal", "query_time_isagpst"]
     ].drop_duplicates()
-    # Use the query time from before the discontinuity to select the previous ephemeris
-    query["ephemeris_selection_time_isagpst"] = query.query_time_isagpst
+    # Select the previous ephemeris
+    query["ephemeris_selection_time_isagpst"] = query.query_time_isagpst - pd.Timedelta(
+        "10s"
+    )
     # But still compute satellite states for after the discontinuity
-    query.query_time_isagpst = df_new_ephemeris.query_time_isagpst.values
     query = query.sort_values("ephemeris_selection_time_isagpst")
     df_previous_ephemeris = rinex_evaluate.compute(
         rinex_3_ephemerides_files, query
     ).reset_index(drop=True)
-    shared_columns = ["sv", "signal", "query_time_isagpst"]
+    shared_columns = ["query_time_isagpst", "sv", "signal"]
     df_new_ephemeris = df_new_ephemeris.sort_values(by=shared_columns).reset_index(
         drop=True
     )
@@ -410,8 +403,8 @@ def build_records(
             "sat_clock_offset_m",
         ]
     ]
-    discontinuities.query_time_isagpst = discontinuities.query_time_isagpst.dt.strftime(
-        "%Y:%m:%dT%H:%M:%S.%f"
+    discontinuities.query_time_isagpst = discontinuities.query_time_isagpst.apply(
+        lambda ts: timedelta_2_seconds(timestamp_2_timedelta(ts, "GPST"))
     )
     discontinuities = discontinuities.to_dict("records")
 
