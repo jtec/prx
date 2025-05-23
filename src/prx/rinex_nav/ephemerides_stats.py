@@ -53,7 +53,7 @@ def main(t1: pd.Timestamp, t2: pd.Timestamp) -> None:
                         "ephemeris_hash [-]: %{customdata[1]}",
                     ]
                 ),
-                name=f"{sv} {health}",
+                name=f"{sv}",
                 legendgroup=sv,
                 showlegend=True,
             )
