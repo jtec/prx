@@ -674,18 +674,18 @@ def compute(
         for _ in range(2):
             per_signal_query = compute_clock_offsets(per_signal_query)
             per_signal_query.query_time_wrt_clock_reference_time_s = (
-                t - per_signal_query.sat_clock_offset_m / constants.cGpsSpeedOfLight_mps
+                    t - per_signal_query.sat_clock_offset_m / constants.cGpsSpeedOfLight_mps
             )
         # Apply sat clock correction to the query time for satellite position computation
         per_signal_query.query_time_wrt_ephemeris_reference_time_s -= (
-            per_signal_query.sat_clock_offset_m / constants.cGpsSpeedOfLight_mps
+                per_signal_query.sat_clock_offset_m / constants.cGpsSpeedOfLight_mps
         )
 
-    # Compute orbital states for each satellite only once:
-    per_sat_query = (
-        per_signal_query.groupby(["sv", "query_time_isagpst"]).first().reset_index()
+    # Compute orbital states for each (satellite,ephemeris) pair only once:
+    per_sat_eph_query = (
+        per_signal_query.groupby(["sv", "query_time_isagpst", "ephemeris_hash"]).first().reset_index()
     )
-    per_sat_query = per_sat_query.drop(
+    per_sat_eph_query = per_sat_eph_query.drop(
         columns=["sat_clock_offset_m", "sat_clock_drift_mps"]
     )
 
@@ -704,10 +704,8 @@ def compute(
             sub_df[["x_m", "y_m", "z_m", "dx_mps", "dy_mps", "dz_mps"]] = np.nan
         return sub_df
 
-    per_sat_query = per_sat_query.groupby("orbit_type")[per_sat_query.columns].apply(
-        evaluate_orbit
-    )
-    per_sat_query = per_sat_query.reset_index(drop=True)
+    per_sat_eph_query = per_sat_eph_query.groupby("orbit_type")[per_sat_eph_query.columns].apply(evaluate_orbit)
+    per_sat_eph_query = per_sat_eph_query.reset_index(drop=True)
     columns_to_keep = [
         "sv",
         "sat_pos_x_m",
@@ -719,10 +717,10 @@ def compute(
         "query_time_isagpst",
         "ephemeris_hash",
     ]
-    per_sat_query = per_sat_query[columns_to_keep]
-    # Expand the computed satellite states into the larger signal-specific query dataframe
+    per_sat_eph_query = per_sat_eph_query[columns_to_keep]
+    # Merge the computed satellite states into the larger signal-specific query dataframe
     per_signal_query = per_signal_query.merge(
-        per_sat_query, on=["sv", "query_time_isagpst", "ephemeris_hash"]
+        per_sat_eph_query, on=["sv", "query_time_isagpst", "ephemeris_hash"]
     )
     columns_to_keep = [
         "sat_clock_offset_m",
