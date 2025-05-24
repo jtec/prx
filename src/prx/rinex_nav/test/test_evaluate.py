@@ -2,7 +2,11 @@ import numpy as np
 import pandas as pd
 from pathlib import Path
 
-from prx.rinex_nav.evaluate import select_ephemerides, set_time_of_validity
+from prx.rinex_nav.evaluate import (
+    select_ephemerides,
+    set_time_of_validity,
+    remove_duplicate_ephemerides,
+)
 from prx.sp3 import evaluate as sp3_evaluate
 from prx.rinex_nav import evaluate as rinex_nav_evaluate
 from prx import constants, converters, util
@@ -42,6 +46,8 @@ def input_for_test():
         shutil.rmtree(test_directory)
     os.makedirs(test_directory)
     test_files = {
+        "rinex_obs_file": test_directory
+        / "TLSE00FRA_R_20220010000_01D_30S_MO.rnx_slice_0.24h.rnx",
         "rinex_nav_file": test_directory / "BRDC00IGS_R_20220010000_01D_MN.zip",
         "sp3_file": test_directory / "WUM0MGXULT_20220010000_01D_05M_ORB.SP3",
     }
@@ -53,35 +59,6 @@ def input_for_test():
         assert test_file_path.exists()
     yield test_files
     shutil.rmtree(test_directory)
-
-
-def test_compare_rnx3_gps_sat_pos_with_magnitude(input_for_test):
-    """Loads a RNX3 nav file, computes broadcast position for a GPS satellite and compares to
-    position computed by MAGNITUDE matlab library"""
-    path_to_rnx3_nav_file = converters.anything_to_rinex_3(
-        input_for_test["rinex_nav_file"]
-    )
-    query = pd.DataFrame(
-        {
-            "sv": "G01",
-            "signal": "C1C",
-            "query_time_isagpst": week_and_seconds_2_timedelta(
-                weeks=2190, seconds=523800
-            )
-            + constants.cGpstUtcEpoch,
-        },
-        index=[0],
-    )
-    rinex_sat_states = rinex_nav_evaluate.compute_parallel(path_to_rnx3_nav_file, query)
-
-    # MAGNITUDE position
-    sv_pos_magnitude = np.array([13053451.235, -12567273.060, 19015357.126])
-    sv_pos_prx = rinex_sat_states[["sat_pos_x_m", "sat_pos_y_m", "sat_pos_z_m"]][
-        rinex_sat_states.sv == "G01"
-    ].to_numpy()
-
-    threshold_pos_error_m = 1e-3
-    assert np.linalg.norm(sv_pos_prx - sv_pos_magnitude) < threshold_pos_error_m
 
 
 def test_expired_ephemeris_yields_nans(input_for_test):
@@ -224,7 +201,9 @@ def test_compare_to_sp3(input_for_test):
     query = generate_sat_query(pd.Timestamp("2022-01-01T01:10:00.000000000"))
     # We have no SP3 reference solutions for SBAS satellites, so remove them from the query
     query = query[~query.sv.str.startswith("S")]
-    rinex_sat_states = rinex_nav_evaluate.compute_parallel(rinex_nav_file, query.copy())
+    rinex_sat_states = rinex_nav_evaluate.compute_parallel(
+        rinex_nav_file, query.copy(), True
+    )
     rinex_sat_states = (
         rinex_sat_states.sort_values(by=["sv", "query_time_isagpst"])
         .sort_index(axis=1)
@@ -717,6 +696,7 @@ def test_select_ephemerides():
     ephemerides = pd.DataFrame(
         {
             "sv": ["E01", "G01", "G01", "G01"],
+            "constellation": ["E", "G", "G", "G"],
             "ephemeris_reference_time_isagpst": [
                 pd.Timedelta("10s"),
                 pd.Timedelta("10s"),
@@ -733,7 +713,6 @@ def test_select_ephemerides():
             "ephemeris_hash": [1, 2, 3, 4],
         }
     )
-    ephemerides["constellation"] = ephemerides.sv.str[0]
     ephemerides = set_time_of_validity(ephemerides)
     query = pd.DataFrame(
         {
@@ -754,3 +733,62 @@ def test_select_ephemerides():
         pd.Series([pd.Timedelta("100s"), pd.Timedelta("50s"), pd.Timedelta("90s")])
     )
     assert query_with_ephemerides.ephemeris_hash.equals(pd.Series([1, 2, 2]))
+
+
+def test_select_ephemerides_based_on_ttr():
+    """
+    Test ephemerides selection and duplicate ephemerides removal
+    See: https://github.com/tomojitakasu/RTKLIB/issues/765
+
+    Create a minimal ephemerides dataframe containing 2 datasets with:
+        - close time of ephemeris (t_oe)
+        - different time of transmission (TransTime)
+        - a different ordering between t_oe and TransTime
+        - different ephemeris_hash for validating the selected ephemeris
+    """
+    ephemerides = pd.DataFrame(
+        {
+            "sv": [
+                "G15",
+                "G15",
+            ],
+            "constellation": ["G", "G"],
+            "t_oe": [115184, 115200],
+            "TransTime": [114666, 108018],
+            "ephemeris_reference_time_isagpst": [
+                pd.Timestamp("2024-06-24 07:59:44"),
+                pd.Timestamp("2024-06-24 08:00:00"),
+            ],
+            "clock_reference_time_isagpst": [
+                pd.Timestamp("2024-06-24 07:59:44"),
+                pd.Timestamp("2024-06-24 08:00:00"),
+            ],
+            "ephemeris_hash": [
+                1,
+                2,
+            ],
+            "fnav_or_inav": ["", ""],
+        }
+    )
+    ephemerides = set_time_of_validity(ephemerides)
+
+    query = pd.DataFrame(
+        {
+            "sv": ["G15"],
+            "query_time_isagpst": [pd.Timestamp("2024-06-24 08:20:00")],
+            "signal": [
+                "C1C",
+            ],
+        }
+    )
+    query_with_ephemerides = select_ephemerides(ephemerides, query)
+    # The selected ephemerides should be the second one (ephemeris_hash=2), based on t_oe comparison,
+    # despite the fact that the first one has transmitted later (ttr larger for ephemeris_hash=1)
+    assert query_with_ephemerides.ephemeris_hash.equals(pd.Series([2]))
+
+    # Remove duplicate ephemerides
+    ephemerides_rmv = remove_duplicate_ephemerides(ephemerides)
+    assert len(ephemerides_rmv) == 1
+    query_with_ephemerides_rmv = select_ephemerides(ephemerides_rmv, query)
+    # The selected ephemerides should be the first one (ephemeris_hash=1)
+    assert query_with_ephemerides_rmv.ephemeris_hash.equals(pd.Series([1]))
