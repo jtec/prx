@@ -16,23 +16,26 @@ def main(t1: pd.Timestamp, t2: pd.Timestamp) -> None:
         block.attrs.pop("ionospheric_corr_GPS", None)
         ephemeris_blocks.append(block)
     ephemerides = pd.concat(ephemeris_blocks)
+    ephemerides.loc[ephemerides.sv.str.startswith("C"), "health"] = ephemerides.loc[
+        ephemerides.sv.str.startswith("C"), "SatH1"
+    ]
     ephemerides = (
-        ephemerides[ephemerides.sv.str.startswith("C")]
+        ephemerides[ephemerides.sv.str.startswith("G")]
         .sort_values(by=["sv"])
         .reset_index(drop=True)
     )
     fig = make_subplots(rows=1, cols=1)
 
     flag2string = {
-        0: "healthy",
-        1: "unhealthy",
+        int(0): "healthy",
+        int(1): "unhealthy",
     }
     health2color = {
         "healthy": "green",
         "unhealthy": "red",
     }
-    ephemerides.SatH1 = ephemerides.SatH1.map(flag2string)
-    for (sv, health), group_df in ephemerides.groupby(["sv", "SatH1"]):
+    ephemerides.health = ephemerides.health.astype(int).map(flag2string)
+    for (sv, health), group_df in ephemerides.groupby(["sv", "health"]):
         prn = float(sv[1:])
         offset = 0 if health == "healthy" else 0.1
         fig.add_trace(
