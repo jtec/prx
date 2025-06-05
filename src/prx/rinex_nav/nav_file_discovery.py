@@ -102,9 +102,9 @@ def try_downloading_ephemerides(mid_day: pd.Timestamp, folder: Path):
 def rinex_3_ephemerides_file_coverage_time(ephemerides_file: Path):
     parts = str(ephemerides_file).split("_")
     start_time = pd.to_datetime(parts[-3], format="%Y%j%H%M")
-    assert parts[-2][-1] == "D", (
-        f"Was expecting 'D' (days) as duration unit in Rinex ephemerides file name: {ephemerides_file}"
-    )
+    assert (
+        parts[-2][-1] == "D"
+    ), f"Was expecting 'D' (days) as duration unit in Rinex ephemerides file name: {ephemerides_file}"
     duration = parts[-2][:-1]
     duration_unit = parts[-2][-1]
     end_time = start_time + pd.Timedelta(int(duration), duration_unit.lower())
@@ -153,14 +153,15 @@ def update_local_database(mid_day_start: pd.Timestamp, mid_day_end: pd.Timestamp
 
 
 def discover_or_download_ephemerides(
-    t_start: pd.Timestamp, t_end: pd.Timestamp, folder, constellations
+    t_start: pd.Timestamp, t_end: pd.Timestamp, folder: Path | None = None
 ):
     # If there are any navigation files provided by the user, use them, otherwise use IGS files.
-    user_provided_nav_files = [
-        f for f in folder.rglob("*.rnx") if is_rinex_3_nav_file(f)
-    ]
-    if len(user_provided_nav_files) > 0:
-        return user_provided_nav_files
+    if folder:
+        user_provided_nav_files = [
+            f for f in folder.rglob("*.rnx") if is_rinex_3_nav_file(f)
+        ]
+        if len(user_provided_nav_files) > 0:
+            return user_provided_nav_files
     # Ephemeris files cover at least a day, so first round time stamps to midday here
     t_start = timestamp_to_mid_day(t_start)
     t_end = timestamp_to_mid_day(t_end)
@@ -206,7 +207,7 @@ if __name__ == "__main__":
         "--observation_file_path", type=str, help="Observation file path", required=True
     )
     args = parser.parse_args()
-    assert Path(args.observation_file_path).exists(), (
-        f"Cannot find observation file {args.observation_file_path}"
-    )
+    assert Path(
+        args.observation_file_path
+    ).exists(), f"Cannot find observation file {args.observation_file_path}"
     discover_or_download_auxiliary_files(Path(args.observation_file_path))
