@@ -40,12 +40,12 @@ def input_for_test():
 
 def test_health_flag(input_for_test):
     """
-    Extracting and merging of the health flag from a RINEX NAV file in a PRX DataFrame containing epochs and sat id
+    Tests the extraction and association of the health flag from a RINEX NAV file on a PRX DataFrame of epochs and satellites.
     """
     # read csv file
     df_prx = pd.read_csv(input_for_test["prx_file"], comment="#")
 
-    # create query dataframe by extrqcing the right columns
+    # create query dataframe by extracting the right columns
     query = pd.DataFrame(
         {
             "sv": df_prx.constellation + df_prx.prn.astype(str).str.zfill(2),
@@ -70,13 +70,30 @@ def test_health_flag(input_for_test):
         "G": "health",
         "E": "health",
         "C": "SatH1",
-        "R": "health",  # TBC
-        "J": "health",  # TBC
-        "I": "health",  # TBC
+        "R": "health",  
+        "J": "health",  
+        "I": "Health", 
     }
-    health_flag = [
-        row._asdict()[col_dict[row.sv[0]]] for row in query.itertuples(index=False)
-    ]
+
+    health_valid_ranges = {
+        "G" : (0, 63),
+        "E" : (0, 3),
+        "C" : (0, 3),
+        "R" : (0, 7),
+        "J" : (0, 63),
+        "I" : (0, 3),
+    }
+    # health_flag = [
+    #     row._asdict()[col_dict[row.sv[0]]] for row in query.itertuples(index=False)
+    # ]
+
+    health_flag = []
+    for row in query.itertuples(index=False):
+        if row.sv[0] not in col_dict:
+            pytest.fail(f"Constellation {row.sv[0]} missing")
+        if not hasattr(row, col_dict[row.sv[0]]):
+            pytest.fail(f"Parameter {col_dict[row.sv[0]]} missing")
+        health_flag.append(getattr(row,col_dict[row.sv[0]] ))
 
     # merge health flag into prx dataframe
     df_prx["health_flag"] = health_flag
@@ -97,10 +114,15 @@ def test_health_flag(input_for_test):
     )
 
     # assert result
-    # valeurs partout : pas de nan ?
+    # Verification : pas de NaN dans health_flah
+    assert not df_prx["health_flag"].isna().any()
 
-    # valeurs dans plage de valeur possible
+    # Vérification : valeurs dans plage de valeur possible
+    assert all(
+        health_valid_ranges[const][0] <= hf <= health_valid_ranges[const][1]
+        for const, hf in zip(df_prx["constellation"], df_prx["health_flag"])
+    )
 
-    # vérifier la valeur pour un échantillons de query
+    # Vérifier la valeur pour un échantillons de query
 
     print("done")
