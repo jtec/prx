@@ -67,25 +67,72 @@ Run `uv run pytest ---durations=10` to run all tests and have pytest list the 10
 
 We use https://google.github.io/styleguide/pyguide.html as our python style guide.
 
+## Profiling - finding bottlenecks in the code
+
+To find bottlenecks in a specific function, decorate it with `@profile`, making sure that the module also does `from
+line_profiler import profile`.
+Then run for instance
+
+```
+LINE_PROFILE=1 uv run kernprof -lb src/prx/test/benchmark.py
+uv run python -m line_profiler -rmt --unit 1e-3  --sort "benchmark.py.lprof"
+```
+
+which will print how much time python spent on each line:
+
+```
+Total time: 9.20136 s
+File: /Users/janbolting/repositories/prx/src/prx/main.py
+Function: build_records at line 239
+
+Line #      Hits         Time  Per Hit   % Time  Line Contents
+==============================================================
+   239                                           @prx.util.timeit
+   240                                           @profile
+   241                                           def build_records(
+   242                                               rinex_3_obs_file,
+   243                                               rinex_3_ephemerides_files,
+   244                                               approximate_receiver_ecef_position_m,
+   245                                           ):
+   246         2         88.2     44.1      1.0      warm_up_parser_cache([rinex_3_obs_file] + rinex_3_ephemerides_files)
+   247         4          0.0      0.0      0.0      approximate_receiver_ecef_position_m = np.array(
+   248         2          0.0      0.0      0.0          approximate_receiver_ecef_position_m
+   249                                               )
+   250         2          1.0      0.5      0.0      check_assumptions(rinex_3_obs_file)
+   251         2         55.7     27.8      0.6      flat_obs = util.parse_rinex_obs_file(rinex_3_obs_file)
+...
+```
+
 ## How to contribute
 
 ### I ran a file through prx and it did not do what I expected
 
-Please open a PR adding a unit test that reproduces the issue, ideally with an input that is as small as possible to keep our tests lean and fast. No need to be a python developer: If you don't know how to write the test, a PR with a comment describing what you envision the test to do will do - then simply tag a few people on the PR you think can help to get the actual implementation going.
+Please open a PR adding a unit test that reproduces the issue, ideally with an input that is as small as possible to
+keep our tests lean and fast. No need to be a python developer: If you don't know how to write the test, a PR with a
+comment describing what you envision the test to do will do - then simply tag a few people on the PR you think can help
+to get the actual implementation going.
 
-If you don't know how to open a PR, feel free to open an issue instead, describing how to reproduce the unexpected behaviour you are seeing and uploading or linking to the data needed.
+If you don't know how to open a PR, feel free to open an issue instead, describing how to reproduce the unexpected
+behaviour you are seeing and uploading or linking to the data needed.
 
 ### I have an idea for a new feature that will make prx even more useful and/or easier to use
 
-Please open a PR adding with a unit test that tests the new feature. No need to be a python developer: If you don't know how to implement the feature or write the test, a PR with a comment describing what the test will do can be enough - then tag a few people you think can help to get the actual implementation going.
+Please open a PR adding with a unit test that tests the new feature. No need to be a python developer: If you don't know
+how to implement the feature or write the test, a PR with a comment describing what the test will do can be enough -
+then tag a few people you think can help to get the actual implementation going.
 
 If you don't know how to open a PR, feel free to open an issue instead.
 
 ## Frequently Asked Questions
-### How can I use my own RINEX NAV file?
-When processing your own GNSS data, your receiver may provide you both the RINEX OBS and NAV files. If you want to specifically use your own RINEX NAV file, it shall be in the same folder as your OBS file and follow the RINEX 3 file naming convention. This can be achieved by passing your RINEX NAV file in `gfzrnx`:
 
-`.\src\prx\tools\gfzrnx\gfzrnx_217_win64.exe -finp <RINEX_OBS_filepath> -fout ::RX3::` (on Windows, or use the adequate `gfzrnx`binary)
+### How can I use my own RINEX NAV file?
+
+When processing your own GNSS data, your receiver may provide you both the RINEX OBS and NAV files. If you want to
+specifically use your own RINEX NAV file, it shall be in the same folder as your OBS file and follow the RINEX 3 file
+naming convention. This can be achieved by passing your RINEX NAV file in `gfzrnx`:
+
+`.\src\prx\tools\gfzrnx\gfzrnx_217_win64.exe -finp <RINEX_OBS_filepath> -fout ::RX3::` (on Windows, or use the adequate
+`gfzrnx`binary)
 
 ## Acronyms
 
