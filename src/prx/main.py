@@ -30,7 +30,9 @@ def write_prx_file(
 ):
     output_writers = {"jsonseq": write_json_text_sequence_file, "csv": write_csv_file}
     if output_format not in output_writers.keys():
-        assert False, f"Output format {output_format} not supported,  we can do {list(output_writers.keys())}"
+        assert False, (
+            f"Output format {output_format} not supported,  we can do {list(output_writers.keys())}"
+        )
     return output_writers[output_format](
         prx_header, prx_records, file_name_without_extension
     )
@@ -214,12 +216,12 @@ def check_assumptions(
 ):
     obs_header = georinex.rinexheader(rinex_3_obs_file)
     if "RCV CLOCK OFFS APPL" in obs_header.keys():
-        assert (
-            obs_header["RCV CLOCK OFFS APPL"].strip() == "0"
-        ), "Handling of 'RCV CLOCK OFFS APPL' != 0 not implemented yet."
-    assert (
-        obs_header["TIME OF FIRST OBS"].split()[-1].strip() == "GPS"
-    ), "Handling of observation files using time scales other than GPST not implemented yet."
+        assert obs_header["RCV CLOCK OFFS APPL"].strip() == "0", (
+            "Handling of 'RCV CLOCK OFFS APPL' != 0 not implemented yet."
+        )
+    assert obs_header["TIME OF FIRST OBS"].split()[-1].strip() == "GPS", (
+        "Handling of observation files using time scales other than GPST not implemented yet."
+    )
 
 
 def parse_rinex_nav_or_obs_file(rinex_file_path: Path):
@@ -227,9 +229,9 @@ def parse_rinex_nav_or_obs_file(rinex_file_path: Path):
         return parse_rinex_obs_file(rinex_file_path)
     elif is_rinex_3_nav_file(rinex_file_path):
         return parse_rinex_nav_file(rinex_file_path)
-    assert (
-        False
-    ), f"File {rinex_file_path} appears to be neither RINEX 3 OBS nor NAV file."
+    assert False, (
+        f"File {rinex_file_path} appears to be neither RINEX 3 OBS nor NAV file."
+    )
 
 
 def warm_up_parser_cache(rinex_files):
