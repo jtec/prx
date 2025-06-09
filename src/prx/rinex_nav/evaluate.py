@@ -16,7 +16,7 @@ log = logging.getLogger(__name__)
 
 def detect_leap_second_insertion(df: pd.DataFrame):
     t1 = df["ephemeris_reference_time_isagpst"].min() - pd.Timedelta(days=1)
-    t2 = df["ephemeris_reference_time_isagpst"].max() - pd.Timedelta(days=2)
+    t2 = df["ephemeris_reference_time_isagpst"].max() + pd.Timedelta(days=1)
     ls_1 = compute_gps_utc_leap_seconds(yyyy=t1.year, doy=t1.dayofyear)
     ls_2 = compute_gps_utc_leap_seconds(yyyy=t2.year, doy=t2.dayofyear)
     assert ls_1 == ls_2, (
