@@ -8,7 +8,6 @@ import pandas as pd
 import numpy as np
 import git
 import prx.util
-from line_profiler import profile
 from prx import atmospheric_corrections as atmo, util
 from prx.constants import carrier_frequencies_hz
 from prx.util import parse_rinex_obs_file
@@ -239,7 +238,6 @@ def warm_up_parser_cache(rinex_files):
 
 
 @prx.util.timeit
-@profile
 def build_records(
     rinex_3_obs_file,
     rinex_3_ephemerides_files,
