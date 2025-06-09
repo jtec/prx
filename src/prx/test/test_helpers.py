@@ -307,8 +307,20 @@ def test_timedelta_2_weeks_and_seconds():
     week_expected = [54, 54, 1025, 2048, np.nan]
     seconds_of_week_expected = [280800, 281400, 317400, 302400, np.nan]
 
-    assert week_expected == week_computed
-    assert seconds_of_week_expected == seconds_of_week_expected
+    np.testing.assert_array_equal(week_computed, week_expected)
+    np.testing.assert_array_equal(seconds_of_week_computed, seconds_of_week_expected)
+
+    # We also expect the function to work for Series of timestamps
+    week_series_computed, seconds_of_week_series_computed = (
+        util.timedelta_2_weeks_and_seconds(
+            pd.Series(tested_timestamps)
+            - constants.system_time_scale_rinex_utc_epoch["GPST"]
+        )
+    )
+    np.testing.assert_array_equal(week_series_computed, week_expected)
+    np.testing.assert_array_equal(
+        seconds_of_week_series_computed, seconds_of_week_series_computed
+    )
 
 
 def test_compute_gps_leap_seconds():
