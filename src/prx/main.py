@@ -468,17 +468,10 @@ def build_records(
         )
         if "IONOSPHERIC CORR" in nav_header_dict[f"{year:03d}" + f"{doy:03d}"]:
             log.info(f"Computing iono delay for {year}-{doy:03d}")
-            time_of_emission_weeksecond_isagpst = (
-                flat_obs.loc[mask]
-                .apply(
-                    lambda row: util.timedelta_2_weeks_and_seconds(
-                        row.time_of_emission_isagpst
-                        - constants.system_time_scale_rinex_utc_epoch["GPST"]
-                    )[1],
-                    axis=1,
-                )
-                .to_numpy()
-            )
+            time_of_emission_weeksecond_isagpst = util.timedelta_2_weeks_and_seconds(
+                flat_obs.loc[mask].time_of_emission_isagpst
+                - constants.system_time_scale_rinex_utc_epoch["GPST"]
+            )[1].to_numpy()
 
             flat_obs.loc[
                 mask,
