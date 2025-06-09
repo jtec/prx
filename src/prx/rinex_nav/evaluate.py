@@ -45,9 +45,9 @@ def time_scale_integer_second_offset_wrt_gpst(time_scale, utc_gpst_leap_seconds=
     if time_scale == "BDT":
         return pd.Timedelta(seconds=-14)
     if time_scale == "GLONASST":
-        assert utc_gpst_leap_seconds is not None, (
-            "Need GPST-UTC leap seconds to compute GLONASST integer second offset w.r.t. GPST"
-        )
+        assert (
+            utc_gpst_leap_seconds is not None
+        ), "Need GPST-UTC leap seconds to compute GLONASST integer second offset w.r.t. GPST"
         return pd.Timedelta(seconds=-utc_gpst_leap_seconds)
     assert False, f"Unexpected time scale: {time_scale}"
 
@@ -442,13 +442,13 @@ def convert_nav_dataset_to_dataframe(nav_ds):
         }
         group_time_scale = group["time_scale"].iloc[0]
         if group_time_scale not in ["GLONASST", "SBAST"]:
-            full_seconds = (
+            full_seconds_toe = (
                 group[week_field[group_time_scale]] * constants.cSecondsPerWeek
                 + group["Toe"]
             )
             group["ephemeris_reference_time_system_time"] = (
                 constants.system_time_scale_rinex_utc_epoch[group_time_scale]
-                + pd.to_timedelta(full_seconds, unit="seconds")
+                + pd.to_timedelta(full_seconds_toe, unit="seconds")
             )
         else:
             # For SBAS and GLONASS there are no separate ephemeris reference time fields
@@ -457,11 +457,23 @@ def convert_nav_dataset_to_dataframe(nav_ds):
             group["SVclockDrift"] = group["SVrelFreqBias"]
             # And the second derivative is zero, i.e. the constellation ground segment uses a fist-order clock model
             group["SVclockDriftRate"] = 0
+            # Make sure we have all navigation message transmission times in the same column
+            group["TransTime"] = group["MessageFrameTime"]
+        full_seconds_tot = (
+            group[week_field[group_time_scale]] * constants.cSecondsPerWeek
+            + group["TransTime"]
+        )
+        group["ephemeris_transmission_time_system_time"] = (
+            constants.system_time_scale_rinex_utc_epoch[group_time_scale]
+            + pd.to_timedelta(full_seconds_tot, unit="seconds")
+        )
+
         group["ephemeris_reference_time_isagpst"] = to_isagpst(
             group["ephemeris_reference_time_system_time"],
             group_time_scale,
             int(nav_ds.attrs["utc_gpst_leap_seconds"]),
         )
+
         group["clock_offset_reference_time_system_time"] = group["time"]
         group["clock_reference_time_isagpst"] = to_isagpst(
             group["clock_offset_reference_time_system_time"],
@@ -521,9 +533,9 @@ def compute_gal_inav_fnav_indicators(df):
     )
     # We expect only the following navigation message types for Galileo:
     indicators = set(df[is_gal].fnav_or_inav_indicator.unique())
-    assert len(indicators.intersection({1, 2, 4, 5})) == len(indicators), (
-        f"Unexpected Galileo navigation message type: {indicators}"
-    )
+    assert len(indicators.intersection({1, 2, 4, 5})) == len(
+        indicators
+    ), f"Unexpected Galileo navigation message type: {indicators}"
     df.loc[is_gal & (df.fnav_or_inav_indicator == 1), "fnav_or_inav"] = "inav"
     df.loc[is_gal & (df.fnav_or_inav_indicator == 2), "fnav_or_inav"] = "fnav"
     df.loc[is_gal & (df.fnav_or_inav_indicator == 4), "fnav_or_inav"] = "inav"
@@ -545,9 +557,9 @@ def to_isagpst(time, timescale, gpst_utc_leapseconds):
             )
         )
 
-    assert False, (
-        f"Unexpected types: time is {type(time)}, timescale is {type(timescale)}"
-    )
+    assert (
+        False
+    ), f"Unexpected types: time is {type(time)}, timescale is {type(timescale)}"
 
 
 @timeit
