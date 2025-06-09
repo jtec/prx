@@ -9,9 +9,19 @@ from joblib import Parallel, delayed
 import georinex
 from prx import util
 from prx import constants
-from prx.util import timeit, repair_with_gfzrnx
+from prx.util import timeit, repair_with_gfzrnx, compute_gps_utc_leap_seconds
 
 log = logging.getLogger(__name__)
+
+
+def detect_leap_second_insertion(df: pd.DataFrame):
+    t1 = df["ephemeris_reference_time_isagpst"].min() - pd.Timedelta(days=1)
+    t2 = df["ephemeris_reference_time_isagpst"].max() - pd.Timedelta(days=2)
+    ls_1 = compute_gps_utc_leap_seconds(yyyy=t1.year, doy=t1.dayofyear)
+    ls_2 = compute_gps_utc_leap_seconds(yyyy=t2.year, doy=t2.dayofyear)
+    assert (
+        ls_1 == ls_2
+    ), "Leap second change within ephemeris set, this case is not tested, aborting."
 
 
 @timeit
@@ -24,6 +34,7 @@ def parse_rinex_nav_file(rinex_file: Path):
             rinex_file_path
         )
         df = convert_nav_dataset_to_dataframe(ds)
+        detect_leap_second_insertion(df)
         df["source"] = str(rinex_file_path.resolve())
         df["ephemeris_hash"] = pd.util.hash_pandas_object(df, index=False).astype(str)
         return df
@@ -441,6 +452,7 @@ def convert_nav_dataset_to_dataframe(nav_ds):
             "IRNSST": "GPSWeek",
         }
         group_time_scale = group["time_scale"].iloc[0]
+        group["clock_offset_reference_time_system_time"] = group["time"]
         if group_time_scale not in ["GLONASST", "SBAST"]:
             full_seconds_toe = (
                 group[week_field[group_time_scale]] * constants.cSecondsPerWeek
@@ -455,26 +467,52 @@ def convert_nav_dataset_to_dataframe(nav_ds):
             group["ephemeris_reference_time_system_time"] = group["time"]
             # The first derivative of the clock offset is in a different field for SBAS and GLONASS
             group["SVclockDrift"] = group["SVrelFreqBias"]
-            # And the second derivative is zero, i.e. the constellation ground segment uses a fist-order clock model
+            # And the second derivative is zero, i.e. the constellation ground segment uses a first-order clock model
             group["SVclockDriftRate"] = 0
             # Make sure we have all navigation message transmission times in the same column
             group["TransTime"] = group["MessageFrameTime"]
-        full_seconds_tot = (
-            group[week_field[group_time_scale]] * constants.cSecondsPerWeek
-            + group["TransTime"]
+        # Compute time of transmission of the ephemeris
+        if group_time_scale != "GLONASST":
+            full_seconds_tot = (
+                group[week_field[group_time_scale]] * constants.cSecondsPerWeek
+                + group["TransTime"]
+            )
+            group["ephemeris_transmission_time_system_time"] = (
+                constants.system_time_scale_rinex_utc_epoch[group_time_scale]
+                + pd.to_timedelta(full_seconds_tot, unit="seconds")
+            )
+        else:
+            # For GLONASS we need to figure out the start of the UTC week the transmission time refers to.
+            # Note that GLONASS UTC weeks start on Sundays 00h00, not Mondays like ISO UTC weeks.
+            arbitrary_utc_week_start = pd.Timestamp("1980-01-06 00:00:00")
+            toe_s = (
+                group["ephemeris_reference_time_system_time"] - arbitrary_utc_week_start
+            ) / pd.Timedelta(seconds=1)
+            toe = group["ephemeris_reference_time_system_time"]
+            toe_week_number = np.floor(toe_s / constants.cSecondsPerWeek)
+            tot = arbitrary_utc_week_start + pd.to_timedelta(
+                (toe_week_number * constants.cSecondsPerWeek + group["TransTime"]),
+                unit="seconds",
+            )
+            # Close to week boundaries we can be off by one week, but we know that the time of transmission is
+            # close to the ephemeris reference time:
+            is_late = (tot - toe) > pd.Timedelta(days=1)
+            is_early = (tot - toe) < -pd.Timedelta(days=1)
+            tot[is_late] -= pd.Timedelta(weeks=1)
+            tot[is_early] += pd.Timedelta(weeks=1)
+            assert (tot - toe).abs().max() < pd.Timedelta(days=1)
+            group["ephemeris_transmission_time_system_time"] = tot
+        # Convert everything to integer-second-aligned GPST
+        group["ephemeris_transmission_time_isagpst"] = to_isagpst(
+            group["ephemeris_transmission_time_system_time"],
+            group_time_scale,
+            int(nav_ds.attrs["utc_gpst_leap_seconds"]),
         )
-        group["ephemeris_transmission_time_system_time"] = (
-            constants.system_time_scale_rinex_utc_epoch[group_time_scale]
-            + pd.to_timedelta(full_seconds_tot, unit="seconds")
-        )
-
         group["ephemeris_reference_time_isagpst"] = to_isagpst(
             group["ephemeris_reference_time_system_time"],
             group_time_scale,
             int(nav_ds.attrs["utc_gpst_leap_seconds"]),
         )
-
-        group["clock_offset_reference_time_system_time"] = group["time"]
         group["clock_reference_time_isagpst"] = to_isagpst(
             group["clock_offset_reference_time_system_time"],
             group_time_scale,
