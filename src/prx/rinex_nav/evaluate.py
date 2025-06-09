@@ -188,7 +188,7 @@ def is_bds_geo(constellation, inclination_rad, semi_major_axis_m):
         21528 * constants.cMetersPerKilometer + constants.cBdsCgcs2000SmiMajorAxis_m
     )
     radius_threshold_m = (
-        meo_approximate_radius_m - geo_and_igso_approximate_radius_m
+        meo_approximate_radius_m + geo_and_igso_approximate_radius_m
     ) / 2
     inclination_threshold_rad = inclination_igso_and_meo_rad / 2
     is_geo = (
