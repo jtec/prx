@@ -5,7 +5,6 @@ from pathlib import Path
 from prx.rinex_nav.evaluate import (
     select_ephemerides,
     set_time_of_validity,
-    remove_duplicate_ephemerides,
 )
 from prx.sp3 import evaluate as sp3_evaluate
 from prx.rinex_nav import evaluate as rinex_nav_evaluate
@@ -60,7 +59,7 @@ def input_for_test():
     yield test_files
     shutil.rmtree(test_directory)
 
-
+    
 def test_expired_ephemeris_yields_nans(input_for_test):
     path_to_rnx3_nav_file = converters.anything_to_rinex_3(
         input_for_test["rinex_nav_file"]
@@ -749,10 +748,7 @@ def test_select_ephemerides_based_on_ttr():
     """
     ephemerides = pd.DataFrame(
         {
-            "sv": [
-                "G15",
-                "G15",
-            ],
+            "sv": ["G15", "G15"],
             "constellation": ["G", "G"],
             "t_oe": [115184, 115200],
             "TransTime": [114666, 108018],
@@ -764,10 +760,7 @@ def test_select_ephemerides_based_on_ttr():
                 pd.Timestamp("2024-06-24 07:59:44"),
                 pd.Timestamp("2024-06-24 08:00:00"),
             ],
-            "ephemeris_hash": [
-                1,
-                2,
-            ],
+            "ephemeris_hash": [1,2],
             "fnav_or_inav": ["", ""],
         }
     )
@@ -777,9 +770,7 @@ def test_select_ephemerides_based_on_ttr():
         {
             "sv": ["G15"],
             "query_time_isagpst": [pd.Timestamp("2024-06-24 08:20:00")],
-            "signal": [
-                "C1C",
-            ],
+            "signal": ["C1C"],
         }
     )
     query_with_ephemerides = select_ephemerides(ephemerides, query)

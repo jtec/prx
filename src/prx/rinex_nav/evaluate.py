@@ -24,6 +24,7 @@ def parse_rinex_nav_file(rinex_file: Path):
             rinex_file_path
         )
         df = convert_nav_dataset_to_dataframe(ds)
+        df["source"] = str(rinex_file_path.resolve())
         df["ephemeris_hash"] = pd.util.hash_pandas_object(df, index=False).astype(str)
         return df
 
@@ -216,7 +217,7 @@ def is_bds_geo(constellation, inclination_rad, semi_major_axis_m):
         21528 * constants.cMetersPerKilometer + constants.cBdsCgcs2000SmiMajorAxis_m
     )
     radius_threshold_m = (
-        meo_approximate_radius_m - geo_and_igso_approximate_radius_m
+        meo_approximate_radius_m + geo_and_igso_approximate_radius_m
     ) / 2
     inclination_threshold_rad = inclination_igso_and_meo_rad / 2
     is_geo = (
@@ -448,7 +449,6 @@ def convert_nav_dataset_to_dataframe(nav_ds):
     # Drop ephemerides for which all parameters are NaN, as we cannot compute anything from those
     df = df.dropna(how="all")
     df = df.reset_index()
-    df["source"] = nav_ds.filename
     # georinex adds suffixes to satellite IDs if it sees multiple ephemerides (e.g. F/NAV, I/NAV) for the same
     # satellite and the same timestamp.
     # The downstream code expects three-letter satellite IDs, so remove suffixes.
