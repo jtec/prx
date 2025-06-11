@@ -711,6 +711,7 @@ def test_select_ephemerides():
             ],
             "fnav_or_inav": ["fnav", "", "", ""],
             "ephemeris_hash": [1, 2, 3, 4],
+            "TransTime": [9, 9, 100, 999],
         }
     )
     ephemerides = set_time_of_validity(ephemerides)
@@ -782,13 +783,4 @@ def test_select_ephemerides_based_on_ttr():
         }
     )
     query_with_ephemerides = select_ephemerides(ephemerides, query)
-    # The selected ephemerides should be the second one (ephemeris_hash=2), based on t_oe comparison,
-    # despite the fact that the first one has transmitted later (ttr larger for ephemeris_hash=1)
-    assert query_with_ephemerides.ephemeris_hash.equals(pd.Series([2]))
-
-    # Remove duplicate ephemerides
-    ephemerides_rmv = remove_duplicate_ephemerides(ephemerides)
-    assert len(ephemerides_rmv) == 1
-    query_with_ephemerides_rmv = select_ephemerides(ephemerides_rmv, query)
-    # The selected ephemerides should be the first one (ephemeris_hash=1)
-    assert query_with_ephemerides_rmv.ephemeris_hash.equals(pd.Series([1]))
+    assert query_with_ephemerides.ephemeris_hash.equals(pd.Series([1]))

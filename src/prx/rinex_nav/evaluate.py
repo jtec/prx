@@ -585,8 +585,6 @@ def to_isagpst(time, timescale, gpst_utc_leapseconds):
 @timeit
 def select_ephemerides(df, query):
     df = df[df.ephemeris_reference_time_isagpst.notna()]
-    query = query.sort_values(by="query_time_isagpst")
-    df = df.sort_values(by="ephemeris_reference_time_isagpst")
     # Add fnav/inav indicator to query for to select the FNAV ephemeris for E5b signals, and INAV for other signals
     query["fnav_or_inav"] = ""
     query.loc[
@@ -595,14 +593,44 @@ def select_ephemerides(df, query):
     query.loc[
         (query.sv.str[0] == "E") & (query.signal.str[1] != "5"), "fnav_or_inav"
     ] = "inav"
-    query = pd.merge_asof(
-        query,
-        df,
-        left_on="query_time_isagpst",
-        right_on="ephemeris_reference_time_isagpst",
-        by=["sv", "fnav_or_inav"],
-        direction="backward",
-    )
+    query_result = []
+    for query_single in query.itertuples(index=False):
+        eph_filtered = df.loc[
+            (df.sv == getattr(query_single, "sv"))
+            & (df.fnav_or_inav == getattr(query_single, "fnav_or_inav"))
+            # & (df.validity_start <= getattr(query_single, "query_time_isagpst"))
+            # & (df.validity_end >= getattr(query_single, "query_time_isagpst"))
+            & (
+                df.ephemeris_reference_time_isagpst
+                <= getattr(query_single, "query_time_isagpst")
+            )
+        ]
+        if eph_filtered.empty:
+            eph_selected = pd.Series({ind: np.nan for ind in eph_filtered.columns})
+        else:
+            eph_filtered = eph_filtered.sort_values(by="TransTime", ignore_index=True)
+            eph_selected = eph_filtered.iloc[-1]
+        query_result.append(
+            pd.concat(
+                [
+                    pd.DataFrame([query_single]).reset_index(drop=True),
+                    pd.DataFrame(
+                        [
+                            eph_selected[
+                                [
+                                    col
+                                    for col in eph_selected.index
+                                    if col not in query.columns
+                                ]
+                            ]
+                        ]
+                    ).reset_index(drop=True),
+                ],
+                axis=1,
+            )
+        )
+    query = pd.concat(query_result)
+
     # Compute times w.r.t. orbit and clock reference times used by downstream computations
     query["query_time_wrt_ephemeris_reference_time_s"] = (
         query["query_time_isagpst"] - query["ephemeris_reference_time_isagpst"]
@@ -659,7 +687,6 @@ def compute(
     #   - query_time_isagpst
     rinex_nav_file_path = Path(rinex_nav_file_path)
     ephemerides = parse_rinex_nav_file(rinex_nav_file_path)
-    ephemerides = remove_duplicate_ephemerides(ephemerides)
     # Group delays and clock offsets can be signal-specific, so we need to match ephemerides to code signals,
     # not only to satellites
     # Example: Galileo transmits E5a clock and group delay parameters in the F/NAV message, but parameters for other
