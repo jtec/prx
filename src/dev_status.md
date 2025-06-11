@@ -39,17 +39,15 @@ Same as level 1 and 2, with the following additional parameters. The parameters 
 
 | Parameters                                                        | Name in PRX file                                                                                  | Status |
 |-------------------------------------------------------------------|---------------------------------------------------------------------------------------------------|--------|
-| Satellite position and velocity (∗)                               | `sat_pos_x_m`, `sat_pos_y_m`, `sat_pos_z_m`,<br>`sat_vel_x_mps`, `sat_vel_y_mps`, `sat_vel_z_mps` | ❌      |
-| Satellite clock offset and drift (including relativistic effect) (∗) | `sat_clock_offset_m`, `sat_clock_drift_mps`                                                       | ❌      |
-| Tropospheric delay (∗∗)                                           | `tropo_delay_m`                                                                                   | ❌      |
+| Satellite position and velocity (computed using `sp3` and `clk` files)                               | `sat_pos_x_m`, `sat_pos_y_m`, `sat_pos_z_m`,<br>`sat_vel_x_mps`, `sat_vel_y_mps`, `sat_vel_z_mps` | ❌      |
+| Satellite clock offset and drift (including relativistic effect) (computed using `sp3` and `clk` files) | `sat_clock_offset_m`, `sat_clock_drift_mps`                                                       | ❌      |
+| Tropospheric delay (computed using `tropex` files)                                           | `tropo_delay_m`                                                                                   | ❌      |
 | Tropospheric mapping function                                     | to be completed                                                                                   | ❌      |
-| Ionospheric delay (∗∗∗)                                           | `iono_delay_m`                                                                                    | ❌      |
-| Satellite code & phase bias (∗∗∗∗)                                | `sat_code_bias_m`                                                                                 | ❌      |
-| Satellite & receiver phase center offset and variation (∗∗∗∗∗)    | to be completed                                                                                   | ❌      |
+| Ionospheric delay (computed using `ionex` files)                                           | `iono_delay_m`                                                                                    | ❌      |
+| Satellite code & phase bias (computed using `bia` files)                                | `sat_code_bias_m`                                                                                 | ❌      |
+| Satellite & receiver phase center offset and variation (computed using `antex` files)    | to be completed                                                                                   | ❌      |
 | Solid Earth Tide                                                  | to be completed                                                                                   | ❌      |
 
-(∗) computed using `sp3` and `clk` files  
-(∗∗) computed using `tropex` files  
-(∗∗∗) computed using `ionex` files  
-(∗∗∗∗) computed using `bia` files  
-(∗∗∗∗∗) computed using `antex` files  
+  
+
+  
