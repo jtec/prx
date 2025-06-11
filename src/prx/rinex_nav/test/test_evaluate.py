@@ -800,7 +800,7 @@ def test_select_ephemerides_based_on_ttr():
                 pd.Timestamp("2024-06-24 07:59:44"),
                 pd.Timestamp("2024-06-24 08:00:00"),
             ],
-            "ephemeris_hash": [1,2],
+            "ephemeris_hash": [1, 2],
             "fnav_or_inav": ["", ""],
         }
     )
