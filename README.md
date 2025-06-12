@@ -74,7 +74,10 @@ line_profiler import profile`.
 Then run for instance
 
 ```
-LINE_PROFILE=1 uv run kernprof -lb src/prx/test/benchmark.py
+LINE_PROFILE=1  # Linux Terminal
+# $env:LINE_PROFILE=1  # Windows PowerShell
+# set LINE_PROFILE=1  # Windows CMD
+uv run kernprof -lb src/prx/test/benchmark.py
 uv run python -m line_profiler -rmt --unit 1e-3  --sort "benchmark.py.lprof"
 ```
 
