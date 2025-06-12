@@ -39,6 +39,34 @@ def parse_rinex_nav_file(rinex_file: Path):
     return cached_load(rinex_file, file_content_hash)
 
 
+def remove_duplicate_ephemerides(eph, interval_s=60):
+    """
+    Remove ephemerides covering the same time span, due to re-upload by the segment control.
+    The comparison is based on the 'time of ephemeris' and 'time of transmission' parameters.
+    """
+    idx_rmv = []
+
+    for sv, group in eph.groupby("sv"):
+        if sv[0] == "E":
+            continue
+        else:
+            # find positional index for ephemerides with toe difference smaller than threshold
+            idx_close = [
+                group.index.get_loc(idx_val)
+                for idx_val in group.loc[group.t_oe.diff().abs() < interval_s].index
+            ]
+            # for each case, chose the one with the largest ttr
+            for idx_val in idx_close:
+                if group.TransTime.iloc[idx_val] < group.TransTime.iloc[idx_val - 1]:
+                    idx_rmv.append(group.index.to_list()[idx_val])
+                else:
+                    idx_rmv.append(group.index.to_list()[idx_val - 1])
+    log.info(
+        f"{remove_duplicate_ephemerides.__name__} removed {len(idx_rmv)} ephemerides datasets"
+    )
+    return eph.drop(index=idx_rmv).reset_index(drop=True)
+
+
 def time_scale_integer_second_offset_wrt_gpst(time_scale, utc_gpst_leap_seconds=None):
     if time_scale in ["GPST", "SBAST", "QZSST", "IRNSST", "GST"]:
         return pd.Timedelta(seconds=0)
@@ -392,7 +420,7 @@ def kepler_orbit_position_and_velocity(eph):
 
 def set_time_of_validity(df):
     def set_for_one_constellation(group):
-        group_constellation = group["constellation"].iloc[0]
+        group_constellation = group["constellation"].iat[0]
         group["validity_start"] = (
             group["ephemeris_reference_time_isagpst"]
             + constants.constellation_2_ephemeris_validity_interval[
@@ -407,7 +435,11 @@ def set_time_of_validity(df):
         )
         return group
 
-    df = df.groupby("constellation").apply(set_for_one_constellation)
+    df = (
+        df.groupby("constellation")[df.columns]
+        .apply(set_for_one_constellation)
+        .reset_index(drop=True)
+    )
     return df
 
 
@@ -553,8 +585,6 @@ def to_isagpst(time, timescale, gpst_utc_leapseconds):
 @timeit
 def select_ephemerides(df, query):
     df = df[df.ephemeris_reference_time_isagpst.notna()]
-    query = query.sort_values(by="query_time_isagpst")
-    df = df.sort_values(by="ephemeris_reference_time_isagpst")
     # Add fnav/inav indicator to query for to select the FNAV ephemeris for E5b signals, and INAV for other signals
     query["fnav_or_inav"] = ""
     query.loc[
@@ -563,14 +593,44 @@ def select_ephemerides(df, query):
     query.loc[
         (query.sv.str[0] == "E") & (query.signal.str[1] != "5"), "fnav_or_inav"
     ] = "inav"
-    query = pd.merge_asof(
-        query,
-        df,
-        left_on="query_time_isagpst",
-        right_on="ephemeris_reference_time_isagpst",
-        by=["sv", "fnav_or_inav"],
-        direction="backward",
-    )
+    query_result = []
+    for query_single in query.itertuples(index=False):
+        eph_filtered = df.loc[
+            (df.sv == getattr(query_single, "sv"))
+            & (df.fnav_or_inav == getattr(query_single, "fnav_or_inav"))
+            # & (df.validity_start <= getattr(query_single, "query_time_isagpst"))
+            # & (df.validity_end >= getattr(query_single, "query_time_isagpst"))
+            & (
+                df.ephemeris_reference_time_isagpst
+                <= getattr(query_single, "query_time_isagpst")
+            )
+        ]
+        if eph_filtered.empty:
+            eph_selected = pd.Series({ind: np.nan for ind in eph_filtered.columns})
+        else:
+            eph_filtered = eph_filtered.sort_values(by="TransTime", ignore_index=True)
+            eph_selected = eph_filtered.iloc[-1]
+        query_result.append(
+            pd.concat(
+                [
+                    pd.DataFrame([query_single]).reset_index(drop=True),
+                    pd.DataFrame(
+                        [
+                            eph_selected[
+                                [
+                                    col
+                                    for col in eph_selected.index
+                                    if col not in query.columns
+                                ]
+                            ]
+                        ]
+                    ).reset_index(drop=True),
+                ],
+                axis=1,
+            )
+        )
+    query = pd.concat(query_result)
+
     # Compute times w.r.t. orbit and clock reference times used by downstream computations
     query["query_time_wrt_ephemeris_reference_time_s"] = (
         query["query_time_isagpst"] - query["ephemeris_reference_time_isagpst"]
@@ -597,7 +657,9 @@ def compute_clock_offsets(df):
     return df
 
 
-def compute_parallel(rinex_nav_file_path, per_signal_query):
+def compute_parallel(
+    rinex_nav_file_path, per_signal_query, is_query_corrected_by_sat_clock_offset=False
+):
     # Warm up nav file parser cache so that we don't parse the file multiple times
     _ = parse_rinex_nav_file(rinex_nav_file_path)
     parallel = Parallel(n_jobs=round(multiprocessing.cpu_count() / 2), return_as="list")
@@ -605,12 +667,17 @@ def compute_parallel(rinex_nav_file_path, per_signal_query):
     n_chunks = min(len(per_signal_query.index), 4)
     chunks = np.array_split(per_signal_query, n_chunks)
     processed_chunks = parallel(
-        delayed(compute)(rinex_nav_file_path, chunk) for chunk in chunks
+        delayed(compute)(
+            rinex_nav_file_path, chunk, is_query_corrected_by_sat_clock_offset
+        )
+        for chunk in chunks
     )
     return pd.concat(processed_chunks)
 
 
-def compute(rinex_nav_file_path, per_signal_query):
+def compute(
+    rinex_nav_file_path, per_signal_query, is_query_corrected_by_sat_clock_offset=False
+):
     query_columns = per_signal_query.columns
     # per_signal_query is a pd.DataFrame with the following columns
     #   - time_of_reception_in_receiver_time
@@ -625,7 +692,22 @@ def compute(rinex_nav_file_path, per_signal_query):
     # Example: Galileo transmits E5a clock and group delay parameters in the F/NAV message, but parameters for other
     # signals in the I/NAV message
     per_signal_query = select_ephemerides(ephemerides, per_signal_query)
-    per_signal_query = compute_clock_offsets(per_signal_query)
+
+    # compute satellite clock bias
+    if is_query_corrected_by_sat_clock_offset:
+        per_signal_query = compute_clock_offsets(per_signal_query)
+    else:  # compute satellite clock offset iteratively
+        t = per_signal_query.query_time_wrt_clock_reference_time_s
+        for _ in range(2):
+            per_signal_query = compute_clock_offsets(per_signal_query)
+            per_signal_query.query_time_wrt_clock_reference_time_s = (
+                t - per_signal_query.sat_clock_offset_m / constants.cGpsSpeedOfLight_mps
+            )
+        # Apply sat clock correction to the query time for satellite position computation
+        per_signal_query.query_time_wrt_ephemeris_reference_time_s -= (
+            per_signal_query.sat_clock_offset_m / constants.cGpsSpeedOfLight_mps
+        )
+
     # Compute orbital states for each (satellite,ephemeris) pair only once:
     per_sat_eph_query = (
         per_signal_query.groupby(["sv", "query_time_isagpst", "ephemeris_hash"])
@@ -651,7 +733,9 @@ def compute(rinex_nav_file_path, per_signal_query):
             sub_df[["x_m", "y_m", "z_m", "dx_mps", "dy_mps", "dz_mps"]] = np.nan
         return sub_df
 
-    per_sat_eph_query = per_sat_eph_query.groupby("orbit_type").apply(evaluate_orbit)
+    per_sat_eph_query = per_sat_eph_query.groupby("orbit_type")[
+        per_sat_eph_query.columns
+    ].apply(evaluate_orbit)
     per_sat_eph_query = per_sat_eph_query.reset_index(drop=True)
     columns_to_keep = [
         "sv",
@@ -765,7 +849,9 @@ def compute_total_group_delays(
         df["sat_code_bias_m"] = df.tgd * df.gamma * df.speedOfLightIcd_mps
         return df
 
-    query = query.groupby(["signal", "constellation"]).apply(compute_tgds)
+    query = query.groupby(["signal", "constellation"])[query.columns].apply(
+        compute_tgds
+    )
     return query
 
 
