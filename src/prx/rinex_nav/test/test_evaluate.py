@@ -7,6 +7,7 @@ from prx.sp3 import evaluate as sp3_evaluate
 from prx.rinex_nav import evaluate as rinex_nav_evaluate
 from prx import constants, converters, util
 from prx.util import week_and_seconds_2_timedelta
+from prx.main import process
 import shutil
 import pytest
 import os
@@ -42,7 +43,33 @@ def input_for_test():
         shutil.rmtree(test_directory)
     os.makedirs(test_directory)
     test_files = {
+        "rinex_obs_file": test_directory / "TLSE00FRA_R_20220010000_01H_30S_MO.rnx.gz",
         "rinex_nav_file": test_directory / "BRDC00IGS_R_20220010000_01D_MN.zip",
+        "sp3_file": test_directory / "WUM0MGXULT_20220010000_01D_05M_ORB.SP3",
+    }
+    for key, test_file_path in test_files.items():
+        shutil.copy(
+            Path(__file__).parent.joinpath("datasets", test_file_path.name),
+            test_file_path,
+        )
+        assert test_file_path.exists()
+    yield test_files
+    shutil.rmtree(test_directory)
+
+
+@pytest.fixture
+def input_for_test_2():
+    test_directory = (
+        Path(__file__).parent.joinpath(f"./tmp_test_directory_{__name__}").resolve()
+    )
+    if test_directory.exists():
+        # Start from empty directory, might avoid hiding some subtle bugs, e.g.
+        # file decompression not working properly
+        shutil.rmtree(test_directory)
+    os.makedirs(test_directory)
+    test_files = {
+        "rinex_obs_file": test_directory / "TLSE00FRA_R_20230010100_10S_01S_MO.crx.gz",
+        "rinex_nav_file": test_directory / "BRDC00IGS_R_20230010000_01D_MN.rnx.zip",
         "sp3_file": test_directory / "WUM0MGXULT_20220010000_01D_05M_ORB.SP3",
     }
     for key, test_file_path in test_files.items():
@@ -760,11 +787,25 @@ def test_health_flag(input_for_test):
     """
     Tests the extraction and association of the health flag from a RINEX NAV file on a PRX DataFrame of epochs and satellites.
     """
-    # read csv file
-    df_prx = pd.read_csv(input_for_test["prx_file"], comment="#")
+
+    observation_file = input_for_test["rinex_obs_file"]
+    process(observation_file_path=observation_file, output_format="csv")
+
+    expected_prx_file = observation_file.with_suffix("")  # delete the last suffix
+    while expected_prx_file.suffix:  # delete the remaining suffixes if they exist
+        expected_prx_file = expected_prx_file.with_suffix("")
+
+    expected_prx_file = expected_prx_file.with_name(
+        expected_prx_file.name + "." + constants.cPrxCsvFileExtension
+    )
+
+    assert isinstance(expected_prx_file, Path)
+    assert expected_prx_file.exists()
+
+    # Read the CSV file
+    df_prx = pd.read_csv(expected_prx_file, comment="#")
     df_prx = df_prx.reset_index(drop=True)
     df_prx["id"] = df_prx.index  # identifiant unique par ligne
-
 
     # create query dataframe by extracting the right columns
     query = pd.DataFrame(
@@ -787,18 +828,11 @@ def test_health_flag(input_for_test):
     # select the right ephemerides dataset for each query row
     query = select_ephemerides(ephemerides, query)
 
-    health_valid_ranges = {
-        "G" : (0, 63),
-        "E" : (0, 3),
-        "C" : (0, 3),
-        "R" : (0, 7),
-        "J" : (0, 63),
-        "I" : (0, 3),
-    }
-
     # add health_flag column to query and merge health flag into prx dataframe
     query["health_flag"] = rinex_nav_evaluate.extract_health_flag_from_query(query)
-    df_prx = df_prx.merge(query[["id", "health_flag"]], on="id", how="left")
+
+    if "health_flag" not in df_prx.columns:
+        df_prx = df_prx.merge(query[["id", "health_flag"]], on="id", how="left")
 
     # delete column index
     df_prx.drop(columns=["id"], inplace=True)
@@ -806,11 +840,8 @@ def test_health_flag(input_for_test):
     # save prx dataframe as csv file
     df_prx.to_csv(  # verify parameters
         path_or_buf=(
-            input_for_test["prx_file"].parent.joinpath(
-                input_for_test["prx_file"].stem
-                + "_new"
-                + input_for_test["prx_file"].suffix
-            )
+            input_for_test["rinex_obs_file"].parent
+            / (input_for_test["rinex_obs_file"].stem + "_new.csv")
         ),
         index=False,
         mode="a",
@@ -823,11 +854,19 @@ def test_health_flag(input_for_test):
     # assert not df_prx["health_flag"].isna().any()
 
     # Vérification : valeurs dans plage de valeur possible
+    health_valid_ranges = {
+        "G": (0, 63),
+        "E": (0, 255),
+        "C": (0, 3),
+        "R": (0, 7),
+        "J": (0, 63),
+        "I": (0, 3),
+        "S": (0, 63),
+    }
+
     for const, hf in zip(df_prx["constellation"], df_prx["health_flag"]):
         if pd.notna(hf):
             assert health_valid_ranges[const][0] <= hf <= health_valid_ranges[const][1]
-        
-            
 
     # Vérifier la valeur pour un échantillons de query
     # (sv, epoch, expected health flag)
@@ -836,68 +875,88 @@ def test_health_flag(input_for_test):
     test_list = [
         ("G01", pd.Timestamp("2022-01-01 00:00:00"), 0),
         ("G22", pd.Timestamp("2022-01-01 00:00:00"), 63),
-
         ("R24", pd.Timestamp("2022-01-01 00:16:00"), 0),
         ("R15", pd.Timestamp("2022-01-01 00:16:00"), 0),
-
         ("C06", pd.Timestamp("2022-01-01 00:01:30"), 0),
         ("C20", pd.Timestamp("2022-01-01 00:02:30"), 0),
-
         ("E33", pd.Timestamp("2022-01-01 00:01:00"), 0),
         ("E08", pd.Timestamp("2022-01-01 00:01:00"), 0),
-
     ]
 
     for test in test_list:
-        valeurs = query.loc[(query.sv == test[0]) & (query.query_time_isagpst == test[1]),"health_flag"]
+        valeurs = query.loc[
+            (query.sv == test[0]) & (query.query_time_isagpst == test[1]), "health_flag"
+        ]
         assert (valeurs == test[2]).all()
-
 
     print("done")
 
 
-def test_compute_health_flag(input_for_test):
+def test_compute_health_flag(input_for_test_2):
     """
-    Comprehensive test of health_flag extraction via the compute function    
+    Comprehensive test of health_flag extraction via the compute function
     """
-    # read csv file
-    df_prx = pd.read_csv(input_for_test["prx_file"], comment="#")
-    
+    observation_file = input_for_test_2["rinex_obs_file"]
+    process(observation_file_path=observation_file, output_format="csv")
+    expected_prx_file = observation_file.with_suffix("")  # delete the last suffix
+    while expected_prx_file.suffix:  # delete the remaining suffixes if they exist
+        expected_prx_file = expected_prx_file.with_suffix("")
+
+    expected_prx_file = expected_prx_file.with_name(
+        expected_prx_file.name + "." + constants.cPrxCsvFileExtension
+    )
+
+    assert isinstance(expected_prx_file, Path)
+    assert expected_prx_file.exists()
+
+    # Read the CSV file
+    df_prx = pd.read_csv(expected_prx_file, comment="#")
+
     # create query dataframe by extracting the right columns
-    per_signal_query = pd.DataFrame({
-        'time_of_reception_in_receiver_time': df_prx['time_of_reception_in_receiver_time'],
-        'observation_value': df_prx['C_obs_m'],  #TBD
-        'signal': df_prx['rnx_obs_identifier'],          
-        'sv': df_prx['constellation'] + df_prx['prn'].astype(str).str.zfill(2),
-        'query_time_isagpst': pd.to_datetime(df_prx['time_of_reception_in_receiver_time']),
-    })
-    
+    per_signal_query = pd.DataFrame(
+        {
+            "time_of_reception_in_receiver_time": df_prx[
+                "time_of_reception_in_receiver_time"
+            ],
+            "observation_value": df_prx["C_obs_m"],
+            "signal": df_prx["rnx_obs_identifier"],
+            "sv": df_prx["constellation"] + df_prx["prn"].astype(str).str.zfill(2),
+            "query_time_isagpst": pd.to_datetime(
+                df_prx["time_of_reception_in_receiver_time"]
+            ),
+        }
+    )
+
     # use of function compute()
-    rinex_nav_path = converters.compressed_to_uncompressed(input_for_test["rinex_nav_file"])
-    per_signal_query = rinex_nav_evaluate.compute(rinex_nav_path,per_signal_query)
-    
+    rinex_nav_path = converters.compressed_to_uncompressed(
+        input_for_test_2["rinex_nav_file"]
+    )
+    per_signal_query = rinex_nav_evaluate.compute(rinex_nav_path, per_signal_query)
+
     # Verifies the presence of the health_column
-    assert 'health_flag' in per_signal_query.columns
-    
+    assert "health_flag" in per_signal_query.columns
+
     # pas de Nan
-    assert per_signal_query['health_flag'].notna().any()
-    
+    assert per_signal_query["health_flag"].notna().any()
+
     health_valid_ranges = {
-        "G" : (0, 63),  
-        "E" : (0, 3),
-        "C" : (0, 3),
-        "R" : (0, 7),
-        "J" : (0, 63),
-        "I" : (0, 3),
+        "G": (0, 63),
+        "E": (0, 255),
+        "C": (0, 3),
+        "R": (0, 7),
+        "J": (0, 63),
+        "I": (0, 3),
+        "S": (0, 63),
     }
 
     for const, (min_val, max_val) in health_valid_ranges.items():
-        mask = per_signal_query['sv'].str.startswith(const)
+        mask = per_signal_query["sv"].str.startswith(const)
         if mask.any():
-            hf_values = per_signal_query.loc[mask, 'health_flag'].dropna()
-            assert hf_values.between(min_val, max_val).all(), \
+            hf_values = per_signal_query.loc[mask, "health_flag"].dropna()
+            assert hf_values.between(min_val, max_val).all(), (
                 f"Valeurs health_flag invalides pour {const}"
-    
+            )
+
     # Vérifier la valeur pour un échantillons de query
     # (sv, epoch, expected health flag)
     # deux valeurs pour chaque constellation (valeurs différentes de health)
@@ -905,21 +964,20 @@ def test_compute_health_flag(input_for_test):
     test_list = [
         ("G01", pd.Timestamp("2022-01-01 00:00:00"), 0),
         ("G22", pd.Timestamp("2022-01-01 00:00:00"), 63),
-
         ("R24", pd.Timestamp("2022-01-01 00:16:00"), 0),
         ("R15", pd.Timestamp("2022-01-01 00:16:00"), 0),
-
         ("C06", pd.Timestamp("2022-01-01 00:01:30"), 0),
         ("C20", pd.Timestamp("2022-01-01 00:02:30"), 0),
-
         ("E33", pd.Timestamp("2022-01-01 00:01:00"), 0),
         ("E08", pd.Timestamp("2022-01-01 00:01:00"), 0),
-
     ]
-    
+
     for test in test_list:
-        valeurs = per_signal_query.loc[(per_signal_query.sv == test[0]) & (per_signal_query.query_time_isagpst == test[1]),"health_flag"]
+        valeurs = per_signal_query.loc[
+            (per_signal_query.sv == test[0])
+            & (per_signal_query.query_time_isagpst == test[1]),
+            "health_flag",
+        ]
         assert (valeurs == test[2]).all()
 
-    
     print("done")

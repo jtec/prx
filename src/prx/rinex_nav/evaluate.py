@@ -9,7 +9,6 @@ from joblib import Parallel, delayed
 import georinex
 from prx import util
 from prx import constants
-from prx.rinex_nav.health_flag import extract_health_flag_from_query
 from prx.util import timeit, repair_with_gfzrnx
 
 log = logging.getLogger(__name__)
@@ -585,6 +584,42 @@ def select_ephemerides(df, query):
     return query
 
 
+def extract_health_flag_from_query(query):
+    """
+    Extracts the health flag for each row of a query from a `query` DataFrame containing ephemeris data.
+
+    Args:
+    query (pd.DataFrame): DataFrame containing at least the 'sv' column and the constellation-specific health flag columns.
+
+    Returns:
+    List: List of health indicators associated with each row of the query.
+    """
+    # get health flag, according to constellation
+    col_dict = {
+        "G": "health",
+        "E": "health",
+        "C": "SatH1",
+        "S": "health",
+        "R": "health",
+        "J": "health",
+        "I": "health",
+    }
+
+    # health_flag = [
+    #     row._asdict()[col_dict[row.sv[0]]] for row in query.itertuples(index=False)
+    # ]
+
+    for row in query.itertuples(index=False):
+        assert row.sv[0] in col_dict
+        assert hasattr(row, col_dict[row.sv[0]])
+
+    health_flag = [
+        getattr(row, col_dict[row.sv[0]]) for row in query.itertuples(index=False)
+    ]
+
+    return health_flag
+
+
 def compute_clock_offsets(df):
     df["sat_clock_offset_m"] = constants.cGpsSpeedOfLight_mps * (
         df["SVclockBias"]
@@ -770,42 +805,6 @@ def compute_total_group_delays(
 
     query = query.groupby(["signal", "constellation"]).apply(compute_tgds)
     return query
-
-def extract_health_flag_from_query(query):
-    """
-    Extracts the health flag for each row of a query from a `query` DataFrame containing ephemeris data.
-
-    Args:
-    query (pd.DataFrame): DataFrame containing at least the 'sv' column and the constellation-specific health flag columns.
-
-    Returns:
-    List: List of health indicators associated with each row of the query.
-    """
-    # get health flag, according to constellation
-    col_dict = {
-        "G": "health",
-        "E": "health",
-        "C": "SatH1",
-        "R": "health",  
-        "J": "health",  
-        "I": "Health", 
-    }
-
-    # health_flag = [
-    #     row._asdict()[col_dict[row.sv[0]]] for row in query.itertuples(index=False)
-    # ]
-
-    for row in query.itertuples(index=False):
-        assert row.sv[0] in col_dict
-        assert hasattr(row, col_dict[row.sv[0]])
-
-    health_flag = [
-        getattr(row, col_dict[row.sv[0]])
-        for row in query.itertuples(index=False)
-    ]
-
-    return health_flag
-
 
 
 if __name__ == "main":

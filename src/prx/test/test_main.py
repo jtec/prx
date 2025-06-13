@@ -16,6 +16,7 @@ from prx.user import (
     bootstrap_coarse_receiver_position,
 )
 from prx.rinex_nav import nav_file_discovery
+from prx.rinex_nav import evaluate
 
 log = util.get_logger(__name__)
 
@@ -42,6 +43,34 @@ def input_for_test_tlse():
     )
     ephemerides_file = (
         datasets_directory / "TLSE_2023001/BRDC00IGS_R_20230010000_01D_MN.rnx.zip"
+    )
+    for file in [compressed_compact_rinex_file, ephemerides_file]:
+        shutil.copy(
+            file,
+            test_directory / file.name,
+        )
+
+    yield test_directory / compressed_compact_rinex_file.name
+    shutil.rmtree(test_directory)
+
+
+@pytest.fixture
+def input_for_test_tlse_2024():
+    test_directory = Path(f"./tmp_test_directory_{__name__}").resolve()
+    if test_directory.exists():
+        # Make sure the expected file has not been generated before and is still on disk due to e.g. a previous
+        # test run having crashed:
+        shutil.rmtree(test_directory)
+    os.makedirs(test_directory)
+    datasets_directory = Path(__file__).parent / "datasets"
+    # Also provide ephemerides on disk so the test does not have to download them:
+    compressed_compact_rinex_file = (
+        datasets_directory
+        / "TLSE00FRA_R_2024001"
+        / "TLSE00FRA_R_20240011800_01H_30S_MO.crx.gz"
+    )
+    ephemerides_file = (
+        datasets_directory / "TLSE00FRA_R_2024001/BRDC00IGS_R_20240010000_01D_MN.rnx.gz"
     )
     for file in [compressed_compact_rinex_file, ephemerides_file]:
         shutil.copy(
@@ -300,6 +329,49 @@ def test_spp_lsq_tlse(input_for_test_tlse):
         log.info(f"Velocity offset: {velocity_offset}")
         assert np.max(np.abs(position_offset)) < 1e1
         assert np.max(np.abs(velocity_offset)) < 1e-1
+
+
+def test_spp_lsq_tlse_2024(input_for_test_tlse_2024):
+    """
+    Calculates the position offset twice.
+    Once including a faulty satellite (G27) and once only with satellites with a health_flag of 0.
+
+    Allows to assess the faulty satellite's impact on positioning accuracy
+    """
+    df, metadata = run_rinex_through_prx(input_for_test_tlse_2024)
+    df["sv"] = df["constellation"].astype(str) + df["prn"].astype(str)
+    df_first_epoch = df[
+        df.time_of_reception_in_receiver_time
+        == df.time_of_reception_in_receiver_time.min()
+    ]
+    constellation_to_use = ["G"]
+
+    # observation with every sat
+
+    obs = df_first_epoch[df.constellation.isin(constellation_to_use)]
+    pt_lsq = spp_pt_lsq(obs)
+    position_offset = pt_lsq[0:3, :] - np.array(
+        metadata["approximate_receiver_ecef_position_m"]
+    ).reshape(-1, 1)
+
+    log.info(
+        f"Using constellations: {constellation_to_use}, {len(obs.sv.unique())} SVs"
+    )
+    log.info(f"Position offset: {position_offset}")
+
+    # observation without G27
+    obs_without_G27 = obs.loc[obs.health_flag == 0]
+    pt_lsq_without_G27 = spp_pt_lsq(obs_without_G27)
+    position_offset_without_G27 = pt_lsq_without_G27[0:3, :] - np.array(
+        metadata["approximate_receiver_ecef_position_m"]
+    ).reshape(-1, 1)
+    log.info(
+        f"Using constellations: {constellation_to_use}, {len(obs.sv.unique())} SVs"
+    )
+    log.info(f"Position offset: {position_offset_without_G27}")
+
+    assert np.max(np.abs(position_offset_without_G27)) < np.min(np.abs(position_offset))
+    assert np.max(np.abs(position_offset_without_G27)) < 1e1
 
 
 def test_spp_lsq_for_obs_file_across_two_days(
