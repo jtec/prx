@@ -200,17 +200,14 @@ def timestamp_to_mid_day(ts):
     )
 
 
-def timedelta_2_weeks_and_seconds(time_delta: pd.Timedelta):
-    if pd.isnull(time_delta):
-        return np.nan, np.nan
-
-    assert isinstance(time_delta, pd.Timedelta), (
-        "time_delta must be of type pd.Timedelta"
-    )
+def timedelta_2_weeks_and_seconds(time_delta: pd.Timedelta | pd.Series):
+    if isinstance(time_delta, pd.Timedelta):
+        wn_series, tow_series = timedelta_2_weeks_and_seconds(pd.Series([time_delta]))
+        return wn_series.iloc[0], tow_series.iloc[0]
     in_nanoseconds = time_delta / pd.Timedelta(1, "ns")
-    weeks = math.floor(in_nanoseconds / constants.cNanoSecondsPerWeek)
+    weeks = np.floor(in_nanoseconds / constants.cNanoSecondsPerWeek)
     week_nanoseconds = in_nanoseconds - weeks * constants.cNanoSecondsPerWeek
-    return weeks, np.float64(week_nanoseconds) / constants.cNanoSecondsPerSecond
+    return weeks, week_nanoseconds.astype(np.float64) / constants.cNanoSecondsPerSecond
 
 
 def week_and_seconds_2_timedelta(weeks, seconds):
