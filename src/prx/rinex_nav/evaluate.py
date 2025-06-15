@@ -11,6 +11,7 @@ from prx import util
 from prx import constants
 from prx.util import timeit, repair_with_gfzrnx
 from line_profiler import profile
+
 log = logging.getLogger(__name__)
 
 
@@ -594,43 +595,75 @@ def select_ephemerides(df, query):
     query.loc[
         (query.sv.str[0] == "E") & (query.signal.str[1] != "5"), "fnav_or_inav"
     ] = "inav"
-    query_result = []
-    for query_single in query.itertuples(index=False):
-        eph_filtered = df.loc[
-            (df.sv == getattr(query_single, "sv"))
-            & (df.fnav_or_inav == getattr(query_single, "fnav_or_inav"))
-            # & (df.validity_start <= getattr(query_single, "query_time_isagpst"))
-            # & (df.validity_end >= getattr(query_single, "query_time_isagpst"))
-            & (
-                df.ephemeris_reference_time_isagpst
-                <= getattr(query_single, "query_time_isagpst")
-            )
-        ]
-        if eph_filtered.empty:
-            eph_selected = pd.Series({ind: np.nan for ind in eph_filtered.columns})
-        else:
-            eph_filtered = eph_filtered.sort_values(by="TransTime", ignore_index=True)
-            eph_selected = eph_filtered.iloc[-1]
-        query_result.append(
-            pd.concat(
-                [
-                    pd.DataFrame([query_single]).reset_index(drop=True),
-                    pd.DataFrame(
-                        [
-                            eph_selected[
-                                [
-                                    col
-                                    for col in eph_selected.index
-                                    if col not in query.columns
-                                ]
-                            ]
-                        ]
-                    ).reset_index(drop=True),
-                ],
-                axis=1,
-            )
-        )
-    query = pd.concat(query_result)
+    additional_columns = [col for col in df.columns if col not in query.columns]
+
+    # query_result = []
+    # for query_single in query.itertuples(index=False):
+    #     eph_filtered = df.loc[
+    #         (df.sv == getattr(query_single, "sv"))
+    #         & (df.fnav_or_inav == getattr(query_single, "fnav_or_inav"))
+    #         & (
+    #             df.ephemeris_reference_time_isagpst
+    #             <= getattr(query_single, "query_time_isagpst")
+    #         )
+    #     ]
+    #     if eph_filtered.empty:
+    #         eph_selected = pd.DataFrame(
+    #             {ind: np.nan for ind in eph_filtered.columns}, index=[0]
+    #         )
+    #     else:
+    #         eph_filtered = eph_filtered.sort_values(by="TransTime", ignore_index=True)
+    #         eph_selected = eph_filtered.iloc[[-1], :].reset_index(drop=True)
+    #     query_result.append(
+    #         pd.concat(
+    #             [
+    #                 pd.DataFrame([query_single], index=[0]),
+    #                 eph_selected[additional_columns],
+    #             ],
+    #             axis=1,
+    #         )
+    #     )
+    # query_result_1 = pd.concat(query_result)
+
+    # Step 1: Perform a cross join between query and df on shared keys
+    merged = pd.merge(query, df, how="left", on=["sv", "fnav_or_inav"])
+
+    # Step 2: Filter based on the ephemeris_reference_time_isagpst <= query_time_isagpst
+    filtered = merged[
+        merged["ephemeris_reference_time_isagpst"] <= merged["query_time_isagpst"]
+    ]
+
+    # Step 3: Sort so that the most recent TransTime is first
+    # TODO GLONASS does not have TransTime...
+    filtered = filtered.sort_values(
+        ["sv", "fnav_or_inav", "query_time_isagpst", "TransTime"]
+    )
+
+    # Step 4: Drop duplicates keeping the last valid row for each query
+    # Identify rows by a unique key (e.g., index of original query)
+    filtered["query_index"] = filtered.groupby(
+        ["sv", "fnav_or_inav", "query_time_isagpst"]
+    ).ngroup()
+
+    # Step 5: Pick the latest valid eph row per query
+    selected = filtered.groupby("query_index", as_index=False).tail(1)
+
+    # Step 6: Reconstruct the final DataFrame
+    query_with_query_index = query.merge(
+        filtered[
+            ["sv", "fnav_or_inav", "query_time_isagpst", "query_index"]
+        ].drop_duplicates(),
+        on=["sv", "fnav_or_inav", "query_time_isagpst"],
+        how="left",
+    )
+    query_result_2 = pd.merge(
+        query_with_query_index,
+        selected[["query_index"] + additional_columns],
+        on="query_index",
+        how="left",
+    ).drop(columns="query_index")
+
+    query = query_result_2
 
     # Compute times w.r.t. orbit and clock reference times used by downstream computations
     query["query_time_wrt_ephemeris_reference_time_s"] = (
@@ -676,7 +709,6 @@ def compute_parallel(
     return pd.concat(processed_chunks)
 
 
-@profile
 def compute(
     rinex_nav_file_path, per_signal_query, is_query_corrected_by_sat_clock_offset=False
 ):
