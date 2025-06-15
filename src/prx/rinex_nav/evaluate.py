@@ -10,7 +10,7 @@ import georinex
 from prx import util
 from prx import constants
 from prx.util import timeit, repair_with_gfzrnx
-
+from line_profiler import profile
 log = logging.getLogger(__name__)
 
 
@@ -583,6 +583,7 @@ def to_isagpst(time, timescale, gpst_utc_leapseconds):
 
 
 @timeit
+@profile
 def select_ephemerides(df, query):
     df = df[df.ephemeris_reference_time_isagpst.notna()]
     # Add fnav/inav indicator to query for to select the FNAV ephemeris for E5b signals, and INAV for other signals
@@ -675,6 +676,7 @@ def compute_parallel(
     return pd.concat(processed_chunks)
 
 
+@profile
 def compute(
     rinex_nav_file_path, per_signal_query, is_query_corrected_by_sat_clock_offset=False
 ):
