@@ -605,10 +605,6 @@ def extract_health_flag_from_query(query):
         "I": "health",
     }
 
-    # health_flag = [
-    #     row._asdict()[col_dict[row.sv[0]]] for row in query.itertuples(index=False)
-    # ]
-
     for row in query.itertuples(index=False):
         assert row.sv[0] in col_dict
         assert hasattr(row, col_dict[row.sv[0]])

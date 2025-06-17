@@ -783,41 +783,22 @@ def test_select_ephemerides():
     assert query_with_ephemerides.ephemeris_hash.equals(pd.Series([1, 2, 2]))
 
 
-def test_health_flag(input_for_test):
+def test_extract_health_flag_from_query(input_for_test):
     """
     Tests the extraction and association of the health flag from a RINEX NAV file on a PRX DataFrame of epochs and satellites.
     """
-
-    observation_file = input_for_test["rinex_obs_file"]
-    process(observation_file_path=observation_file, output_format="csv")
-
-    expected_prx_file = observation_file.with_suffix("")  # delete the last suffix
-    while expected_prx_file.suffix:  # delete the remaining suffixes if they exist
-        expected_prx_file = expected_prx_file.with_suffix("")
-
-    expected_prx_file = expected_prx_file.with_name(
-        expected_prx_file.name + "." + constants.cPrxCsvFileExtension
+    rinex_3_obs_file= converters.anything_to_rinex_3(input_for_test["rinex_obs_file"])
+    query = util.parse_rinex_obs_file(rinex_3_obs_file)[["time", "sv", "obs_type"]]
+    query.time = pd.to_datetime(query.time, format="%Y-%m-%dT%H:%M:%S")
+    query.obs_type = query.obs_type.str[1:]
+    query = query.loc[~query.obs_type.str.contains("lli")].reset_index(drop=True)
+    query = query.rename(
+        columns={
+            "time": "query_time_isagpst",
+            "obs_type": "signal",
+        },
     )
-
-    assert isinstance(expected_prx_file, Path)
-    assert expected_prx_file.exists()
-
-    # Read the CSV file
-    df_prx = pd.read_csv(expected_prx_file, comment="#")
-    df_prx = df_prx.reset_index(drop=True)
-    df_prx["id"] = df_prx.index  # identifiant unique par ligne
-
-    # create query dataframe by extracting the right columns
-    query = pd.DataFrame(
-        {
-            "id": df_prx.index,
-            "sv": df_prx.constellation + df_prx.prn.astype(str).str.zfill(2),
-            "signal": df_prx.rnx_obs_identifier,
-            "query_time_isagpst": [
-                pd.Timestamp(time) for time in df_prx.time_of_reception_in_receiver_time
-            ],
-        }
-    )
+    query["id"] = query.index
 
     # read nav file
     rinex_nav_file = converters.compressed_to_uncompressed(
@@ -828,32 +809,16 @@ def test_health_flag(input_for_test):
     # select the right ephemerides dataset for each query row
     query = select_ephemerides(ephemerides, query)
 
+    # remove query with missing ephemerides
+    query = query.dropna(subset="time")
+
     # add health_flag column to query and merge health flag into prx dataframe
     query["health_flag"] = rinex_nav_evaluate.extract_health_flag_from_query(query)
 
-    if "health_flag" not in df_prx.columns:
-        df_prx = df_prx.merge(query[["id", "health_flag"]], on="id", how="left")
+    # Verification : no NaN values health_flag
+    assert not query["health_flag"].isna().any()
 
-    # delete column index
-    df_prx.drop(columns=["id"], inplace=True)
-
-    # save prx dataframe as csv file
-    df_prx.to_csv(  # verify parameters
-        path_or_buf=(
-            input_for_test["rinex_obs_file"].parent
-            / (input_for_test["rinex_obs_file"].stem + "_new.csv")
-        ),
-        index=False,
-        mode="a",
-        float_format="%.6f",
-        date_format="%Y-%m-%d %H:%M:%S.%f",
-    )
-
-    # assert result
-    # Verification : pas de NaN dans health_flah
-    # assert not df_prx["health_flag"].isna().any()
-
-    # Vérification : valeurs dans plage de valeur possible
+    # Verification : health flag values inside ranges specified in rinex v3 format
     health_valid_ranges = {
         "G": (0, 63),
         "E": (0, 255),
@@ -863,16 +828,13 @@ def test_health_flag(input_for_test):
         "I": (0, 3),
         "S": (0, 63),
     }
-
-    for const, hf in zip(df_prx["constellation"], df_prx["health_flag"]):
+    for const, hf in zip(query["constellation"], query["health_flag"]):
         if pd.notna(hf):
             assert health_valid_ranges[const][0] <= hf <= health_valid_ranges[const][1]
 
-    # Vérifier la valeur pour un échantillons de query
-    # (sv, epoch, expected health flag)
-    # deux valeurs pour chaque constellation (valeurs différentes de health)
-
-    test_list = [
+    # Verification of the value for some particular queries.
+    # The reference value is read manually from the rinex NAV file
+    test_list = [  # (sv, epoch, expected health flag)
         ("G01", pd.Timestamp("2022-01-01 00:00:00"), 0),
         ("G22", pd.Timestamp("2022-01-01 00:00:00"), 63),
         ("R24", pd.Timestamp("2022-01-01 00:16:00"), 0),
@@ -884,61 +846,41 @@ def test_health_flag(input_for_test):
     ]
 
     for test in test_list:
-        valeurs = query.loc[
+        val = query.loc[
             (query.sv == test[0]) & (query.query_time_isagpst == test[1]), "health_flag"
         ]
-        assert (valeurs == test[2]).all()
-
-    print("done")
+        assert (val == test[2]).all()
 
 
 def test_compute_health_flag(input_for_test_2):
     """
     Comprehensive test of health_flag extraction via the compute function
     """
-    observation_file = input_for_test_2["rinex_obs_file"]
-    process(observation_file_path=observation_file, output_format="csv")
-    expected_prx_file = observation_file.with_suffix("")  # delete the last suffix
-    while expected_prx_file.suffix:  # delete the remaining suffixes if they exist
-        expected_prx_file = expected_prx_file.with_suffix("")
-
-    expected_prx_file = expected_prx_file.with_name(
-        expected_prx_file.name + "." + constants.cPrxCsvFileExtension
-    )
-
-    assert isinstance(expected_prx_file, Path)
-    assert expected_prx_file.exists()
-
-    # Read the CSV file
-    df_prx = pd.read_csv(expected_prx_file, comment="#")
-
-    # create query dataframe by extracting the right columns
-    per_signal_query = pd.DataFrame(
-        {
-            "time_of_reception_in_receiver_time": df_prx[
-                "time_of_reception_in_receiver_time"
-            ],
-            "observation_value": df_prx["C_obs_m"],
-            "signal": df_prx["rnx_obs_identifier"],
-            "sv": df_prx["constellation"] + df_prx["prn"].astype(str).str.zfill(2),
-            "query_time_isagpst": pd.to_datetime(
-                df_prx["time_of_reception_in_receiver_time"]
-            ),
-        }
+    rinex_3_obs_file = converters.anything_to_rinex_3(input_for_test_2["rinex_obs_file"])
+    query = util.parse_rinex_obs_file(rinex_3_obs_file)[["time", "sv", "obs_type"]]
+    query.time = pd.to_datetime(query.time, format="%Y-%m-%dT%H:%M:%S")
+    query.obs_type = query.obs_type.str[1:]
+    query = query.loc[~query.obs_type.str.contains("lli")].reset_index(drop=True)
+    query = query.rename(
+        columns={
+            "time": "query_time_isagpst",
+            "obs_type": "signal",
+        },
     )
 
     # use of function compute()
     rinex_nav_path = converters.compressed_to_uncompressed(
         input_for_test_2["rinex_nav_file"]
     )
-    per_signal_query = rinex_nav_evaluate.compute(rinex_nav_path, per_signal_query)
+    query = rinex_nav_evaluate.compute(rinex_nav_path, query)
 
     # Verifies the presence of the health_column
-    assert "health_flag" in per_signal_query.columns
+    assert "health_flag" in query.columns
 
-    # pas de Nan
-    assert per_signal_query["health_flag"].notna().any()
+    # Verification : no NaN values health_flag
+    assert query["health_flag"].notna().any()
 
+    # Verification : health flag values inside ranges specified in rinex v3 format
     health_valid_ranges = {
         "G": (0, 63),
         "E": (0, 255),
@@ -948,20 +890,17 @@ def test_compute_health_flag(input_for_test_2):
         "I": (0, 3),
         "S": (0, 63),
     }
-
     for const, (min_val, max_val) in health_valid_ranges.items():
-        mask = per_signal_query["sv"].str.startswith(const)
+        mask = query["sv"].str.startswith(const)
         if mask.any():
-            hf_values = per_signal_query.loc[mask, "health_flag"].dropna()
+            hf_values = query.loc[mask, "health_flag"].dropna()
             assert hf_values.between(min_val, max_val).all(), (
                 f"Valeurs health_flag invalides pour {const}"
             )
 
-    # Vérifier la valeur pour un échantillons de query
-    # (sv, epoch, expected health flag)
-    # deux valeurs pour chaque constellation (valeurs différentes de health)
-
-    test_list = [
+    # Verification of the value for some particular queries.
+    # The reference value is read manually from the rinex NAV file
+    test_list = [  # (sv, epoch, expected health flag)
         ("G01", pd.Timestamp("2022-01-01 00:00:00"), 0),
         ("G22", pd.Timestamp("2022-01-01 00:00:00"), 63),
         ("R24", pd.Timestamp("2022-01-01 00:16:00"), 0),
@@ -973,11 +912,11 @@ def test_compute_health_flag(input_for_test_2):
     ]
 
     for test in test_list:
-        valeurs = per_signal_query.loc[
-            (per_signal_query.sv == test[0])
-            & (per_signal_query.query_time_isagpst == test[1]),
+        values = query.loc[
+            (query.sv == test[0])
+            & (query.query_time_isagpst == test[1]),
             "health_flag",
         ]
-        assert (valeurs == test[2]).all()
+        assert (values == test[2]).all()
 
     print("done")
