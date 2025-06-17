@@ -787,7 +787,7 @@ def test_extract_health_flag_from_query(input_for_test):
     """
     Tests the extraction and association of the health flag from a RINEX NAV file on a PRX DataFrame of epochs and satellites.
     """
-    rinex_3_obs_file= converters.anything_to_rinex_3(input_for_test["rinex_obs_file"])
+    rinex_3_obs_file = converters.anything_to_rinex_3(input_for_test["rinex_obs_file"])
     query = util.parse_rinex_obs_file(rinex_3_obs_file)[["time", "sv", "obs_type"]]
     query.time = pd.to_datetime(query.time, format="%Y-%m-%dT%H:%M:%S")
     query.obs_type = query.obs_type.str[1:]
@@ -856,7 +856,9 @@ def test_compute_health_flag(input_for_test_2):
     """
     Comprehensive test of health_flag extraction via the compute function
     """
-    rinex_3_obs_file = converters.anything_to_rinex_3(input_for_test_2["rinex_obs_file"])
+    rinex_3_obs_file = converters.anything_to_rinex_3(
+        input_for_test_2["rinex_obs_file"]
+    )
     query = util.parse_rinex_obs_file(rinex_3_obs_file)[["time", "sv", "obs_type"]]
     query.time = pd.to_datetime(query.time, format="%Y-%m-%dT%H:%M:%S")
     query.obs_type = query.obs_type.str[1:]
@@ -913,8 +915,7 @@ def test_compute_health_flag(input_for_test_2):
 
     for test in test_list:
         values = query.loc[
-            (query.sv == test[0])
-            & (query.query_time_isagpst == test[1]),
+            (query.sv == test[0]) & (query.query_time_isagpst == test[1]),
             "health_flag",
         ]
         assert (values == test[2]).all()

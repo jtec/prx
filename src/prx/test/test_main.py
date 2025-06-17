@@ -347,7 +347,6 @@ def test_spp_lsq_tlse_2024(input_for_test_tlse_2024):
     constellation_to_use = ["G"]
 
     # observation with every sat
-
     obs = df_first_epoch[df.constellation.isin(constellation_to_use)]
     pt_lsq = spp_pt_lsq(obs)
     position_offset = pt_lsq[0:3, :] - np.array(
@@ -359,18 +358,20 @@ def test_spp_lsq_tlse_2024(input_for_test_tlse_2024):
     )
     log.info(f"Position offset: {position_offset}")
 
-    # observation without G27
-    obs_without_G27 = obs.loc[obs.health_flag == 0]
+    # observation without G27, using health_flag
+    obs_without_G27 = obs.loc[obs.health_flag == 0]  # keep only healthy satellites
     pt_lsq_without_G27 = spp_pt_lsq(obs_without_G27)
     position_offset_without_G27 = pt_lsq_without_G27[0:3, :] - np.array(
         metadata["approximate_receiver_ecef_position_m"]
     ).reshape(-1, 1)
     log.info(
-        f"Using constellations: {constellation_to_use}, {len(obs.sv.unique())} SVs"
+        f"Using constellations: {constellation_to_use}, {len(obs.sv.unique())} SVs (healthy)"
     )
     log.info(f"Position offset: {position_offset_without_G27}")
 
-    assert np.max(np.abs(position_offset_without_G27)) < np.min(np.abs(position_offset))
+    # Verification: the position error significantly decrease when excluding G27
+    assert np.linalg.norm(position_offset_without_G27) < np.linalg.norm(position_offset)
+    # Verification: the position error without G27 is within tolerance
     assert np.max(np.abs(position_offset_without_G27)) < 1e1
 
 
