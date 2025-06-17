@@ -2,12 +2,15 @@ import numpy as np
 import pandas as pd
 from pathlib import Path
 
-from prx.rinex_nav.evaluate import select_ephemerides, set_time_of_validity
+from prx.rinex_nav.evaluate import (
+    select_ephemerides,
+    set_time_of_validity,
+    parse_rinex_nav_file,
+)
 from prx.sp3 import evaluate as sp3_evaluate
 from prx.rinex_nav import evaluate as rinex_nav_evaluate
 from prx import constants, converters, util
 from prx.util import week_and_seconds_2_timedelta
-from prx.main import process
 import shutil
 import pytest
 import os
@@ -80,6 +83,16 @@ def input_for_test_2():
         assert test_file_path.exists()
     yield test_files
     shutil.rmtree(test_directory)
+
+
+def test_parse_nav_file(input_for_test):
+    path_to_rnx3_nav_file = converters.anything_to_rinex_3(
+        input_for_test["rinex_nav_file"]
+    )
+    df = parse_rinex_nav_file(path_to_rnx3_nav_file)
+    assert not df.empty
+    assert df["source"].nunique() == 1
+    assert df["source"].iloc[0] == str(path_to_rnx3_nav_file.resolve())
 
 
 def test_compare_rnx3_gps_sat_pos_with_magnitude(input_for_test):
