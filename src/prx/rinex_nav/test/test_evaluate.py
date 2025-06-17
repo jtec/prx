@@ -211,9 +211,7 @@ def test_compare_to_sp3(input_for_test):
     query = generate_sat_query(pd.Timestamp("2022-01-01T01:10:00.000000000"))
     # We have no SP3 reference solutions for SBAS satellites, so remove them from the query
     query = query[~query.sv.str.startswith("S")]
-    rinex_sat_states = rinex_nav_evaluate.compute_parallel(
-        rinex_nav_file, query.copy(), True
-    )
+    rinex_sat_states = rinex_nav_evaluate.compute_parallel(rinex_nav_file, query.copy())
     rinex_sat_states = (
         rinex_sat_states.sort_values(by=["sv", "query_time_isagpst"])
         .sort_index(axis=1)
