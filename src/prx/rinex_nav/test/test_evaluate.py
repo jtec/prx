@@ -11,7 +11,6 @@ from prx.sp3 import evaluate as sp3_evaluate
 from prx.rinex_nav import evaluate as rinex_nav_evaluate
 from prx import constants, converters, util
 from prx.util import week_and_seconds_2_timedelta
-from prx.main import process
 import shutil
 import pytest
 import os
