@@ -26,6 +26,7 @@ def write_prx_file(
     prx_records: pd.DataFrame,
     file_name_without_extension: Path,
     output_format: str,
+    prx_level: int,
 ):
     output_writers = {"jsonseq": write_json_text_sequence_file, "csv": write_csv_file}
     if output_format not in output_writers.keys():
@@ -33,7 +34,7 @@ def write_prx_file(
             f"Output format {output_format} not supported,  we can do {list(output_writers.keys())}"
         )
     return output_writers[output_format](
-        prx_header, prx_records, file_name_without_extension
+        prx_header, prx_records, file_name_without_extension, prx_level
     )
 
 
@@ -80,10 +81,13 @@ def write_json_text_sequence_file(
 
 
 def write_csv_file(
-    prx_header: dict, flat_records: pd.DataFrame, file_name_without_extension: Path
+    prx_header: dict,
+    flat_records: pd.DataFrame,
+    file_name_without_extension: Path,
+    prx_level: int,
 ):
     output_file = Path(
-        f"{str(file_name_without_extension)}.{constants.cPrxCsvFileExtension}"
+        f"{str(file_name_without_extension)}.{constants.cPrxFileExtension_per_level[prx_level]}"
     )
     flat_records["sat_elevation_deg"] = np.rad2deg(
         flat_records.elevation_rad.to_numpy()
@@ -238,11 +242,17 @@ def warm_up_parser_cache(rinex_files):
 
 
 @prx.util.timeit
-def build_records(
+def build_records_levels_12(
     rinex_3_obs_file,
     rinex_3_ephemerides_files,
     approximate_receiver_ecef_position_m,
+    prx_level,
 ):
+    """
+    Creates a flat_obs dataframe including columns for prx processing levels 1 and 2.
+    See ./documents/dev_status.md for details on the columns.
+    """
+
     warm_up_parser_cache([rinex_3_obs_file] + rinex_3_ephemerides_files)
     approximate_receiver_ecef_position_m = np.array(
         approximate_receiver_ecef_position_m
@@ -314,7 +324,7 @@ def build_records(
         on=["time_of_reception_in_receiver_time", "satellite"],
     )
 
-    # Compute broadcast position, velocity, clock offset, clock offset rate and TGDs
+    # create a query dataframe with columns ["signal","sv","query_time_isagpst"]
     query = flat_obs[flat_obs["observation_type"].str.startswith("C")]
     query = query.rename(
         columns={
@@ -324,6 +334,7 @@ def build_records(
         },
     )
 
+    # Compute broadcast position, velocity, clock offset, clock offset rate and TGDs
     sat_states_per_day = []
     for file in rinex_3_ephemerides_files:
         # get year and doy from NAV filename
@@ -341,13 +352,19 @@ def build_records(
         ]
         if day_query.empty:
             continue
-        log.info(f"Computing satellite states for {year}-{doy:03d}")
-        sat_states_per_day.append(
-            rinex_evaluate.compute_parallel(
-                file,
-                day_query,
+
+        if prx_level in [1, 2]:  # compute sat pos, vel, clk bias, clk drift
+            log.info(f"Computing satellite states for {year}-{doy:03d}")
+            sat_states_per_day.append(
+                rinex_evaluate.compute_parallel(
+                    file,
+                    day_query,
+                )
             )
-        )
+        if prx_level == 1:  # drop sat group delay
+            sat_states_per_day[-1] = sat_states_per_day[-1].drop(
+                columns=["sat_code_bias_m"]
+            )
     sat_states = pd.concat(sat_states_per_day)
     sat_states = sat_states.rename(
         columns={
@@ -356,35 +373,6 @@ def build_records(
             "query_time_isagpst": "time_of_emission_isagpst",
         },
     )
-    # We need Timestamps to compute tropo delays
-    sat_states = sat_states.merge(
-        flat_obs[
-            [
-                "satellite",
-                "time_of_emission_isagpst",
-                "time_of_reception_in_receiver_time",
-            ]
-        ].drop_duplicates(),
-        on=["satellite", "time_of_emission_isagpst"],
-        how="left",
-    )
-    # Compute anything else that is satellite-specific
-    sat_states["relativistic_clock_effect_m"] = util.compute_relativistic_clock_effect(
-        sat_states[["sat_pos_x_m", "sat_pos_y_m", "sat_pos_z_m"]].to_numpy(),
-        sat_states[["sat_vel_x_mps", "sat_vel_y_mps", "sat_vel_z_mps"]].to_numpy(),
-    )
-    sat_states["sagnac_effect_m"] = util.compute_sagnac_effect(
-        sat_states[["sat_pos_x_m", "sat_pos_y_m", "sat_pos_z_m"]].to_numpy(),
-        approximate_receiver_ecef_position_m,
-    )
-    [latitude_user_rad, longitude_user_rad, height_user_m] = util.ecef_2_geodetic(
-        approximate_receiver_ecef_position_m
-    )
-    days_of_year = np.array(
-        sat_states["time_of_reception_in_receiver_time"]
-        .apply(lambda element: element.timetuple().tm_yday)
-        .to_numpy()
-    )
     (
         sat_states["elevation_rad"],
         sat_states["azimuth_rad"],
@@ -392,35 +380,72 @@ def build_records(
         sat_states[["sat_pos_x_m", "sat_pos_y_m", "sat_pos_z_m"]].to_numpy(),
         approximate_receiver_ecef_position_m,
     )
-    (
-        tropo_delay_m,
-        __,
-        __,
-        __,
-        __,
-    ) = atmo.compute_tropo_delay_unb3m(
-        latitude_user_rad * np.ones(days_of_year.shape),
-        height_user_m * np.ones(days_of_year.shape),
-        days_of_year,
-        sat_states.elevation_rad.to_numpy(),
-    )
-    sat_states["tropo_delay_m"] = tropo_delay_m
+
+    if prx_level == 2:
+        # Compute anything else that is satellite-specific
+        sat_states["relativistic_clock_effect_m"] = (
+            util.compute_relativistic_clock_effect(
+                sat_states[["sat_pos_x_m", "sat_pos_y_m", "sat_pos_z_m"]].to_numpy(),
+                sat_states[
+                    ["sat_vel_x_mps", "sat_vel_y_mps", "sat_vel_z_mps"]
+                ].to_numpy(),
+            )
+        )
+        sat_states["sagnac_effect_m"] = util.compute_sagnac_effect(
+            sat_states[["sat_pos_x_m", "sat_pos_y_m", "sat_pos_z_m"]].to_numpy(),
+            approximate_receiver_ecef_position_m,
+        )
+        # We need Timestamps to compute tropo delays
+        sat_states = sat_states.merge(
+            flat_obs[
+                [
+                    "satellite",
+                    "time_of_emission_isagpst",
+                    "time_of_reception_in_receiver_time",
+                ]
+            ].drop_duplicates(),
+            on=["satellite", "time_of_emission_isagpst"],
+            how="left",
+        )
+        [latitude_user_rad, longitude_user_rad, height_user_m] = util.ecef_2_geodetic(
+            approximate_receiver_ecef_position_m
+        )
+        days_of_year = np.array(
+            sat_states["time_of_reception_in_receiver_time"]
+            .apply(lambda element: element.timetuple().tm_yday)
+            .to_numpy()
+        )
+        (
+            tropo_delay_m,
+            __,
+            __,
+            __,
+            __,
+        ) = atmo.compute_tropo_delay_unb3m(
+            latitude_user_rad * np.ones(days_of_year.shape),
+            height_user_m * np.ones(days_of_year.shape),
+            days_of_year,
+            sat_states.elevation_rad.to_numpy(),
+        )
+        sat_states["tropo_delay_m"] = tropo_delay_m
+        sat_states = sat_states.drop(columns=["time_of_reception_in_receiver_time"])
+
     # Merge sat states into observation dataframe. Due to Galileo's FNAV/INAV ephemerides
     # being signal-specific, we merge on the code identifier here and not only the satellite
     sat_states["code_id"] = sat_states["observation_type"].str[1:3]
     flat_obs["code_id"] = flat_obs["observation_type"].str[1:3]
-    sat_states = sat_states.drop(
-        columns=["observation_type", "time_of_reception_in_receiver_time"]
-    )
     flat_obs = flat_obs.merge(
-        sat_states,
+        sat_states.drop(columns=["observation_type"]),
         on=["satellite", "code_id", "time_of_emission_isagpst"],
         how="left",
-    )
+    ).drop(columns=["code_id"])
+
+    if prx_level==2:
     # Fix code biases being merged into lines with signals that are not code signals
-    flat_obs.loc[
-        ~(flat_obs.observation_type.str.startswith("C")), "sat_code_bias_m"
-    ] = np.nan
+        flat_obs.loc[
+            ~(flat_obs.observation_type.str.startswith("C")), "sat_code_bias_m"
+        ] = np.nan
+
     # GLONASS satellites with both FDMA and CDMA signals have a frequency slot for FDMA signals,
     # for CDMA signals we use the common carrier frequency of those signals.
     glo_cdma = flat_obs[
@@ -445,65 +470,70 @@ def build_records(
         return flat_obs
 
     flat_obs = assign_carrier_frequencies(flat_obs)
-    # create a dictionary containing the headers of the different NAV files.
-    # The keys are the "YYYYDDD" (year and day of year) and are located at
-    # [12:19] of the file name using RINEX naming convention
-    nav_header_dict = {
-        file.name[12:19]: georinex.rinexheader(file)
-        for file in rinex_3_ephemerides_files
-    }
 
-    for file in rinex_3_ephemerides_files:
-        # get year and doy from NAV filename
-        year = int(file.name[12:16])
-        doy = int(file.name[16:19])
+    if prx_level == 2:
+        # add iono correction
+        # create a dictionary containing the headers of the different NAV files.
+        # The keys are the "YYYYDDD" (year and day of year) and are located at
+        # [12:19] of the file name using RINEX naming convention
+        nav_header_dict = {
+            file.name[12:19]: georinex.rinexheader(file)
+            for file in rinex_3_ephemerides_files
+        }
 
-        # Selection criteria: time of emission belonging to the day of the current NAV file
-        mask = (
-            flat_obs.time_of_emission_isagpst
-            >= pd.Timestamp(year=year, month=1, day=1) + pd.Timedelta(days=doy - 1)
-        ) & (
-            flat_obs.time_of_emission_isagpst
-            < pd.Timestamp(year=year, month=1, day=1) + pd.Timedelta(days=doy)
-        )
-        if "IONOSPHERIC CORR" in nav_header_dict[f"{year:03d}" + f"{doy:03d}"]:
-            log.info(f"Computing iono delay for {year}-{doy:03d}")
-            time_of_emission_weeksecond_isagpst = util.timedelta_2_weeks_and_seconds(
-                flat_obs.loc[mask].time_of_emission_isagpst
-                - constants.system_time_scale_rinex_utc_epoch["GPST"]
-            )[1].to_numpy()
+        for file in rinex_3_ephemerides_files:
+            # get year and doy from NAV filename
+            year = int(file.name[12:16])
+            doy = int(file.name[16:19])
 
-            flat_obs.loc[
-                mask,
-                "iono_delay_m",
-            ] = atmo.compute_l1_iono_delay_klobuchar(
-                time_of_emission_weeksecond_isagpst,
-                nav_header_dict[f"{year:03d}" + f"{doy:03d}"]["IONOSPHERIC CORR"][
-                    "GPSA"
-                ],
-                nav_header_dict[f"{year:03d}" + f"{doy:03d}"]["IONOSPHERIC CORR"][
-                    "GPSB"
-                ],
-                flat_obs.loc[mask].elevation_rad,
-                flat_obs.loc[mask].azimuth_rad,
-                latitude_user_rad,
-                longitude_user_rad,
-            ) * (
-                constants.carrier_frequencies_hz()["G"]["L1"][1] ** 2
-                / flat_obs.loc[mask].carrier_frequency_hz ** 2
+            # Selection criteria: time of emission belonging to the day of the current NAV file
+            mask = (
+                flat_obs.time_of_emission_isagpst
+                >= pd.Timestamp(year=year, month=1, day=1) + pd.Timedelta(days=doy - 1)
+            ) & (
+                flat_obs.time_of_emission_isagpst
+                < pd.Timestamp(year=year, month=1, day=1) + pd.Timedelta(days=doy)
             )
-        else:
-            logging.warning(f"Missing iono model parameters for day {doy:03d}")
-            flat_obs.loc[
-                mask,
-                "iono_delay_m",
-            ] = np.nan
+            if "IONOSPHERIC CORR" in nav_header_dict[f"{year:03d}" + f"{doy:03d}"]:
+                log.info(f"Computing iono delay for {year}-{doy:03d}")
+                time_of_emission_weeksecond_isagpst = (
+                    util.timedelta_2_weeks_and_seconds(
+                        flat_obs.loc[mask].time_of_emission_isagpst
+                        - constants.system_time_scale_rinex_utc_epoch["GPST"]
+                    )[1].to_numpy()
+                )
+
+                flat_obs.loc[
+                    mask,
+                    "iono_delay_m",
+                ] = atmo.compute_l1_iono_delay_klobuchar(
+                    time_of_emission_weeksecond_isagpst,
+                    nav_header_dict[f"{year:03d}" + f"{doy:03d}"]["IONOSPHERIC CORR"][
+                        "GPSA"
+                    ],
+                    nav_header_dict[f"{year:03d}" + f"{doy:03d}"]["IONOSPHERIC CORR"][
+                        "GPSB"
+                    ],
+                    flat_obs.loc[mask].elevation_rad,
+                    flat_obs.loc[mask].azimuth_rad,
+                    latitude_user_rad,
+                    longitude_user_rad,
+                ) * (
+                    constants.carrier_frequencies_hz()["G"]["L1"][1] ** 2
+                    / flat_obs.loc[mask].carrier_frequency_hz ** 2
+                )
+            else:
+                logging.warning(f"Missing iono model parameters for day {doy:03d}")
+                flat_obs.loc[
+                    mask,
+                    "iono_delay_m",
+                ] = np.nan
 
     return flat_obs
 
 
 @prx.util.timeit
-def process(observation_file_path: Path, output_format="csv"):
+def process(observation_file_path: Path, output_format="csv", prx_level=2):
     t0 = pd.Timestamp.now()
     # We expect a Path, but might get a string here:
     observation_file_path = Path(observation_file_path)
@@ -513,24 +543,27 @@ def process(observation_file_path: Path, output_format="csv"):
     rinex_3_obs_file = converters.anything_to_rinex_3(observation_file_path)
     rinex_3_obs_file = prx.util.repair_with_gfzrnx(rinex_3_obs_file)
     prx_file = rinex_3_obs_file.with_suffix("")
-    aux_files = nav_file_discovery.discover_or_download_auxiliary_files(
-        rinex_3_obs_file
-    )
-    metadata = build_metadata(
-        {"obs_file": rinex_3_obs_file, "nav_file": aux_files["broadcast_ephemerides"]}
-    )
-    metadata["processing_start_time"] = t0
-    prx.util.repair_with_gfzrnx(rinex_3_obs_file)
-    records = build_records(
-        rinex_3_obs_file,
-        aux_files["broadcast_ephemerides"],
-        metadata["approximate_receiver_ecef_position_m"],
-    )
+    match prx_level:
+        case 1 | 2:
+            aux_files = nav_file_discovery.discover_or_download_auxiliary_files(
+                rinex_3_obs_file
+            )
+            metadata = build_metadata(
+                {"obs_file": rinex_3_obs_file, "nav_file": aux_files["broadcast_ephemerides"]}
+            )
+            metadata["processing_start_time"] = t0
+            records = build_records_levels_12(rinex_3_obs_file, aux_files["broadcast_ephemerides"],
+                                              metadata["approximate_receiver_ecef_position_m"], prx_level)
+        case 3:
+            assert False, (
+                "prx level 3 (precise corrections for ppp) not implemented yet..."
+            )
     return write_prx_file(
         metadata,
         records,
         prx_file,
         output_format,
+        prx_level,
     )
 
 
@@ -542,7 +575,11 @@ if __name__ == "__main__":
         epilog="P.S. GNSS rules!",
     )
     parser.add_argument(
-        "--observation_file_path", type=str, help="Observation file path", default=None
+        "--observation_file_path",
+        type=str,
+        help="Observation file path",
+        default=None,
+        required=True,
     )
     parser.add_argument(
         "--output_format",
@@ -550,6 +587,13 @@ if __name__ == "__main__":
         help="Output file format",
         choices=["jsonseq", "csv"],
         default="csv",
+    )
+    parser.add_argument(
+        "--prx_level",
+        type=int,
+        help="Processing level (1: RTK, 2: SPP, 3: PPP)",
+        choices=[1, 2, 3],
+        default=2,
     )
     args = parser.parse_args()
     if args.observation_file_path is None:
