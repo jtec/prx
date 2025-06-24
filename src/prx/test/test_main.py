@@ -119,12 +119,10 @@ def input_for_test_with_first_epoch_at_midnight():
     shutil.rmtree(test_directory)
 
 
-def test_prx_command_line_call_with_csv_output(input_for_test_tlse):
+def test_prx_command_line_call(input_for_test_tlse):
     test_file = input_for_test_tlse
     prx_path = util.prx_repository_root() / "src/prx/main.py"
-    command = (
-        f"python {prx_path} --observation_file_path {test_file} --output_format csv"
-    )
+    command = f"python {prx_path} --observation_file_path {test_file}"
     result = subprocess.run(
         command, capture_output=True, shell=True, cwd=str(test_file.parent)
     )
@@ -135,9 +133,9 @@ def test_prx_command_line_call_with_csv_output(input_for_test_tlse):
     assert expected_prx_file.exists()
 
 
-def test_prx_function_call_with_csv_output(input_for_test_tlse):
+def test_prx_function_call(input_for_test_tlse):
     test_file = input_for_test_tlse
-    main.process(observation_file_path=test_file, output_format="csv", prx_level=2)
+    main.process(observation_file_path=test_file, prx_level=2)
     expected_prx_file = Path(
         str(test_file).replace("crx.gz", constants.cPrxFileExtension_per_level[2])
     )
@@ -159,7 +157,7 @@ def test_prx_function_call_with_csv_output(input_for_test_tlse):
 
 def test_prx_lli_parsing(input_for_test_tlse):
     test_file = input_for_test_tlse
-    main.process(observation_file_path=test_file, output_format="csv")
+    main.process(observation_file_path=test_file)
     expected_prx_file = Path(
         str(test_file).replace("crx.gz", constants.cPrxFileExtension_per_level[2])
     )
@@ -204,7 +202,7 @@ def test_prx_function_call_for_obs_file_across_two_days(
     input_for_test_with_first_epoch_at_midnight,
 ):
     test_file = input_for_test_with_first_epoch_at_midnight["obs_file"]
-    main.process(observation_file_path=test_file, output_format="csv")
+    main.process(observation_file_path=test_file)
     expected_prx_file = Path(
         str(test_file).replace("crx.gz", constants.cPrxFileExtension_per_level[2])
     )
@@ -212,9 +210,7 @@ def test_prx_function_call_for_obs_file_across_two_days(
 
 
 def run_rinex_through_prx(rinex_obs_file: Path, prx_level: int = 2):
-    main.process(
-        observation_file_path=rinex_obs_file, output_format="csv", prx_level=prx_level
-    )
+    main.process(observation_file_path=rinex_obs_file, prx_level=prx_level)
     expected_prx_file = Path(
         str(rinex_obs_file).replace(
             "crx.gz", constants.cPrxFileExtension_per_level[prx_level]
@@ -335,9 +331,7 @@ def test_spp_lsq_for_obs_file_across_two_days(
 
 
 def test_prx_level_1(input_for_test_tlse):
-    main.process(
-        observation_file_path=input_for_test_tlse, output_format="csv", prx_level=1
-    )
+    main.process(observation_file_path=input_for_test_tlse, prx_level=1)
     expected_prx_file = Path(
         str(input_for_test_tlse).replace(
             "crx.gz", constants.cPrxFileExtension_per_level[1]
@@ -381,9 +375,7 @@ def test_prx_level_1(input_for_test_tlse):
 
 
 def test_prx_level_2(input_for_test_tlse):
-    main.process(
-        observation_file_path=input_for_test_tlse, output_format="csv", prx_level=2
-    )
+    main.process(observation_file_path=input_for_test_tlse, prx_level=2)
     expected_prx_file = Path(
         str(input_for_test_tlse).replace(
             "crx.gz", constants.cPrxFileExtension_per_level[2]
@@ -437,9 +429,7 @@ def test_prx_level_3(input_for_test_tlse):
     Test is currently inactive. To be changed once PRX level 3 works.
     """
     try:
-        main.process(
-            observation_file_path=input_for_test_tlse, output_format="csv", prx_level=3
-        )
+        main.process(observation_file_path=input_for_test_tlse, prx_level=3)
         assert False, "Change test if prx level 3 is implemented"
     except AssertionError:
         assert True

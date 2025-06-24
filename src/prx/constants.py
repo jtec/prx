@@ -47,7 +47,6 @@ cMaxOrbitalSpeedOfAnyGnssSatellite_mps = 1e4
 # SBAS URA limit: used to discard SBAS supposed to have inactive georanging capabilities
 cSbasURALimit = 14
 
-cPrxJsonTextSequenceFileExtension = "jsonseq"
 cPrxFileExtension_per_level = {
     1: "prx1",
     2: "prx2",

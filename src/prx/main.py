@@ -25,88 +25,27 @@ def write_prx_file(
     prx_header: dict,
     prx_records: pd.DataFrame,
     file_name_without_extension: Path,
-    output_format: str,
-    prx_level: int,
-):
-    output_writers = {"jsonseq": write_json_text_sequence_file, "csv": write_csv_file}
-    if output_format not in output_writers.keys():
-        assert False, (
-            f"Output format {output_format} not supported,  we can do {list(output_writers.keys())}"
-        )
-    return output_writers[output_format](
-        prx_header, prx_records, file_name_without_extension, prx_level
-    )
-
-
-def write_json_text_sequence_file(
-    prx_header: dict, prx_records: pd.DataFrame, file_name_without_extension: Path
-):
-    output_file = Path(
-        f"{str(file_name_without_extension)}.{constants.cPrxJsonTextSequenceFileExtension}"
-    )
-    with open(output_file, "w", encoding="utf-8") as file:
-        file.write("\u241e" + json.dumps(prx_header, ensure_ascii=False) + "\n")
-        drop_columns = [
-            "time_of_reception_in_receiver_time",
-            "satellite",
-        ]
-        for epoch in prx_records["time_of_reception_in_receiver_time"].unique():
-            epoch = pd.Timestamp(epoch)
-            epoch_obs = prx_records[
-                prx_records["time_of_reception_in_receiver_time"] == epoch
-            ]
-            record = {
-                "time_of_reception_in_receiver_time": epoch.strftime(
-                    "%Y:%m:%dT%H:%M:%S.%f"
-                ),
-                "satellites": {},
-            }
-            for idx, row in epoch_obs.iterrows():
-                sat = row["satellite"]
-                row = row.dropna().to_frame().transpose()
-                record["satellites"][sat] = {"observations": {}}
-                for col in row.columns:
-                    if len(col) == 3:
-                        record["satellites"][sat]["observations"][col] = row[
-                            col
-                        ].values[0]
-                        continue
-                    if col in drop_columns:
-                        continue
-                    if type(row[col].values[0]) is np.ndarray:
-                        row[col].values[0] = row[col].values[0].tolist()
-                    record["satellites"][sat][col] = row[col].values[0]
-            file.write("\u241e" + json.dumps(record, ensure_ascii=False) + "\n")
-    log.info(f"Generated JSON Text Sequence prx file: {output_file}")
-
-
-def write_csv_file(
-    prx_header: dict,
-    flat_records: pd.DataFrame,
-    file_name_without_extension: Path,
     prx_level: int,
 ):
     output_file = Path(
         f"{str(file_name_without_extension)}.{constants.cPrxFileExtension_per_level[prx_level]}"
     )
-    flat_records["sat_elevation_deg"] = np.rad2deg(
-        flat_records.elevation_rad.to_numpy()
-    )
-    flat_records["sat_azimuth_deg"] = np.rad2deg(flat_records.azimuth_rad.to_numpy())
-    flat_records = flat_records.drop(columns=["elevation_rad", "azimuth_rad"])
+    prx_records["sat_elevation_deg"] = np.rad2deg(prx_records.elevation_rad.to_numpy())
+    prx_records["sat_azimuth_deg"] = np.rad2deg(prx_records.azimuth_rad.to_numpy())
+    prx_records = prx_records.drop(columns=["elevation_rad", "azimuth_rad"])
     # Re-arrange records to have one line per code observation, with the associated carrier phase and
     # Doppler observation, and auxiliary information such as satellite position, velocity, clock offset, etc.
     # write records
     # Start with code observations, as they have TGDs, and merge in other observation types one by one
-    flat_records["tracking_id"] = flat_records.observation_type.str[1:3]
-    records = flat_records.loc[flat_records.observation_type.str.startswith("C")]
+    prx_records["tracking_id"] = prx_records.observation_type.str[1:3]
+    records = prx_records.loc[prx_records.observation_type.str.startswith("C")]
     records["C_obs_m"] = records.observation_value
     records = records.drop(columns=["observation_value", "observation_type"])
     type_2_unit = {"D": "hz", "L": "cycles", "S": "dBHz", "C": "m"}
     for obs_type in ["D", "L", "S"]:
-        obs = flat_records.loc[
-            (flat_records.observation_type.str.startswith(obs_type))
-            & (flat_records.observation_type.str.len() == 3)
+        obs = prx_records.loc[
+            (prx_records.observation_type.str.startswith(obs_type))
+            & (prx_records.observation_type.str.len() == 3)
         ][
             [
                 "satellite",
@@ -120,8 +59,8 @@ def write_csv_file(
         )
         if obs_type == "L":
             # add LLI as new column
-            obs_lli = flat_records.loc[
-                flat_records.observation_type.str.contains("lli"),
+            obs_lli = prx_records.loc[
+                prx_records.observation_type.str.contains("lli"),
                 [
                     "satellite",
                     "time_of_reception_in_receiver_time",
@@ -440,8 +379,8 @@ def build_records_levels_12(
         how="left",
     ).drop(columns=["code_id"])
 
-    if prx_level==2:
-    # Fix code biases being merged into lines with signals that are not code signals
+    if prx_level == 2:
+        # Fix code biases being merged into lines with signals that are not code signals
         flat_obs.loc[
             ~(flat_obs.observation_type.str.startswith("C")), "sat_code_bias_m"
         ] = np.nan
@@ -533,7 +472,7 @@ def build_records_levels_12(
 
 
 @prx.util.timeit
-def process(observation_file_path: Path, output_format="csv", prx_level=2):
+def process(observation_file_path: Path, prx_level=2):
     t0 = pd.Timestamp.now()
     # We expect a Path, but might get a string here:
     observation_file_path = Path(observation_file_path)
@@ -562,7 +501,6 @@ def process(observation_file_path: Path, output_format="csv", prx_level=2):
         metadata,
         records,
         prx_file,
-        output_format,
         prx_level,
     )
 
@@ -582,13 +520,6 @@ if __name__ == "__main__":
         required=True,
     )
     parser.add_argument(
-        "--output_format",
-        type=str,
-        help="Output file format",
-        choices=["jsonseq", "csv"],
-        default="csv",
-    )
-    parser.add_argument(
         "--prx_level",
         type=int,
         help="Processing level (1: RTK, 2: SPP, 3: PPP)",
@@ -602,4 +533,4 @@ if __name__ == "__main__":
     if not Path(args.observation_file_path).exists():
         log.error(f"Observation file {args.observation_file_path} does not exist.")
         sys.exit(1)
-    process(Path(args.observation_file_path), args.output_format)
+    process(Path(args.observation_file_path), args.prx_level)
