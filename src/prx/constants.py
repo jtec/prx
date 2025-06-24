@@ -47,12 +47,6 @@ cMaxOrbitalSpeedOfAnyGnssSatellite_mps = 1e4
 # SBAS URA limit: used to discard SBAS supposed to have inactive georanging capabilities
 cSbasURALimit = 14
 
-cPrxFileExtension_per_level = {
-    1: "prx1",
-    2: "prx2",
-    3: "prx3",
-}
-
 
 # From RINEX Version 3.05, 1 December, 2020.
 def carrier_frequencies_hz():

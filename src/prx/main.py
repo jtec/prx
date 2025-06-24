@@ -25,11 +25,8 @@ def write_prx_file(
     prx_header: dict,
     prx_records: pd.DataFrame,
     file_name_without_extension: Path,
-    prx_level: int,
 ):
-    output_file = Path(
-        f"{str(file_name_without_extension)}.{constants.cPrxFileExtension_per_level[prx_level]}"
-    )
+    output_file = Path(f"{str(file_name_without_extension)}.csv")
     prx_records["sat_elevation_deg"] = np.rad2deg(prx_records.elevation_rad.to_numpy())
     prx_records["sat_azimuth_deg"] = np.rad2deg(prx_records.azimuth_rad.to_numpy())
     prx_records = prx_records.drop(columns=["elevation_rad", "azimuth_rad"])
@@ -488,11 +485,19 @@ def process(observation_file_path: Path, prx_level=2):
                 rinex_3_obs_file
             )
             metadata = build_metadata(
-                {"obs_file": rinex_3_obs_file, "nav_file": aux_files["broadcast_ephemerides"]}
+                {
+                    "obs_file": rinex_3_obs_file,
+                    "nav_file": aux_files["broadcast_ephemerides"],
+                }
             )
+            metadata["prx_level"] = prx_level
             metadata["processing_start_time"] = t0
-            records = build_records_levels_12(rinex_3_obs_file, aux_files["broadcast_ephemerides"],
-                                              metadata["approximate_receiver_ecef_position_m"], prx_level)
+            records = build_records_levels_12(
+                rinex_3_obs_file,
+                aux_files["broadcast_ephemerides"],
+                metadata["approximate_receiver_ecef_position_m"],
+                prx_level,
+            )
         case 3:
             assert False, (
                 "prx level 3 (precise corrections for ppp) not implemented yet..."
@@ -501,7 +506,6 @@ def process(observation_file_path: Path, prx_level=2):
         metadata,
         records,
         prx_file,
-        prx_level,
     )
 
 
