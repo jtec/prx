@@ -605,15 +605,15 @@ def extract_health_flag_from_query(query):
         "I": "health",
     }
 
-    for row in query.itertuples(index=False):
-        assert row.sv[0] in col_dict
-        assert hasattr(row, col_dict[row.sv[0]])
+    query = query.copy()
+    query["constellation"] = query["sv"].str[0]
 
-    health_flag = [
-        getattr(row, col_dict[row.sv[0]]) for row in query.itertuples(index=False)
+    query["health_flag"] = query["health"]
+    query.loc[query.constellation == "C", "health_flag"] = query.loc[
+        query.constellation == "C", "SatH1"
     ]
 
-    return health_flag
+    return query["health_flag"]
 
 
 def compute_clock_offsets(df):

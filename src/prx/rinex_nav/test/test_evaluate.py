@@ -795,76 +795,6 @@ def test_select_ephemerides():
     )
     assert query_with_ephemerides.ephemeris_hash.equals(pd.Series([1, 2, 2]))
 
-
-def test_extract_health_flag_from_query(input_for_test):
-    """
-    Tests the extraction and association of the health flag from a RINEX NAV file on a PRX DataFrame of epochs and satellites.
-    """
-    rinex_3_obs_file = converters.anything_to_rinex_3(input_for_test["rinex_obs_file"])
-    query = util.parse_rinex_obs_file(rinex_3_obs_file)[["time", "sv", "obs_type"]]
-    query.time = pd.to_datetime(query.time, format="%Y-%m-%dT%H:%M:%S")
-    query.obs_type = query.obs_type.str[1:]
-    query = query.loc[~query.obs_type.str.contains("lli")].reset_index(drop=True)
-    query = query.rename(
-        columns={
-            "time": "query_time_isagpst",
-            "obs_type": "signal",
-        },
-    )
-    query["id"] = query.index
-
-    # read nav file
-    rinex_nav_file = converters.compressed_to_uncompressed(
-        input_for_test["rinex_nav_file"]
-    )
-    ephemerides = rinex_nav_evaluate.parse_rinex_nav_file(rinex_nav_file)
-
-    # select the right ephemerides dataset for each query row
-    query = select_ephemerides(ephemerides, query)
-
-    # remove query with missing ephemerides
-    query = query.dropna(subset="time")
-
-    # add health_flag column to query and merge health flag into prx dataframe
-    query["health_flag"] = rinex_nav_evaluate.extract_health_flag_from_query(query)
-
-    # Verification : no NaN values health_flag
-    assert not query["health_flag"].isna().any()
-
-    # Verification : health flag values inside ranges specified in rinex v3 format
-    health_valid_ranges = {
-        "G": (0, 63),
-        "E": (0, 255),
-        "C": (0, 3),
-        "R": (0, 7),
-        "J": (0, 63),
-        "I": (0, 3),
-        "S": (0, 63),
-    }
-    for const, hf in zip(query["constellation"], query["health_flag"]):
-        if pd.notna(hf):
-            assert health_valid_ranges[const][0] <= hf <= health_valid_ranges[const][1]
-
-    # Verification of the value for some particular queries.
-    # The reference value is read manually from the rinex NAV file
-    test_list = [  # (sv, epoch, expected health flag)
-        ("G01", pd.Timestamp("2022-01-01 00:00:00"), 0),
-        ("G22", pd.Timestamp("2022-01-01 00:00:00"), 63),
-        ("R24", pd.Timestamp("2022-01-01 00:16:00"), 0),
-        ("R15", pd.Timestamp("2022-01-01 00:16:00"), 0),
-        ("C06", pd.Timestamp("2022-01-01 00:01:30"), 0),
-        ("C20", pd.Timestamp("2022-01-01 00:02:30"), 0),
-        ("E33", pd.Timestamp("2022-01-01 00:01:00"), 0),
-        ("E08", pd.Timestamp("2022-01-01 00:01:00"), 0),
-    ]
-
-    for test in test_list:
-        val = query.loc[
-            (query.sv == test[0]) & (query.query_time_isagpst == test[1]), "health_flag"
-        ]
-        assert (val == test[2]).all()
-
-
 def test_compute_health_flag(input_for_test_2):
     """
     Comprehensive test of health_flag extraction via the compute function
@@ -910,7 +840,7 @@ def test_compute_health_flag(input_for_test_2):
         if mask.any():
             hf_values = query.loc[mask, "health_flag"].dropna()
             assert hf_values.between(min_val, max_val).all(), (
-                f"Valeurs health_flag invalides pour {const}"
+                f"Invalid health flag values {const}"
             )
 
     # Verification of the value for some particular queries.
