@@ -594,24 +594,21 @@ def extract_health_flag_from_query(query):
     Returns:
     List: List of health indicators associated with each row of the query.
     """
-    # get health flag, according to constellation
-    col_dict = {
-        "G": "health",
-        "E": "health",
-        "C": "SatH1",
-        "S": "health",
-        "R": "health",
-        "J": "health",
-        "I": "health",
-    }
+    # get health flag, according to constellations
+    """
+    Health flag according to constellations :
+        "G", "E", "S", "R", "J", "I" : "health"
+        "C" : "SatH1"
+    """
 
     query = query.copy()
     query["constellation"] = query["sv"].str[0]
 
     query["health_flag"] = query["health"]
-    query.loc[query.constellation == "C", "health_flag"] = query.loc[
-        query.constellation == "C", "SatH1"
-    ]
+    if "C" in query["constellation"].unique():
+        query.loc[query.constellation == "C", "health_flag"] = query.loc[
+            query.constellation == "C", "SatH1"
+        ]
 
     return query["health_flag"]
 

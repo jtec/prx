@@ -795,6 +795,7 @@ def test_select_ephemerides():
     )
     assert query_with_ephemerides.ephemeris_hash.equals(pd.Series([1, 2, 2]))
 
+
 def test_compute_health_flag(input_for_test_2):
     """
     Comprehensive test of health_flag extraction via the compute function
