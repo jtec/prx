@@ -27,7 +27,7 @@ dependencies = [
     "setuptools>=75.6.0,<81.0.0",
     "viztracer<2.0.0,>=1.0.0",
     "plotly>=5.24.1,<7.0.0",
-    "line-profiler<5.0.0,>=4.2.0",
+    "line-profiler>=4.2.0,<5.0.0",
     "requests<3.0.0,>=2.32.3",
     "hatchling>=1.27.0",
     "georinex",
