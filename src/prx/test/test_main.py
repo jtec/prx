@@ -16,7 +16,6 @@ from prx.user import (
     bootstrap_coarse_receiver_position,
 )
 from prx.rinex_nav import nav_file_discovery
-from prx.rinex_nav import evaluate
 
 log = util.get_logger(__name__)
 
