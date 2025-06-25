@@ -24,6 +24,7 @@ def parse_rinex_nav_file(rinex_file: Path):
             rinex_file_path
         )
         df = convert_nav_dataset_to_dataframe(ds)
+        df["source"] = str(rinex_file_path.resolve())
         df["ephemeris_hash"] = pd.util.hash_pandas_object(df, index=False).astype(str)
         return df
 
@@ -44,9 +45,9 @@ def time_scale_integer_second_offset_wrt_gpst(time_scale, utc_gpst_leap_seconds=
     if time_scale == "BDT":
         return pd.Timedelta(seconds=-14)
     if time_scale == "GLONASST":
-        assert (
-            utc_gpst_leap_seconds is not None
-        ), "Need GPST-UTC leap seconds to compute GLONASST integer second offset w.r.t. GPST"
+        assert utc_gpst_leap_seconds is not None, (
+            "Need GPST-UTC leap seconds to compute GLONASST integer second offset w.r.t. GPST"
+        )
         return pd.Timedelta(seconds=-utc_gpst_leap_seconds)
     assert False, f"Unexpected time scale: {time_scale}"
 
@@ -188,7 +189,7 @@ def is_bds_geo(constellation, inclination_rad, semi_major_axis_m):
         21528 * constants.cMetersPerKilometer + constants.cBdsCgcs2000SmiMajorAxis_m
     )
     radius_threshold_m = (
-        meo_approximate_radius_m - geo_and_igso_approximate_radius_m
+        meo_approximate_radius_m + geo_and_igso_approximate_radius_m
     ) / 2
     inclination_threshold_rad = inclination_igso_and_meo_rad / 2
     is_geo = (
@@ -416,7 +417,6 @@ def convert_nav_dataset_to_dataframe(nav_ds):
     # Drop ephemerides for which all parameters are NaN, as we cannot compute anything from those
     df = df.dropna(how="all")
     df = df.reset_index()
-    df["source"] = nav_ds.filename
     # georinex adds suffixes to satellite IDs if it sees multiple ephemerides (e.g. F/NAV, I/NAV) for the same
     # satellite and the same timestamp.
     # The downstream code expects three-letter satellite IDs, so remove suffixes.
@@ -521,9 +521,9 @@ def compute_gal_inav_fnav_indicators(df):
     )
     # We expect only the following navigation message types for Galileo:
     indicators = set(df[is_gal].fnav_or_inav_indicator.unique())
-    assert len(indicators.intersection({1, 2, 4, 5})) == len(
-        indicators
-    ), f"Unexpected Galileo navigation message type: {indicators}"
+    assert len(indicators.intersection({1, 2, 4, 5})) == len(indicators), (
+        f"Unexpected Galileo navigation message type: {indicators}"
+    )
     df.loc[is_gal & (df.fnav_or_inav_indicator == 1), "fnav_or_inav"] = "inav"
     df.loc[is_gal & (df.fnav_or_inav_indicator == 2), "fnav_or_inav"] = "fnav"
     df.loc[is_gal & (df.fnav_or_inav_indicator == 4), "fnav_or_inav"] = "inav"
@@ -545,9 +545,9 @@ def to_isagpst(time, timescale, gpst_utc_leapseconds):
             )
         )
 
-    assert (
-        False
-    ), f"Unexpected types: time is {type(time)}, timescale is {type(timescale)}"
+    assert False, (
+        f"Unexpected types: time is {type(time)}, timescale is {type(timescale)}"
+    )
 
 
 @timeit
