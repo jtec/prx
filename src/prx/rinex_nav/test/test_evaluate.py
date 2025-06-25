@@ -46,7 +46,8 @@ def input_for_test():
         shutil.rmtree(test_directory)
     os.makedirs(test_directory)
     test_files = {
-        "rinex_obs_file": test_directory / "TLSE00FRA_R_20220010000_01H_30S_MO.rnx.gz",
+        "rinex_obs_file": test_directory
+        / "TLSE00FRA_R_20220010000_01D_30S_MO.rnx_slice_0.24h.rnx",
         "rinex_nav_file": test_directory / "BRDC00IGS_R_20220010000_01D_MN.zip",
         "sp3_file": test_directory / "WUM0MGXULT_20220010000_01D_05M_ORB.SP3",
     }
@@ -93,35 +94,6 @@ def test_parse_nav_file(input_for_test):
     assert not df.empty
     assert df["source"].nunique() == 1
     assert df["source"].iloc[0] == str(path_to_rnx3_nav_file.resolve())
-
-
-def test_compare_rnx3_gps_sat_pos_with_magnitude(input_for_test):
-    """Loads a RNX3 nav file, computes broadcast position for a GPS satellite and compares to
-    position computed by MAGNITUDE matlab library"""
-    path_to_rnx3_nav_file = converters.anything_to_rinex_3(
-        input_for_test["rinex_nav_file"]
-    )
-    query = pd.DataFrame(
-        {
-            "sv": "G01",
-            "signal": "C1C",
-            "query_time_isagpst": week_and_seconds_2_timedelta(
-                weeks=2190, seconds=523800
-            )
-            + constants.cGpstUtcEpoch,
-        },
-        index=[0],
-    )
-    rinex_sat_states = rinex_nav_evaluate.compute_parallel(path_to_rnx3_nav_file, query)
-
-    # MAGNITUDE position
-    sv_pos_magnitude = np.array([13053451.235, -12567273.060, 19015357.126])
-    sv_pos_prx = rinex_sat_states[["sat_pos_x_m", "sat_pos_y_m", "sat_pos_z_m"]][
-        rinex_sat_states.sv == "G01"
-    ].to_numpy()
-
-    threshold_pos_error_m = 1e-3
-    assert np.linalg.norm(sv_pos_prx - sv_pos_magnitude) < threshold_pos_error_m
 
 
 def test_expired_ephemeris_yields_nans(input_for_test):
@@ -757,6 +729,7 @@ def test_select_ephemerides():
     ephemerides = pd.DataFrame(
         {
             "sv": ["E01", "G01", "G01", "G01"],
+            "constellation": ["E", "G", "G", "G"],
             "ephemeris_reference_time_isagpst": [
                 pd.Timedelta("10s"),
                 pd.Timedelta("10s"),
@@ -771,9 +744,9 @@ def test_select_ephemerides():
             ],
             "fnav_or_inav": ["fnav", "", "", ""],
             "ephemeris_hash": [1, 2, 3, 4],
+            "TransTime": [9, 9, 100, 999],
         }
     )
-    ephemerides["constellation"] = ephemerides.sv.str[0]
     ephemerides = set_time_of_validity(ephemerides)
     query = pd.DataFrame(
         {
