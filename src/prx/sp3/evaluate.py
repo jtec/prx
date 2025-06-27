@@ -159,6 +159,7 @@ def compute(sp3_file_path, query):
                     row["query_time_isagpst"] - constants.cGpstUtcEpoch
                 ),
             )
+            sat_pv["health_flag"] = [0]
         else:
             sat_pv = pd.DataFrame()
             sat_pv["gpst_s"] = [row.query_time_isagpst]
@@ -171,6 +172,7 @@ def compute(sp3_file_path, query):
             sat_pv["sat_vel_y_mps"] = [np.nan]
             sat_pv["sat_vel_z_mps"] = [np.nan]
             sat_pv["sat_clock_drift_mps"] = [np.nan]
+            sat_pv["health_flag"] = [1]
         return pd.concat((row.drop("sv"), sat_pv.squeeze()))
 
     query = query.apply(interpolate_sat_states, axis=1).reset_index()

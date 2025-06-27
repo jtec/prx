@@ -588,6 +588,35 @@ def select_ephemerides(df, query):
     return query
 
 
+def extract_health_flag_from_query(query):
+    """
+    Extracts the health flag for each row of a query from a `query` DataFrame containing ephemeris data.
+
+    Args:
+    query (pd.DataFrame): DataFrame containing at least the 'sv' column and the constellation-specific health flag columns.
+
+    Returns:
+    List: List of health indicators associated with each row of the query.
+    """
+    # get health flag, according to constellations
+    """
+    Health flag according to constellations :
+        "G", "E", "S", "R", "J", "I" : "health"
+        "C" : "SatH1"
+    """
+
+    query = query.copy()
+    query["constellation"] = query["sv"].str[0]
+
+    query["health_flag"] = query["health"]
+    if "C" in query["constellation"].unique():
+        query.loc[query.constellation == "C", "health_flag"] = query.loc[
+            query.constellation == "C", "SatH1"
+        ]
+
+    return query["health_flag"]
+
+
 def compute_clock_offsets(df):
     df["sat_clock_offset_m"] = constants.cGpsSpeedOfLight_mps * (
         df["SVclockBias"]
@@ -681,6 +710,7 @@ def compute(
         per_sat_eph_query.columns
     ].apply(evaluate_orbit)
     per_sat_eph_query = per_sat_eph_query.reset_index(drop=True)
+    per_sat_eph_query["health_flag"] = extract_health_flag_from_query(per_sat_eph_query)
     columns_to_keep = [
         "sv",
         "sat_pos_x_m",
@@ -691,6 +721,7 @@ def compute(
         "sat_vel_z_mps",
         "query_time_isagpst",
         "ephemeris_hash",
+        "health_flag",
     ]
     per_sat_eph_query = per_sat_eph_query[columns_to_keep]
     # Merge the computed satellite states into the larger signal-specific query dataframe
