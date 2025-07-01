@@ -392,7 +392,7 @@ def kepler_orbit_position_and_velocity(eph):
 
 def set_time_of_validity(df):
     def set_for_one_constellation(group):
-        group_constellation = group["constellation"].iloc[0]
+        group_constellation = group["constellation"].iat[0]
         group["validity_start"] = (
             group["ephemeris_reference_time_isagpst"]
             + constants.constellation_2_ephemeris_validity_interval[
@@ -407,7 +407,11 @@ def set_time_of_validity(df):
         )
         return group
 
-    df = df.groupby("constellation").apply(set_for_one_constellation)
+    df = (
+        df.groupby("constellation")[df.columns]
+        .apply(set_for_one_constellation)
+        .reset_index(drop=True)
+    )
     return df
 
 
@@ -584,6 +588,35 @@ def select_ephemerides(df, query):
     return query
 
 
+def extract_health_flag_from_query(query):
+    """
+    Extracts the health flag for each row of a query from a `query` DataFrame containing ephemeris data.
+
+    Args:
+    query (pd.DataFrame): DataFrame containing at least the 'sv' column and the constellation-specific health flag columns.
+
+    Returns:
+    List: List of health indicators associated with each row of the query.
+    """
+    # get health flag, according to constellations
+    """
+    Health flag according to constellations :
+        "G", "E", "S", "R", "J", "I" : "health"
+        "C" : "SatH1"
+    """
+
+    query = query.copy()
+    query["constellation"] = query["sv"].str[0]
+
+    query["health_flag"] = query["health"]
+    if "C" in query["constellation"].unique():
+        query.loc[query.constellation == "C", "health_flag"] = query.loc[
+            query.constellation == "C", "SatH1"
+        ]
+
+    return query["health_flag"]
+
+
 def compute_clock_offsets(df):
     df["sat_clock_offset_m"] = constants.cGpsSpeedOfLight_mps * (
         df["SVclockBias"]
@@ -597,7 +630,9 @@ def compute_clock_offsets(df):
     return df
 
 
-def compute_parallel(rinex_nav_file_path, per_signal_query):
+def compute_parallel(
+    rinex_nav_file_path, per_signal_query, is_query_corrected_by_sat_clock_offset=False
+):
     # Warm up nav file parser cache so that we don't parse the file multiple times
     _ = parse_rinex_nav_file(rinex_nav_file_path)
     parallel = Parallel(n_jobs=round(multiprocessing.cpu_count() / 2), return_as="list")
@@ -605,12 +640,17 @@ def compute_parallel(rinex_nav_file_path, per_signal_query):
     n_chunks = min(len(per_signal_query.index), 4)
     chunks = np.array_split(per_signal_query, n_chunks)
     processed_chunks = parallel(
-        delayed(compute)(rinex_nav_file_path, chunk) for chunk in chunks
+        delayed(compute)(
+            rinex_nav_file_path, chunk, is_query_corrected_by_sat_clock_offset
+        )
+        for chunk in chunks
     )
     return pd.concat(processed_chunks)
 
 
-def compute(rinex_nav_file_path, per_signal_query):
+def compute(
+    rinex_nav_file_path, per_signal_query, is_query_corrected_by_sat_clock_offset=False
+):
     query_columns = per_signal_query.columns
     # per_signal_query is a pd.DataFrame with the following columns
     #   - time_of_reception_in_receiver_time
@@ -625,7 +665,22 @@ def compute(rinex_nav_file_path, per_signal_query):
     # Example: Galileo transmits E5a clock and group delay parameters in the F/NAV message, but parameters for other
     # signals in the I/NAV message
     per_signal_query = select_ephemerides(ephemerides, per_signal_query)
-    per_signal_query = compute_clock_offsets(per_signal_query)
+
+    # compute satellite clock bias
+    if is_query_corrected_by_sat_clock_offset:
+        per_signal_query = compute_clock_offsets(per_signal_query)
+    else:  # compute satellite clock offset iteratively
+        t = per_signal_query.query_time_wrt_clock_reference_time_s
+        for _ in range(2):
+            per_signal_query = compute_clock_offsets(per_signal_query)
+            per_signal_query.query_time_wrt_clock_reference_time_s = (
+                t - per_signal_query.sat_clock_offset_m / constants.cGpsSpeedOfLight_mps
+            )
+        # Apply sat clock correction to the query time for satellite position computation
+        per_signal_query.query_time_wrt_ephemeris_reference_time_s -= (
+            per_signal_query.sat_clock_offset_m / constants.cGpsSpeedOfLight_mps
+        )
+
     # Compute orbital states for each (satellite,ephemeris) pair only once:
     per_sat_eph_query = (
         per_signal_query.groupby(["sv", "query_time_isagpst", "ephemeris_hash"])
@@ -651,8 +706,11 @@ def compute(rinex_nav_file_path, per_signal_query):
             sub_df[["x_m", "y_m", "z_m", "dx_mps", "dy_mps", "dz_mps"]] = np.nan
         return sub_df
 
-    per_sat_eph_query = per_sat_eph_query.groupby("orbit_type").apply(evaluate_orbit)
+    per_sat_eph_query = per_sat_eph_query.groupby("orbit_type")[
+        per_sat_eph_query.columns
+    ].apply(evaluate_orbit)
     per_sat_eph_query = per_sat_eph_query.reset_index(drop=True)
+    per_sat_eph_query["health_flag"] = extract_health_flag_from_query(per_sat_eph_query)
     columns_to_keep = [
         "sv",
         "sat_pos_x_m",
@@ -663,6 +721,7 @@ def compute(rinex_nav_file_path, per_signal_query):
         "sat_vel_z_mps",
         "query_time_isagpst",
         "ephemeris_hash",
+        "health_flag",
     ]
     per_sat_eph_query = per_sat_eph_query[columns_to_keep]
     # Merge the computed satellite states into the larger signal-specific query dataframe
@@ -765,7 +824,9 @@ def compute_total_group_delays(
         df["sat_code_bias_m"] = df.tgd * df.gamma * df.speedOfLightIcd_mps
         return df
 
-    query = query.groupby(["signal", "constellation"]).apply(compute_tgds)
+    query = query.groupby(["signal", "constellation"])[query.columns].apply(
+        compute_tgds
+    )
     return query
 
 

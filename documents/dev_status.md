@@ -10,16 +10,15 @@ The following tables gather the different information needed according to the le
 
 Those parameters are computed from the broadcast navigation message (`rinex nav` file).
 
-| Parameters                       | Name in PRX file                                                                                                                                                                                        | Status    |
-|----------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-----------|
-| GNSS observations                | `time_of_reception_in_receiver_time`<br/>`C_obs_m`, `D_obs_hz`, `L_obs_cycles`, `S_obs_dBHz`,<br/>`rnx_obs_identifier`, `constellation`, `prn`, `carrier_frequency_hz` , `frequency_slot` (for GLONASS) | ✅       |
-| Loss of Lock indicator           | `LLI`                                                                                                                                                                                                   | ✅       |
-| Satellite health flag            | to be completed                                                                                                                                                                                         | ❌       |
-| Satellite position and velocity  | `sat_pos_x_m`, `sat_pos_y_m`, `sat_pos_z_m`,<br> `sat_vel_x_mps`, `sat_vel_y_mps`, `sat_vel_z_mps`                                                                                                      | ✅       |
-| Satellite clock offset and drift | `sat_clock_offset_m`, `sat_clock_drift_mps`                                                                                                                                                             | ✅       |
-| Satellite elevation and azimuth  | `sat_elevation_deg`, `sat_azimuth_deg`                                                                                                                                                                  | ✅       |
-| Ephemerides dataset identifier   | `ephemeris_hash`                                                                                                                                                                                        | ✅       |
---- 
+| Parameters                      | Name in PRX file                                                                                                                                                               | Status    |
+|---------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-----------|
+| GNSS observations               | `time_of_reception_in_receiver_time`<br/>`C_obs_m`, `D_obs_hz`, `L_obs_cycles`, `S_obs_dBHz`,<br/>`rnx_obs_identifier`, `constellation`, `prn`, `frequency_slot` (for GLONASS) | ✅       |
+| Loss of Lock indicator          | `LLI`                                                                                                                                                                          | ✅       |
+| Satellite health flag           | `health_flag`                                                                                                                                                               | ✅        |
+| Satellite position and velocity | `sat_pos_x_m`, `sat_pos_y_m`, `sat_pos_z_m`,<br> `sat_vel_x_mps`, `sat_vel_y_mps`, `sat_vel_z_mps`                                                                             | ✅       |
+| Satellite elevation and azimuth | `sat_elevation_deg`, `sat_azimuth_deg`                                                                                                                                         | ✅       |
+| Ephemerides dataset identifier  | `ephemeris_hash`                                                                                                                                                               | ✅       |
+
 
 ### Level 2 - SPP 
 Same as Level 1, with the following additional parameters. Those parameters are still computed from the broadcast navigation message.
