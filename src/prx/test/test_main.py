@@ -417,11 +417,9 @@ def test_prx_level_3(input_for_test_tlse):
     """
     Test is currently inactive. To be changed once PRX level 3 works.
     """
-    try:
+    # check that calling main.process with "prx_level=3" will raise an AssertionError
+    with pytest.raises(AssertionError):
         main.process(observation_file_path=input_for_test_tlse, prx_level=3)
-        assert False, "Change test if prx level 3 is implemented"
-    except AssertionError:
-        assert True
 
 
 def test_bootstrap_coarse_receiver_position(input_for_test_tlse):
