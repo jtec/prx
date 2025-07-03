@@ -18,7 +18,7 @@ Those parameters are computed from the broadcast navigation message (`rinex nav`
 | Satellite position and velocity | `sat_pos_x_m`, `sat_pos_y_m`, `sat_pos_z_m`,<br> `sat_vel_x_mps`, `sat_vel_y_mps`, `sat_vel_z_mps`                                                                             | ✅       |
 | Satellite elevation and azimuth | `sat_elevation_deg`, `sat_azimuth_deg`                                                                                                                                         | ✅       |
 | Ephemerides dataset identifier  | `ephemeris_hash`                                                                                                                                                               | ✅       |
---- 
+
 
 ### Level 2 - SPP 
 Same as Level 1, with the following additional parameters. Those parameters are still computed from the broadcast navigation message.
