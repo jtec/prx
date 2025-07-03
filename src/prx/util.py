@@ -518,3 +518,14 @@ def compute_gps_utc_leap_seconds(yyyy: int, doy: int):
             break
     assert ~np.isnan(ls), "GPS leap second could not be retrieved"
     return ls
+
+
+def add_range_column(
+    df: pd.DataFrame, approximate_receiver_ecef_position_m: np.ndarray
+):
+    df["range_m"] = np.sqrt(
+        (df["sat_pos_x_m"] - approximate_receiver_ecef_position_m[0]) ** 2
+        + (df["sat_pos_y_m"] - approximate_receiver_ecef_position_m[1]) ** 2
+        + (df["sat_pos_z_m"] - approximate_receiver_ecef_position_m[2]) ** 2
+    )
+    return df

@@ -557,7 +557,7 @@ def to_isagpst(time, timescale, gpst_utc_leapseconds):
 @timeit
 def select_ephemerides(df, query):
     df = df[df.ephemeris_reference_time_isagpst.notna()]
-    query = query.sort_values(by="query_time_isagpst")
+    query = query.sort_values(by="ephemeris_selection_time_isagpst")
     df = df.sort_values(by="ephemeris_reference_time_isagpst")
     # Add fnav/inav indicator to query for to select the FNAV ephemeris for E5b signals, and INAV for other signals
     query["fnav_or_inav"] = ""
@@ -570,7 +570,7 @@ def select_ephemerides(df, query):
     query = pd.merge_asof(
         query,
         df,
-        left_on="query_time_isagpst",
+        left_on="ephemeris_selection_time_isagpst",
         right_on="ephemeris_reference_time_isagpst",
         by=["sv", "fnav_or_inav"],
         direction="backward",
@@ -630,18 +630,26 @@ def compute_clock_offsets(df):
     return df
 
 
+def compute_parallel(rinex_nav_file_paths, per_signal_query):
+    if not isinstance(rinex_nav_file_paths, list):
+        rinex_nav_file_paths = [rinex_nav_file_paths]
+
+
 def compute_parallel(
-    rinex_nav_file_path, per_signal_query, is_query_corrected_by_sat_clock_offset=False
+    rinex_nav_file_paths, per_signal_query, is_query_corrected_by_sat_clock_offset=False
 ):
+    if not isinstance(rinex_nav_file_paths, list):
+        rinex_nav_file_paths = [rinex_nav_file_paths]
     # Warm up nav file parser cache so that we don't parse the file multiple times
-    _ = parse_rinex_nav_file(rinex_nav_file_path)
+    for rinex_nav_file_path in rinex_nav_file_paths:
+        _ = parse_rinex_nav_file(rinex_nav_file_path)
     parallel = Parallel(n_jobs=round(multiprocessing.cpu_count() / 2), return_as="list")
     # split dataframe into `n_chunks` smaller dataframes
     n_chunks = min(len(per_signal_query.index), 4)
     chunks = np.array_split(per_signal_query, n_chunks)
     processed_chunks = parallel(
         delayed(compute)(
-            rinex_nav_file_path, chunk, is_query_corrected_by_sat_clock_offset
+            rinex_nav_file_paths, chunk, is_query_corrected_by_sat_clock_offset
         )
         for chunk in chunks
     )
@@ -649,8 +657,10 @@ def compute_parallel(
 
 
 def compute(
-    rinex_nav_file_path, per_signal_query, is_query_corrected_by_sat_clock_offset=False
+    rinex_nav_file_paths, per_signal_query, is_query_corrected_by_sat_clock_offset=False
 ):
+    if not isinstance(rinex_nav_file_paths, list):
+        rinex_nav_file_paths = [rinex_nav_file_paths]
     query_columns = per_signal_query.columns
     # per_signal_query is a pd.DataFrame with the following columns
     #   - time_of_reception_in_receiver_time
@@ -658,12 +668,23 @@ def compute(
     #   - signal
     #   - sv
     #   - query_time_isagpst
-    rinex_nav_file_path = Path(rinex_nav_file_path)
-    ephemerides = parse_rinex_nav_file(rinex_nav_file_path)
+    rinex_nav_file_paths = [Path(path) for path in rinex_nav_file_paths]
+    ephemeris_blocks = []
+    for path in rinex_nav_file_paths:
+        block = parse_rinex_nav_file(path)
+        # Not using iono model parameters here, removing them from dataframe attributes to
+        # enable concatenation
+        block.attrs.pop("ionospheric_corr_GPS", None)
+        ephemeris_blocks.append(block)
+    ephemerides = pd.concat(ephemeris_blocks)
     # Group delays and clock offsets can be signal-specific, so we need to match ephemerides to code signals,
     # not only to satellites
     # Example: Galileo transmits E5a clock and group delay parameters in the F/NAV message, but parameters for other
     # signals in the I/NAV message
+    if "ephemeris_selection_time_isagpst" not in per_signal_query.columns:
+        per_signal_query["ephemeris_selection_time_isagpst"] = per_signal_query[
+            "query_time_isagpst"
+        ]
     per_signal_query = select_ephemerides(ephemerides, per_signal_query)
 
     # compute satellite clock bias
@@ -740,9 +761,9 @@ def compute(
     computed_columns_to_keep = [
         col for col in columns_to_keep if col not in query_columns
     ]
-    per_signal_query.loc[
-        ~per_signal_query.ephemeris_valid, computed_columns_to_keep
-    ] = np.nan
+    # per_signal_query.loc[
+    #    ~per_signal_query.ephemeris_valid, computed_columns_to_keep
+    # ] = np.nan
     per_signal_query = per_signal_query[columns_to_keep].reset_index(drop=True)
     return per_signal_query
 

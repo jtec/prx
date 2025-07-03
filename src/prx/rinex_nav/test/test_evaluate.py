@@ -759,6 +759,8 @@ def test_select_ephemerides():
             "signal": ["C5X", "C1C", "C1C"],
         }
     )
+    query["ephemeris_selection_time_isagpst"] = query["query_time_isagpst"]
+
     query_with_ephemerides = select_ephemerides(ephemerides, query)
     query_with_ephemerides = query_with_ephemerides.sort_values(
         by=["sv", "query_time_isagpst"]
