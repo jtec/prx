@@ -260,7 +260,7 @@ def build_records_levels_12(
         on=["time_of_reception_in_receiver_time", "satellite"],
     )
 
-    # create a query dataframe with columns ["signal","sv","query_time_isagpst"]
+    # Build the query DataFrame we need to evaluate ephemerides
     query = flat_obs[flat_obs["observation_type"].str.startswith("C")]
     query = query.rename(
         columns={
@@ -289,14 +289,13 @@ def build_records_levels_12(
         if day_query.empty:
             continue
 
-        if prx_level in [1, 2]:  # compute sat pos, vel, clk bias, clk drift
-            log.info(f"Computing satellite states for {year}-{doy:03d}")
-            sat_states_per_day.append(
-                rinex_evaluate.compute_parallel(
-                    file,
-                    day_query,
-                )
+        log.info(f"Computing satellite states for {year}-{doy:03d}")
+        sat_states_per_day.append(
+            rinex_evaluate.compute_parallel(
+                file,
+                day_query,
             )
+        )
         if prx_level == 1:  # drop sat group delay
             sat_states_per_day[-1] = sat_states_per_day[-1].drop(
                 columns=["sat_code_bias_m"]
@@ -331,40 +330,9 @@ def build_records_levels_12(
             sat_states[["sat_pos_x_m", "sat_pos_y_m", "sat_pos_z_m"]].to_numpy(),
             approximate_receiver_ecef_position_m,
         )
-        # We need Timestamps to compute tropo delays
-        sat_states = sat_states.merge(
-            flat_obs[
-                [
-                    "satellite",
-                    "time_of_emission_isagpst",
-                    "time_of_reception_in_receiver_time",
-                ]
-            ].drop_duplicates(),
-            on=["satellite", "time_of_emission_isagpst"],
-            how="left",
+        sat_states["tropo_delay_m"] = atmo.add_tropo_column(
+            sat_states, flat_obs, approximate_receiver_ecef_position_m
         )
-        [latitude_user_rad, longitude_user_rad, height_user_m] = util.ecef_2_geodetic(
-            approximate_receiver_ecef_position_m
-        )
-        days_of_year = np.array(
-            sat_states["time_of_reception_in_receiver_time"]
-            .apply(lambda element: element.timetuple().tm_yday)
-            .to_numpy()
-        )
-        (
-            tropo_delay_m,
-            __,
-            __,
-            __,
-            __,
-        ) = atmo.compute_tropo_delay_unb3m(
-            latitude_user_rad * np.ones(days_of_year.shape),
-            height_user_m * np.ones(days_of_year.shape),
-            days_of_year,
-            sat_states.elevation_rad.to_numpy(),
-        )
-        sat_states["tropo_delay_m"] = tropo_delay_m
-        sat_states = sat_states.drop(columns=["time_of_reception_in_receiver_time"])
 
     # Merge sat states into observation dataframe. Due to Galileo's FNAV/INAV ephemerides
     # being signal-specific, we merge on the code identifier here and not only the satellite
@@ -409,61 +377,10 @@ def build_records_levels_12(
 
     if prx_level == 2:
         # add iono correction
-        # create a dictionary containing the headers of the different NAV files.
-        # The keys are the "YYYYDDD" (year and day of year) and are located at
-        # [12:19] of the file name using RINEX naming convention
-        nav_header_dict = {
-            file.name[12:19]: georinex.rinexheader(file)
-            for file in rinex_3_ephemerides_files
-        }
-
-        for file in rinex_3_ephemerides_files:
-            # get year and doy from NAV filename
-            year = int(file.name[12:16])
-            doy = int(file.name[16:19])
-
-            # Selection criteria: time of emission belonging to the day of the current NAV file
-            mask = (
-                flat_obs.time_of_emission_isagpst
-                >= pd.Timestamp(year=year, month=1, day=1) + pd.Timedelta(days=doy - 1)
-            ) & (
-                flat_obs.time_of_emission_isagpst
-                < pd.Timestamp(year=year, month=1, day=1) + pd.Timedelta(days=doy)
-            )
-            if "IONOSPHERIC CORR" in nav_header_dict[f"{year:03d}" + f"{doy:03d}"]:
-                log.info(f"Computing iono delay for {year}-{doy:03d}")
-                time_of_emission_weeksecond_isagpst = (
-                    util.timedelta_2_weeks_and_seconds(
-                        flat_obs.loc[mask].time_of_emission_isagpst
-                        - constants.system_time_scale_rinex_utc_epoch["GPST"]
-                    )[1].to_numpy()
-                )
-
-                flat_obs.loc[
-                    mask,
-                    "iono_delay_m",
-                ] = atmo.compute_l1_iono_delay_klobuchar(
-                    time_of_emission_weeksecond_isagpst,
-                    nav_header_dict[f"{year:03d}" + f"{doy:03d}"]["IONOSPHERIC CORR"][
-                        "GPSA"
-                    ],
-                    nav_header_dict[f"{year:03d}" + f"{doy:03d}"]["IONOSPHERIC CORR"][
-                        "GPSB"
-                    ],
-                    flat_obs.loc[mask].elevation_rad,
-                    flat_obs.loc[mask].azimuth_rad,
-                    latitude_user_rad,
-                    longitude_user_rad,
-                ) * (
-                    constants.carrier_frequencies_hz()["G"]["L1"][1] ** 2
-                    / flat_obs.loc[mask].carrier_frequency_hz ** 2
-                )
-            else:
-                logging.warning(f"Missing iono model parameters for day {doy:03d}")
-                flat_obs.loc[
-                    mask,
-                    "iono_delay_m",
-                ] = np.nan
+        iono_idx, iono_delay = atmo.add_iono_column(
+            flat_obs, rinex_3_ephemerides_files, approximate_receiver_ecef_position_m
+        )
+        flat_obs.loc[iono_idx, "iono_delay_m"] = iono_delay
 
     return flat_obs
 
