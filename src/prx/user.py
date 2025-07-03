@@ -2,6 +2,7 @@ import json
 from pathlib import Path
 import numpy as np
 import pandas as pd
+import polars as pl
 import georinex as gr
 
 from prx.constants import cGpsSpeedOfLight_mps
@@ -17,7 +18,9 @@ def parse_prx_csv_file_metadata(prx_file: Path):
 
 
 def parse_prx_csv_file(prx_file: Path):
-    df = pd.read_csv(prx_file, comment="#")
+    df = pl.read_csv(
+        prx_file, comment_prefix="#", schema_overrides={"ephemeris_hash": pl.String}
+    ).to_pandas()
     df.time_of_reception_in_receiver_time = pd.to_datetime(
         df.time_of_reception_in_receiver_time
     )
