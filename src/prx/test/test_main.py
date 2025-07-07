@@ -298,8 +298,11 @@ def test_spp_lsq_tlse(input_for_test_tlse):
     df, metadata = run_rinex_through_prx(input_for_test_tlse)
     df["sv"] = df["constellation"].astype(str) + df["prn"].astype(str)
     df_first_epoch = df[
-        df.time_of_reception_in_receiver_time
-        == df.time_of_reception_in_receiver_time.min()
+        (
+            df.time_of_reception_in_receiver_time
+            == df.time_of_reception_in_receiver_time.min()
+        )
+        & (df.sat_elevation_deg > 10)
     ]
     for constellations_to_use in [
         (
@@ -340,8 +343,11 @@ def test_spp_lsq_tlse_2024(input_for_test_tlse_2024):
     df, metadata = run_rinex_through_prx(input_for_test_tlse_2024)
     df["sv"] = df["constellation"].astype(str) + df["prn"].astype(str)
     df_first_epoch = df[
-        df.time_of_reception_in_receiver_time
-        == df.time_of_reception_in_receiver_time.min()
+        (
+            df.time_of_reception_in_receiver_time
+            == df.time_of_reception_in_receiver_time.min()
+        )
+        & (df.sat_elevation_deg > 10)
     ]
     constellation_to_use = ["G"]
 
