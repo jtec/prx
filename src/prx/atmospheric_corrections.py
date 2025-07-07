@@ -80,6 +80,52 @@ def compute_l1_iono_delay_klobuchar(
     return iono_correction_l1_m
 
 
+def compute_tropo_delay_saastamoinen(height, el, lat, humi=0.7):
+    """
+    code source: rtklib v2.4.3 b33, rtkcmn.c, tropmodel
+
+    INPUTS:
+    - height: geodetic height in m. np.ndarray of shape (n,)
+    - el in rad. np.ndarray of shape (n,)
+    - lat in rad. np.ndarray of shape (n,)
+    - humi in ratio. scalar
+
+    OUTPUTS:
+    - tropo_tot, tropo_h, tropo_w in m. np.ndarray of shape (n,)
+    """
+    assert len(height) == len(el) == len(lat)
+    assert (-100 <= height).all()
+    assert (height <= 1e4).all()
+    assert (
+        el[~np.isnan(el)] >= -np.deg2rad(5)
+    ).all()  # consider slightly negative elevation...
+
+    # standard atmosphere model
+    height_new = height.copy()  # to avoid changing input
+    height_new[height_new < 0] = 0
+    height = height_new
+
+    p = 1013.25 * (1 - 2.2557e-5 * height) ** 5.2568
+    t = 15 - 6.5e-3 * height + 273.16
+    e_wat = 6.108 * np.exp((17.15 * t - 4684) / (t - 38.45)) * humi
+
+    # zenith angle in rad
+    z = np.pi / 2 - el
+
+    # hydrostatic tropospheric delay
+    tropo_h = (
+        0.0022768 * p / (1 - 0.00266 * np.cos(2 * lat) - 0.28e-6 * height) / np.cos(z)
+    )
+
+    # wet tropospheric delay
+    tropo_w = 0.002277 / np.cos(z) * (1255 / t + 0.05) * e_wat
+
+    # total tropospheric delay (projected on the slant path)
+    tropo_tot = tropo_h + tropo_w
+
+    return tropo_tot, tropo_h, tropo_w
+
+
 def compute_tropo_delay_unb3m(
     latitude_user_rad, height_user_m, day_of_year, elevation_sat_rad
 ):

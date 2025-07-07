@@ -380,11 +380,6 @@ def build_records(
     [latitude_user_rad, longitude_user_rad, height_user_m] = util.ecef_2_geodetic(
         approximate_receiver_ecef_position_m
     )
-    days_of_year = np.array(
-        sat_states["time_of_reception_in_receiver_time"]
-        .apply(lambda element: element.timetuple().tm_yday)
-        .to_numpy()
-    )
     (
         sat_states["elevation_rad"],
         sat_states["azimuth_rad"],
@@ -392,17 +387,10 @@ def build_records(
         sat_states[["sat_pos_x_m", "sat_pos_y_m", "sat_pos_z_m"]].to_numpy(),
         approximate_receiver_ecef_position_m,
     )
-    (
-        tropo_delay_m,
-        __,
-        __,
-        __,
-        __,
-    ) = atmo.compute_tropo_delay_unb3m(
-        latitude_user_rad * np.ones(days_of_year.shape),
-        height_user_m * np.ones(days_of_year.shape),
-        days_of_year,
+    (tropo_delay_m, __, __) = atmo.compute_tropo_delay_saastamoinen(
+        height_user_m * np.ones((len(sat_states),)),
         sat_states.elevation_rad.to_numpy(),
+        latitude_user_rad * np.ones((len(sat_states),)),
     )
     sat_states["tropo_delay_m"] = tropo_delay_m
     # Merge sat states into observation dataframe. Due to Galileo's FNAV/INAV ephemerides

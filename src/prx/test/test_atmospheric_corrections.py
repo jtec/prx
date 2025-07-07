@@ -271,7 +271,7 @@ def test_klobuchar_delay():
 
 
 def test_unb3m_corrections():
-    # compare the correction computed by atmospheric_corrections.compute_unb3m_corrections and the results computed
+    # compare the correction computed by atmospheric_corrections.compute_tropo_delay_unb3m and the results computed
     # by the Matlab version provided by the author of the UNB3M model
 
     # The tropo delay reported in the text file is rounded to the 3rd decimal
@@ -296,3 +296,28 @@ def test_unb3m_corrections():
     ) = atmo.compute_tropo_delay_unb3m(lat_rad, height_m, day_of_year, elevation_rad)
 
     assert (np.abs(tropo_delay_m - tropo_expected[:, 8]) < tol).all()
+
+
+def test_saastamoinen_corrections():
+    # compare the correction computed by atmospheric_corrections.compute_tropo_delay_unb3m and
+    # atmospheric_corrections.compute_tropo_delay_saastamoinen
+
+    tropo_expected = np.genfromtxt(
+        util.prx_repository_root() / "src/prx/tools/UNB3m_pack/tunb3m_.txt",
+        skip_header=3,
+    )
+
+    lat_rad = np.deg2rad(tropo_expected[:, 0])
+    height_m = tropo_expected[:, 1]
+    day_of_year = tropo_expected[:, 2]
+    elevation_rad = np.deg2rad(tropo_expected[:, 3])
+
+    tropo_unb3, _, _, _, _ = atmo.compute_tropo_delay_unb3m(
+        lat_rad, height_m, day_of_year, elevation_rad
+    )
+
+    tropo_saas, _, _ = atmo.compute_tropo_delay_saastamoinen(
+        height_m, elevation_rad, lat_rad
+    )
+
+    assert max(abs(tropo_saas - tropo_unb3)) < 0.3
