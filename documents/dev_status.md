@@ -10,6 +10,10 @@ The following tables gather the different information needed according to the le
 
 Those parameters are computed from the broadcast navigation message (`rinex nav` file).
 
+```
+uv run python src/prx/main.py --observation_file_path <path_to_rinex_file> --prx_level 1
+```
+
 | Parameters                      | Name in PRX file                                                                                                                                                               | Status    |
 |---------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-----------|
 | GNSS observations               | `time_of_reception_in_receiver_time`<br/>`C_obs_m`, `D_obs_hz`, `L_obs_cycles`, `S_obs_dBHz`,<br/>`rnx_obs_identifier`, `constellation`, `prn`, `frequency_slot` (for GLONASS) | ✅       |
@@ -22,6 +26,10 @@ Those parameters are computed from the broadcast navigation message (`rinex nav`
 
 ### Level 2 - SPP 
 Same as Level 1, with the following additional parameters. Those parameters are still computed from the broadcast navigation message.
+
+```
+uv run python src/prx/main.py --observation_file_path <path_to_rinex_file> --prx_level 2
+```
 
 | Parameters                       | Name in PRX file               | Status    |
 |----------------------------------|--------------------------------|-----------|
@@ -36,6 +44,10 @@ Same as Level 1, with the following additional parameters. Those parameters are 
 
 ### Level 3 - PPP 
 Same as level 1 and 2, with the following additional parameters. The parameters are computed using IGS products.
+
+```
+uv run python src/prx/main.py --observation_file_path <path_to_rinex_file> --prx_level 3
+```
 
 | Parameters                                                        | Name in PRX file                                                                                  | Status |
 |-------------------------------------------------------------------|---------------------------------------------------------------------------------------------------|--------|
