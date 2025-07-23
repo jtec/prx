@@ -1,6 +1,8 @@
 import numpy as np
-
-from prx.util import deg_2_rad
+import pandas as pd
+import georinex
+import logging
+from prx.util import deg_2_rad, ecef_2_geodetic, timedelta_2_weeks_and_seconds
 import prx.constants as constants
 
 
@@ -78,6 +80,72 @@ def compute_l1_iono_delay_klobuchar(
     )
 
     return iono_correction_l1_m
+
+
+def add_iono_column(
+    flat_obs, rinex_3_ephemerides_files, approximate_receiver_ecef_position_m
+):
+    # create a dictionary containing the headers of the different NAV files.
+    # The keys are the "YYYYDDD" (year and day of year) and are located at
+    # [12:19] of the file name using RINEX naming convention
+    nav_header_dict = {
+        file.name[12:19]: georinex.rinexheader(file)
+        for file in rinex_3_ephemerides_files
+    }
+
+    idx_all_days = []
+    iono_all_days = []
+    for file in rinex_3_ephemerides_files:
+        # get year and doy from NAV filename
+        year = int(file.name[12:16])
+        doy = int(file.name[16:19])
+
+        # Selection criteria: time of emission belonging to the day of the current NAV file
+        mask = (
+            (
+                flat_obs.time_of_emission_isagpst
+                >= pd.Timestamp(year=year, month=1, day=1) + pd.Timedelta(days=doy - 1)
+            )
+            & (
+                flat_obs.time_of_emission_isagpst
+                < pd.Timestamp(year=year, month=1, day=1) + pd.Timedelta(days=doy)
+            )
+            & (flat_obs.observation_type.str.startswith("C"))
+        )
+        mask_idx = mask.loc[mask].index
+        idx_all_days.append(mask_idx)
+        if "IONOSPHERIC CORR" in nav_header_dict[f"{year:03d}" + f"{doy:03d}"]:
+            logging.info(f"Computing iono delay for {year}-{doy:03d}")
+            time_of_emission_weeksecond_isagpst = timedelta_2_weeks_and_seconds(
+                flat_obs.loc[mask_idx, "time_of_emission_isagpst"]
+                - constants.system_time_scale_rinex_utc_epoch["GPST"]
+            )[1].to_numpy()
+            [latitude_user_rad, longitude_user_rad, __] = ecef_2_geodetic(
+                approximate_receiver_ecef_position_m
+            )
+            iono_all_days.append(
+                compute_l1_iono_delay_klobuchar(
+                    time_of_emission_weeksecond_isagpst,
+                    nav_header_dict[f"{year:03d}" + f"{doy:03d}"]["IONOSPHERIC CORR"][
+                        "GPSA"
+                    ],
+                    nav_header_dict[f"{year:03d}" + f"{doy:03d}"]["IONOSPHERIC CORR"][
+                        "GPSB"
+                    ],
+                    flat_obs.loc[mask_idx, "elevation_rad"],
+                    flat_obs.loc[mask_idx, "azimuth_rad"],
+                    latitude_user_rad,
+                    longitude_user_rad,
+                )
+                * (
+                    constants.carrier_frequencies_hz()["G"]["L1"][1] ** 2
+                    / flat_obs.loc[mask_idx, "carrier_frequency_hz"] ** 2
+                )
+            )
+        else:
+            logging.warning(f"Missing iono model parameters for day {doy:03d}")
+            iono_all_days.append(np.full(mask_idx.shape, np.nan))
+    return np.concatenate(idx_all_days), np.concatenate(iono_all_days)
 
 
 def compute_tropo_delay_unb3m(
@@ -302,3 +370,38 @@ def compute_tropo_delay_unb3m(
         tropo_zwd_m,
         tropo_wet_mapping,
     )
+
+
+def add_tropo_column(sat_states, flat_obs, receiver_ecef_position_m):
+    # We need Timestamps to compute tropo delays
+    sat_states = sat_states.merge(
+        flat_obs[
+            [
+                "satellite",
+                "time_of_emission_isagpst",
+                "time_of_reception_in_receiver_time",
+            ]
+        ].drop_duplicates(),
+        on=["satellite", "time_of_emission_isagpst"],
+        how="left",
+    )
+    [latitude_user_rad, __, height_user_m] = ecef_2_geodetic(receiver_ecef_position_m)
+    days_of_year = np.array(
+        sat_states["time_of_reception_in_receiver_time"]
+        .apply(lambda element: element.timetuple().tm_yday)
+        .to_numpy()
+    )
+    (
+        tropo_delay_m,
+        __,
+        __,
+        __,
+        __,
+    ) = compute_tropo_delay_unb3m(
+        latitude_user_rad * np.ones(days_of_year.shape),
+        height_user_m * np.ones(days_of_year.shape),
+        days_of_year,
+        sat_states.elevation_rad.to_numpy(),
+    )
+    # sat_states = sat_states.drop(columns=["time_of_reception_in_receiver_time"])
+    return tropo_delay_m
