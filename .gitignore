@@ -8,6 +8,7 @@ __pycache__
 *.json*
 */tmp_*
 /bin/act
+/src/prx/tools/gfzrnx/*
 /GSDC2021/
 **/diskcache/**
 *.DS_Store
