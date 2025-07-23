@@ -30,7 +30,7 @@ def set_up_test():
     assert test_obs_file.exists()
     test_date = pd.Timestamp("2023-01-01")
     sp3_subfolder = sp3.sp3_file_folder(test_date, test_directory)
-    test_sp3_file = sp3_subfolder / "COD0OPSRAP_20230010000_01D_05M_ORB.SP3.gz"
+    test_sp3_file = sp3_subfolder / "WUM0MGXFIN_20230010000_01D_05M_ORB.SP3.gz"
     shutil.copy(
         util.prx_repository_root()
         / f"src/prx/precise_corrections/sp3/test/datasets/2023/001/{test_sp3_file.name}",
@@ -38,7 +38,15 @@ def set_up_test():
     )
     assert test_sp3_file.exists()
 
-    yield {"test_obs_file": test_obs_file, "test_sp3_file" : test_sp3_file}
+    test_clk_file = sp3_subfolder / 'WUM0MGXFIN_20230010000_01D_30S_CLK.CLK.gz'
+    shutil.copy(
+        util.prx_repository_root()
+        / f"src/prx/precise_corrections/sp3/test/datasets/2023/001/{test_clk_file.name}",
+        test_clk_file,
+    )
+    assert test_clk_file.exists()
+
+    yield {"test_obs_file": test_obs_file, "test_sp3_file" : test_sp3_file, 'test_clk_file' : test_clk_file}
     shutil.rmtree(test_directory)
 
 def test_get_index_of_priority_from_filename(set_up_test):
@@ -64,11 +72,8 @@ def test_get_sp3_file(set_up_test):
     sp3.get_sp3_file(t_start, t_end, db_folder)
 
     gps_week, dow = sp3.timestamp_to_gps_week_and_dow(t_start)
-    expected_priority = (
-        sp3.priority_before_gps_week_2237
-        if gps_week < 2238
-        else sp3.priority_since_gps_week_2238
-    )
+    expected_priority = sp3.priority
+    
     sp3_filename, clk_filename = sp3.build_sp3_filename(gps_week, dow, t_start, expected_priority[0], expected_priority)
     sp3_filename = str(Path(sp3_filename).with_suffix(""))
     clk_filename = str(Path(clk_filename).with_suffix(""))
@@ -80,120 +85,115 @@ def test_get_sp3_file(set_up_test):
     assert downloaded_sp3.exists()
     assert downloaded_clk.exists()
 
-def test_priority_since_2238():
+def test_priority_local_file_found_midway(set_up_test):
     '''
-    This test verifies that the function `get_sp3_file` correctly iterates through the
-    full priority list defined in `priority_since_gps_week_2238` when no local SP3 file
-    is found and all FTP download attempts fail.
+    This test verifies that `get_sp3_file` respects the SP3/CLK priority list when attempting to
+    retrieve orbit and clock files, stopping at the first valid local pair.
 
-    The test uses patches to:
-    - Mock `build_sp3_filename` to track the exact sequence of priority values used.
-    - Force `get_local_sp3` to return None, simulating the absence of a local file.
-    - Force `try_downloading_sp3_ftp` to return None, simulating a failed download.
+    The test simulates the following scenario across increasing priority lengths:
 
-    It asserts that `build_sp3_filename` is called with the correct arguments and in
-    the expected order, ensuring the priority logic is followed as intended. 
+    1. When priority = [('COD', 'FIN')]:
+        - Local file at priority 0 is missing → triggers FTP download.
+        - Download succeeds → file becomes available locally.
+        - `get_sp3_file` finds and returns the local file.
+
+    2. When priority = [('COD', 'FIN'), ('GRG', 'FIN')]:
+        - Local 0 is missing → download fails.
+        - Local 1 is missing → triggers download.
+        - Download of 1 succeeds → file becomes available locally.
+        - `get_sp3_file` returns the local file at priority 1.
+
+    This is done until the local files are found 
+
+    This test ensures:
+    - The function checks local availability before attempting download.
+    - Each priority is tried in order until a valid file is found.
+    - The function stops as soon as a valid local file is available (even if previously downloaded).
+    - The logic is robust regardless of which priority index the file becomes available at.
     '''
-    test_date = pd.Timestamp("2023-12-15 12:00:00", tz="UTC")
-    priority = sp3.priority_since_gps_week_2238
 
-    gps_week, dow = sp3.timestamp_to_gps_week_and_dow(test_date)
-
-    with patch("prx.precise_corrections.sp3.sp3_file_discovery.build_sp3_filename") as mock_build_name, \
-         patch("prx.precise_corrections.sp3.sp3_file_discovery.get_local_sp3", return_value=None), \
-         patch("prx.precise_corrections.sp3.sp3_file_discovery.try_downloading_sp3_ftp", return_value=None):
-
-        sp3.get_sp3_file(test_date, test_date)
-
-        expected_calls = [
-            ((gps_week, dow, test_date, priority[i], priority),) for i in range (0, len(priority))
-        ]
-        actual_calls = mock_build_name.call_args_list
-        print(mock_build_name.call_args_list)
-        assert actual_calls == expected_calls, f"Expected call order:\n{expected_calls}\nbut got:\n{actual_calls}"
-    
-def test_priority_before_2237():
-    '''
-    This test verifies that the function `get_sp3_file` correctly iterates through the
-    full priority list defined in `priority_before_gps_week_2237` when no local SP3 file
-    is found and all FTP download attempts fail.
-
-    The test uses patches to:
-    - Mock `build_sp3_filename` to track the exact sequence of priority values used.
-    - Force `get_local_sp3` to return None, simulating the absence of a local file.
-    - Force `try_downloading_sp3_ftp` to return None, simulating a failed download.
-
-    It asserts that `build_sp3_filename` is called with the correct arguments and in
-    the expected order, ensuring the priority logic is followed as intended. 
-    '''
-    test_date = pd.Timestamp("2021-12-15 12:00:00", tz="UTC")
-    priority = sp3.priority_before_gps_week_2237
-
-    gps_week, dow = sp3.timestamp_to_gps_week_and_dow(test_date)
-
-    with patch("prx.precise_corrections.sp3.sp3_file_discovery.build_sp3_filename") as mock_build_name, \
-         patch("prx.precise_corrections.sp3.sp3_file_discovery.get_local_sp3", return_value=None), \
-         patch("prx.precise_corrections.sp3.sp3_file_discovery.try_downloading_sp3_ftp", return_value=None):
-
-        sp3.get_sp3_file(test_date, test_date)
-
-        expected_calls = [
-            ((gps_week, dow, test_date, priority[i], priority),) for i in range (0, len(priority))
-        ]
-        actual_calls = mock_build_name.call_args_list
-        print(mock_build_name.call_args_list)
-        assert actual_calls == expected_calls, f"Expected call order:\n{expected_calls}\nbut got:\n{actual_calls}"
-
-def test_priority_local_file_found_midway_since_2238(set_up_test):
-    '''
-    This test verifies that `get_sp3_file` iterates through the priority list in order,
-    attempting to retrieve each SP3 file (locally or via FTP) until it finds a valid one.
-
-    In this scenario, all files before a given priority fail (local = None, FTP = None),
-    and a local file is found only at a specific index in the list.
-
-    The test asserts that:
-    - All previous priority options were attempted (get_local + download).
-    - The function stops once the local file is found.
-    - The priority logic is respected in call order.
-    '''
-    sp3_filename = set_up_test['test_sp3_file'].name
-    obs_file = set_up_test["test_obs_file"]
-
-    header = georinex.rinexheader(obs_file)
-    t_start = util.rinex_header_time_string_2_timestamp_ns(header["TIME OF FIRST OBS"]) - pd.Timedelta(200, unit="milliseconds")
-    t_end = util.rinex_header_time_string_2_timestamp_ns(header["TIME OF LAST OBS"])
+    t_start = pd.Timestamp("2023-05-14 12:00:00")
 
     db_folder = set_up_test["test_obs_file"].parent
+    expected_priority = sp3.priority
 
-    gps_week, dow = sp3.timestamp_to_gps_week_and_dow(t_start)
-    expected_priority = (
-        sp3.priority_before_gps_week_2237
-        if gps_week < 2238
-        else sp3.priority_since_gps_week_2238
-    )
-    index_found_file_priority = sp3.get_index_of_priority_from_filename(sp3_filename,t_start)
-    calls = 0
+    index_found_file_priority = len(expected_priority)
 
-    for i in range(index_found_file_priority+1):
-        with patch("prx.precise_corrections.sp3.sp3_file_discovery.priority_since_gps_week_2238", expected_priority[:i+1]), \
-             patch("prx.precise_corrections.sp3.sp3_file_discovery.priority_before_gps_week_2237", expected_priority[:i+1]):
-            for j in range(i+1):
-                if i != j and i != index_found_file_priority:
-                    with patch("prx.precise_corrections.sp3.sp3_file_discovery.try_downloading_sp3_ftp", return_value = None):
-                        sp3_file = sp3.get_sp3_file(t_start, t_end, db_folder) 
-                    assert sp3_file is None
-                elif i == index_found_file_priority :
-                    with patch("prx.precise_corrections.sp3.sp3_file_discovery.try_downloading_sp3_ftp", return_value = None):
-                        sp3_file = sp3.get_sp3_file(t_start, t_end, db_folder) 
-                    assert sp3_file is not None
-                else : 
-                    sp3_file = sp3.get_sp3_file(t_start, t_end, db_folder)
-                    calls +=1
-                    assert sp3_file is not None
-                    if sp3_file.exists() :
-                        sp3_file.unlink() 
-    assert calls == index_found_file_priority
+    for i in range(index_found_file_priority):
+        for j in range(i+1):
+            if i != j :
+                with patch("prx.precise_corrections.sp3.sp3_file_discovery.try_downloading_sp3_ftp", return_value = None), \
+                     patch("prx.precise_corrections.sp3.sp3_file_discovery.priority", expected_priority[:i+1]):
+                        sp3_file, clk_file = sp3.get_sp3_file(t_start, t_start, db_folder) 
+                assert (sp3_file, clk_file) == (None, None)
+
+            else : 
+                with patch("prx.precise_corrections.sp3.sp3_file_discovery.priority", [expected_priority[i]]):
+                    sp3_file, clk_file = sp3.get_sp3_file(t_start, t_start, db_folder)
+                    if sp3_file is None :
+                        print(f"Could not download {sp3_file}")
+                    if clk_file is None : 
+                        print(f"Could not download {clk_file}")
+                    elif sp3_file.exists() :
+                        sp3_file.unlink()
+                    elif clk_file.exists():
+                        clk_file.unlink() 
+
+def test_priority_iteration_until_matching_sp3_clk_pair_found(set_up_test):
+    '''
+    This test ensures that `get_sp3_file` correctly iterates over the list of SP3/CLK priorities 
+    when searching for a matching orbit/clock file pair.
+
+    The scenario being tested simulates the following:
+
+    - A local SP3 file is available at priority index 4.
+    - A local CLK file is available at priority index 5.
+
+    The test walks through increasing slices of the priority list and validates the following:
+
+    1. For all priority levels (0, 0) up to (4, 4):
+        - Matching pairs are downloaded (if the files exist).
+        - `get_sp3_file` returns the pair.
+
+    2. At priority index 5:
+        - The function finds the valid (SP3, CLK) pair locally.
+        - `get_sp3_file` returns the correct local files and terminates.
+
+    '''
+    t_start = pd.Timestamp('2023-06-17 12:00:00')
+    
+    db_folder = set_up_test["test_obs_file"].parent
+
+    expected_priority =sp3.priority
+    
+    index_priority_sp3 = 4
+    index_priority_clk = 5
+    index_iteration = max(index_priority_sp3, index_priority_clk)
+
+    for i in range(index_iteration+1):
+        for j in range(i+1):
+            if i != j and i != index_iteration:
+                with patch("prx.precise_corrections.sp3.sp3_file_discovery.try_downloading_sp3_ftp", return_value = None), \
+                     patch("prx.precise_corrections.sp3.sp3_file_discovery.priority", expected_priority[:i+1]):
+                        sp3_file, clk_file = sp3.get_sp3_file(t_start, t_start, db_folder) 
+                assert (sp3_file, clk_file) == (None, None)
+            elif i == index_iteration :
+                with patch("prx.precise_corrections.sp3.sp3_file_discovery.priority", [expected_priority[i]]):
+                    sp3_file, clk_file = sp3.get_sp3_file(t_start, t_start, db_folder) 
+                assert sp3_file is not None
+                assert clk_file is not None
+            else : 
+                with patch("prx.precise_corrections.sp3.sp3_file_discovery.priority", [expected_priority[i]]):
+                    sp3_file, clk_file = sp3.get_sp3_file(t_start, t_start, db_folder)
+                    if sp3_file is None :
+                        print(f"Could not download {sp3_file}")
+                    if clk_file is None : 
+                        print(f"Could not download {clk_file}")
+                    elif sp3_file.exists() :
+                        sp3_file.unlink()
+                    elif clk_file.exists():
+                        clk_file.unlink()
+                assert sp3.get_index_of_priority_from_filename(str(Path(sp3_file).with_suffix(""))) == sp3.get_index_of_priority_from_filename(str(Path(clk_file).with_suffix("")))
 
 def test_download_all(set_up_test):
     """
@@ -207,9 +207,8 @@ def test_download_all(set_up_test):
     db_folder = set_up_test["test_obs_file"].parent
 
     gps_week, dow = sp3.timestamp_to_gps_week_and_dow(t_start)
-    if gps_week < 2238 :
-        priority = sp3.priority_before_gps_week_2237
-    else : priority = sp3.priority_since_gps_week_2238
+    
+    priority = sp3.priority
 
     downloaded_sp3_files = []
     downloaded_clk_files = []

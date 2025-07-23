@@ -19,20 +19,8 @@ from prx.util import timestamp_to_mid_day
 
 log = logging.getLogger(__name__)
 
-### Before gps week 2237
-# priority_before_gps_week_2237 = [
-#         ('cod'),    # CODE (3-day long solution)
-#         ('grg'),
-#         ('gfz'),
-#         ('esa'),
-#         ('igs'),    # IGS final solution
-#     ]
-#         # WWWW/AAAWWWWD.TYP.Z
-#         # D : day of week 0-6, 7 indicates weekly
-#         # TYP : sp3
-
 ### Since gps week 2238
-priority_since_gps_week_2238 = [
+priority = [
         ('COD', 'FIN'),   
         ('GRG', 'FIN'),
         ('GFZ', 'FIN'),
@@ -62,29 +50,19 @@ def timestamp_to_gps_week_and_dow(ts: pd.Timestamp) -> tuple[int, int]:
     return gps_week, dow
 
 def get_index_of_priority_from_filename(filename : str, day : pd.Timestamp):
-    for i, p in enumerate(priority_since_gps_week_2238):
+    for i, p in enumerate(priority):
         if p[0] in filename and p[1] in filename :
             return i
 
 def build_sp3_filename(gps_week, dow, day : pd.Timestamp, aaa_typ, priority):
-    if priority == priority_since_gps_week_2238 :
-        # aaa_typ : tuple of str (aaa, typ)
-        yyyy = day.year
-        ddd = f"{day.day_of_year:03d}"
-        aaa = aaa_typ[0]
-        typ = aaa_typ[1]
-        sp3_filename = f"{aaa}0MGX{typ}_{yyyy}{ddd}*_01D_*_ORB.SP3.gz"
-        clk_filename = f"{aaa}0MGX{typ}_{yyyy}{ddd}*_01D_*_CLK.CLK.gz"
-        return sp3_filename, clk_filename
-    else :
-        # priority = priority_before_gps_week_2237
-        # aaa_typ : str
-        wwww = gps_week
-        aaa = aaa_typ
-        d = dow
-        sp3_filename = f"{aaa}{wwww}{d}sp3.Z"
-        clk_filename = f"{aaa}{wwww}{d}clk.Z"
-        return sp3_filename, clk_filename
+    # aaa_typ : tuple of str (aaa, typ)
+    yyyy = day.year
+    ddd = f"{day.day_of_year:03d}"
+    aaa = aaa_typ[0]
+    typ = aaa_typ[1]
+    sp3_filename = f"{aaa}0MGX{typ}_{yyyy}{ddd}*_01D_*_ORB.SP3.gz"
+    clk_filename = f"{aaa}0MGX{typ}_{yyyy}{ddd}*_01D_*_CLK.CLK.gz"
+    return sp3_filename, clk_filename
 
 
 def sp3_file_database_folder():
@@ -154,8 +132,8 @@ def get_sp3_file(mid_day_start: pd.Timestamp, mid_day_end: pd.Timestamp, db_fold
     day = mid_day_start
     gps_week, dow = timestamp_to_gps_week_and_dow(day)
     while day <= mid_day_end:
-        for p in priority_since_gps_week_2238:
-            sp3_filename , clk_filename = build_sp3_filename(gps_week, dow, day, p, priority_since_gps_week_2238)
+        for p in priority:
+            sp3_filename , clk_filename = build_sp3_filename(gps_week, dow, day, p, priority)
             sp3_file = get_local_sp3(day, sp3_filename, db_folder)
             clk_file = get_local_sp3(day, clk_filename, db_folder)
             if sp3_file is None :
@@ -186,20 +164,6 @@ def discover_or_download_sp3_file(observation_file_path=Path()):
     t_end = timestamp_to_mid_day(util.rinex_header_time_string_2_timestamp_ns(header["TIME OF LAST OBS"]))
 
     sp3_file, clk_file = get_sp3_file(t_start, t_end) 
-
-    # sp3_files = []
-    # day = t_start
-    # gps_week, dow = timestamp_to_gps_week_and_dow(day)
-    # if gps_week < 2238 :
-    #     priority = priority_before_gps_week_2237
-    # else : priority = priority_since_gps_week_2238
-    # while day <= t_end:
-    #     for p in priority : 
-    #         sp3_filename = build_sp3_filename(gps_week, dow, day, p, priority)
-    #         sp3_files = get_local_sp3(day, sp3_filename)
-    #         if sp3_files is not None:
-    #             sp3_files.append(sp3_files)
-    #     day += pd.Timedelta(1, unit="days")
     return sp3_file, clk_file
 
 
