@@ -49,10 +49,7 @@ def process_gsdc2021_dataset(path_dataset: Path):
     )
 
     for i, file in enumerate(local_gz_list[:]):
-        main.process(
-            observation_file_path=file,
-            output_format="csv",
-        )
+        main.process(observation_file_path=file)
 
     # # Parallelized version (but we should rather try to parallelize prx.process)
     # from joblib import Parallel, delayed

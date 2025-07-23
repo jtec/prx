@@ -7,9 +7,10 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from prx import constants, util
+from prx import util
 from prx import main
 from prx.user import (
+    parse_prx_csv_file_metadata,
     parse_prx_csv_file,
     spp_pt_lsq,
     spp_vt_lsq,
@@ -147,28 +148,22 @@ def input_for_test_with_first_epoch_at_midnight():
     shutil.rmtree(test_directory)
 
 
-def test_prx_command_line_call_with_csv_output(input_for_test_tlse):
+def test_prx_command_line_call(input_for_test_tlse):
     test_file = input_for_test_tlse
     prx_path = util.prx_repository_root() / "src/prx/main.py"
-    command = (
-        f"python {prx_path} --observation_file_path {test_file} --output_format csv"
-    )
+    command = f"python {prx_path} --observation_file_path {test_file}"
     result = subprocess.run(
         command, capture_output=True, shell=True, cwd=str(test_file.parent)
     )
-    expected_prx_file = Path(
-        str(test_file).replace("crx.gz", constants.cPrxCsvFileExtension)
-    )
+    expected_prx_file = Path(str(test_file).replace("crx.gz", "csv"))
     assert result.returncode == 0
     assert expected_prx_file.exists()
 
 
-def test_prx_function_call_with_csv_output(input_for_test_tlse):
+def test_prx_function_call(input_for_test_tlse):
     test_file = input_for_test_tlse
-    main.process(observation_file_path=test_file, output_format="csv")
-    expected_prx_file = Path(
-        str(test_file).replace("crx.gz", constants.cPrxCsvFileExtension)
-    )
+    main.process(observation_file_path=test_file, prx_level=2)
+    expected_prx_file = Path(str(test_file).replace("crx.gz", "csv"))
     assert expected_prx_file.exists()
     df = pd.read_csv(expected_prx_file, comment="#")
     assert not df.empty
@@ -187,10 +182,8 @@ def test_prx_function_call_with_csv_output(input_for_test_tlse):
 
 def test_prx_lli_parsing(input_for_test_tlse):
     test_file = input_for_test_tlse
-    main.process(observation_file_path=test_file, output_format="csv")
-    expected_prx_file = Path(
-        str(test_file).replace("crx.gz", constants.cPrxCsvFileExtension)
-    )
+    main.process(observation_file_path=test_file)
+    expected_prx_file = Path(str(test_file).replace("crx.gz", "csv"))
     df = pd.read_csv(expected_prx_file, comment="#")
     # LLI check - CS expected (LLI = 1)
     assert (
@@ -232,18 +225,14 @@ def test_prx_function_call_for_obs_file_across_two_days(
     input_for_test_with_first_epoch_at_midnight,
 ):
     test_file = input_for_test_with_first_epoch_at_midnight["obs_file"]
-    main.process(observation_file_path=test_file, output_format="csv")
-    expected_prx_file = Path(
-        str(test_file).replace("crx.gz", constants.cPrxCsvFileExtension)
-    )
+    main.process(observation_file_path=test_file)
+    expected_prx_file = Path(str(test_file).replace("crx.gz", "csv"))
     assert expected_prx_file.exists()
 
 
-def run_rinex_through_prx(rinex_obs_file: Path):
-    main.process(observation_file_path=rinex_obs_file, output_format="csv")
-    expected_prx_file = Path(
-        str(rinex_obs_file).replace("crx.gz", constants.cPrxCsvFileExtension)
-    )
+def run_rinex_through_prx(rinex_obs_file: Path, prx_level: int = 2):
+    main.process(observation_file_path=rinex_obs_file, prx_level=prx_level)
+    expected_prx_file = Path(str(rinex_obs_file).replace("crx.gz", "csv"))
     assert expected_prx_file.exists()
     records, metadata = parse_prx_csv_file(expected_prx_file)
     records = pd.read_csv(expected_prx_file, comment="#")
@@ -384,7 +373,8 @@ def test_spp_lsq_for_obs_file_across_two_days(
     input_for_test_with_first_epoch_at_midnight,
 ):
     df, metadata = run_rinex_through_prx(
-        input_for_test_with_first_epoch_at_midnight["obs_file"]
+        input_for_test_with_first_epoch_at_midnight["obs_file"],
+        prx_level=2,
     )
     df_first_epoch = df[
         df.time_of_reception_in_receiver_time
@@ -407,13 +397,14 @@ def test_spp_lsq_for_obs_file_across_two_days(
         assert np.max(np.abs(velocity_offset)) < 1e-1
 
 
-def test_csv_column_names(input_for_test_tlse):
-    test_file = input_for_test_tlse
-    main.process(observation_file_path=test_file, output_format="csv")
-    expected_prx_file = Path(
-        str(test_file).replace("crx.gz", constants.cPrxCsvFileExtension)
-    )
+def test_prx_level_1(input_for_test_tlse):
+    main.process(observation_file_path=input_for_test_tlse, prx_level=1)
+    expected_prx_file = Path(str(input_for_test_tlse).replace("crx.gz", "csv"))
     assert expected_prx_file.exists()
+
+    # Read first line of file, containing meta-data
+    metadata = parse_prx_csv_file_metadata(expected_prx_file)
+    assert metadata["prx_level"] == 1
 
     # Read the CSV file
     df = pd.read_csv(expected_prx_file, comment="#")
@@ -421,34 +412,94 @@ def test_csv_column_names(input_for_test_tlse):
     # Expected CSV column names
     expected_column_names = {
         "time_of_reception_in_receiver_time",
-        "sat_clock_offset_m",
-        "sat_clock_drift_mps",
+        "C_obs_m",
+        "D_obs_hz",
+        "L_obs_cycles",
+        "S_obs_dBHz",
+        "rnx_obs_identifier",
+        "constellation",
+        "prn",
+        "carrier_frequency_hz",
+        "frequency_slot",
+        "health_flag",
+        "LLI",
         "sat_pos_x_m",
         "sat_pos_y_m",
         "sat_pos_z_m",
         "sat_vel_x_mps",
         "sat_vel_y_mps",
         "sat_vel_z_mps",
-        "relativistic_clock_effect_m",
-        "sagnac_effect_m",
-        "tropo_delay_m",
-        "sat_code_bias_m",
-        "carrier_frequency_hz",
-        "iono_delay_m",
+        "sat_clock_offset_m",
+        "sat_clock_drift_mps",
         "sat_elevation_deg",
         "sat_azimuth_deg",
-        "rnx_obs_identifier",
+        "ephemeris_hash",
+    }
+
+    # Checking if all renamed parameters exist in the dataframe columns
+    assert set(df.columns) == expected_column_names, (
+        f"Additional columns in computed prx file: {set(df.columns).difference(expected_column_names)}"
+    )
+
+
+def test_prx_level_2(input_for_test_tlse):
+    main.process(observation_file_path=input_for_test_tlse, prx_level=2)
+    expected_prx_file = Path(str(input_for_test_tlse).replace("crx.gz", "csv"))
+    assert expected_prx_file.exists()
+
+    # Read first line of file, containing meta-data
+    metadata = parse_prx_csv_file_metadata(expected_prx_file)
+    assert metadata["prx_level"] == 2
+
+    # Read the CSV file
+    df = pd.read_csv(expected_prx_file, comment="#")
+
+    # Expected CSV column names
+    expected_column_names = {
+        "time_of_reception_in_receiver_time",
         "C_obs_m",
         "D_obs_hz",
         "L_obs_cycles",
         "S_obs_dBHz",
+        "rnx_obs_identifier",
         "constellation",
         "prn",
+        "carrier_frequency_hz",
+        "frequency_slot",
+        "health_flag",
+        "LLI",
+        "sat_pos_x_m",
+        "sat_pos_y_m",
+        "sat_pos_z_m",
+        "sat_vel_x_mps",
+        "sat_vel_y_mps",
+        "sat_vel_z_mps",
+        "sat_clock_offset_m",
+        "sat_clock_drift_mps",
+        "sat_code_bias_m",
+        "relativistic_clock_effect_m",
+        "sagnac_effect_m",
+        "tropo_delay_m",
+        "sat_code_bias_m",
+        "iono_delay_m",
+        "sat_elevation_deg",
+        "sat_azimuth_deg",
+        "ephemeris_hash",
     }
 
     # Checking if all renamed parameters exist in the dataframe columns
-    for parameter in expected_column_names:
-        assert parameter in df.columns
+    assert set(df.columns) == expected_column_names, (
+        f"Additional columns in computed prx file: {set(df.columns).difference(expected_column_names)}"
+    )
+
+
+def test_prx_level_3(input_for_test_tlse):
+    """
+    Test is currently inactive. To be changed once PRX level 3 works.
+    """
+    # check that calling main.process with "prx_level=3" will raise an AssertionError
+    with pytest.raises(AssertionError):
+        main.process(observation_file_path=input_for_test_tlse, prx_level=3)
 
 
 def test_bootstrap_coarse_receiver_position(input_for_test_tlse):
