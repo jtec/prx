@@ -1,3 +1,4 @@
+import glob
 import logging
 import math
 import os
@@ -89,41 +90,46 @@ def repair_with_gfzrnx(file):
             logging.warning(f"File {file} already contains 'gfzrnx', skipping repair.")
             return file
     path_folder_gfzrnx = Path(__file__).parent.joinpath("tools", "gfzrnx")
-    path_binary = path_folder_gfzrnx.joinpath(
-        constants.gfzrnx_binary[platform.system()]
-    )
-    command = [
-        str(path_binary),
-        "-finp",
-        str(file),
-        "-fout",
-        str(file),
-        "-chk",
-        "-kv",
-        "-f",
-    ]
-    result = subprocess.run(
-        command,
-        capture_output=True,
-    )
-    if result.returncode == 0:
-        logger.info(f"Ran gfzrnx file repair on {file}")
-        with open(file, "r") as f:
-            file_content = f.read()
-            file_content = re.sub(
-                r"gfzrnx-(.*?)FILE PROCESSING(.*)UTC COMMENT",
-                r"gfzrnx-\1FILE PROCESSING (timestamp removed by prx) UTC COMMENT",
-                file_content,
-                count=1,
-            )
-        with open(file, "w") as f:
-            f.write(file_content)
-            logger.info(
-                f"Removed repair timestamp from gfzrnx file {file} to avoid content hash changes."
-            )
+    if path_folder_gfzrnx.exists():
+        binary_name = glob.glob("gfzrnx_*", root_dir=path_folder_gfzrnx)
+        assert len(binary_name) == 1, (
+            "Several `gfzrnx` binaries found in 'src/prx/tools/gfzrnx/' folder. Keep only a single one."
+        )
+        path_binary = path_folder_gfzrnx.joinpath(binary_name[0])
+        command = [
+            str(path_binary),
+            "-finp",
+            str(file),
+            "-fout",
+            str(file),
+            "-chk",
+            "-kv",
+            "-f",
+        ]
+        result = subprocess.run(
+            command,
+            capture_output=True,
+        )
+        if result.returncode == 0:
+            logger.info(f"Ran gfzrnx file repair on {file}")
+            with open(file, "r") as f:
+                file_content = f.read()
+                file_content = re.sub(
+                    r"gfzrnx-(.*?)FILE PROCESSING(.*)UTC COMMENT",
+                    r"gfzrnx-\1FILE PROCESSING (timestamp removed by prx) UTC COMMENT",
+                    file_content,
+                    count=1,
+                )
+            with open(file, "w") as f:
+                f.write(file_content)
+                logger.info(
+                    f"Removed repair timestamp from gfzrnx file {file} to avoid content hash changes."
+                )
+        else:
+            logger.info(f"gfzrnx file repair run failed: {result}")
+            assert False
     else:
-        logger.info(f"gfzrnx file repair run failed: {result}")
-        assert False
+        logger.info("gfzrnx binary not found in 'src/prx/tools/'. Skipping repair...")
     return file
 
 
