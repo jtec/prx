@@ -28,17 +28,18 @@ uv run python src/prx/main.py --observation_file_path <path_to_rinex_file> --prx
 Same as Level 1, with the following additional parameters. Those parameters are still computed from the broadcast navigation message.
 
 ```
-uv run python src/prx/main.py --observation_file_path <path_to_rinex_file> --prx_level 2
+uv run python src/prx/main.py --observation_file_path <path_to_rinex_file> --prx_level 2 \
+    [--tropo {saastamoinen | unb3m}]
 ```
 
-| Parameters                       | Name in PRX file               | Status    |
-|----------------------------------|--------------------------------|-----------|
-| Satellite clock offset and drift | `sat_clock_offset_m`, `sat_clock_drift_mps`  | ✅       |
-| Relativistic clock effect        | `relativistic_clock_effect_m`    | ✅       |
-| Sagnac effect                    | `sagnac_effect_m`                | ✅       |
-| Tropospheric delay               | `tropo_delay_m`                  | ✅       |
-| Satellite code bias              | `sat_code_bias_m`                | ✅       |
-| Ionospheric delay                | `iono_delay_m`                   | ✅       |
+| Parameters                                       | Name in PRX file               | Status    |
+|--------------------------------------------------|--------------------------------|-----------|
+| Satellite clock offset and drift                 | `sat_clock_offset_m`, `sat_clock_drift_mps`  | ✅       |
+| Relativistic clock effect                        | `relativistic_clock_effect_m`    | ✅       |
+| Sagnac effect                                    | `sagnac_effect_m`                | ✅       |
+| Tropospheric delay (Saastamoinen or UNB3m model) | `tropo_delay_m`                  | ✅       |
+| Satellite code bias                              | `sat_code_bias_m`                | ✅       |
+| Ionospheric delay                                | `iono_delay_m`                   | ✅       |
 
 ---
 
