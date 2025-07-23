@@ -20,31 +20,32 @@ from prx.util import timestamp_to_mid_day
 log = logging.getLogger(__name__)
 
 ### Before gps week 2237
-priority_before_gps_week_2237 = [
-        ('igs'),    # IGS final solution
-        ('igr'),    # IGS rapid solution
-        ('cod'),    # CODE (3-day long solution)
-        ('grg'),
-        ('gfz'),
-        ('esa'),
-        ('mit'),    # MIT finale solution
-    ]
-        # WWWW/AAAWWWWD.TYP.Z
-        # D : day of week 0-6, 7 indicates weekly
-        # TYP : sp3
+# priority_before_gps_week_2237 = [
+#         ('cod'),    # CODE (3-day long solution)
+#         ('grg'),
+#         ('gfz'),
+#         ('esa'),
+#         ('igs'),    # IGS final solution
+#     ]
+#         # WWWW/AAAWWWWD.TYP.Z
+#         # D : day of week 0-6, 7 indicates weekly
+#         # TYP : sp3
 
 ### Since gps week 2238
 priority_since_gps_week_2238 = [
-        ('IGS','FIN'), 
-        ('IGS','RAP'),
-        ('GRG','FIN'),
-        ('COD','FIN'),
-        ('GFZ','FIN'), 
-        ('GRG','RAP'),
-        ('COD','RAP'),
-        ('ESA','FIN'),
-        ('GFZ','RAP'),
-        ('MIT','FIN')
+        ('COD', 'FIN'),   
+        ('GRG', 'FIN'),
+        ('GFZ', 'FIN'),
+        ('ESA', 'FIN'),
+        ('WUM', 'FIN'),
+        ('JAX', 'FIN'),
+        ('JPL', 'FIN'),
+        ('MIT', 'FIN'),
+        ('COD', 'RAP'),
+        ('GRG', 'RAP'),
+        ('GFZ', 'RAP'),
+        ('ESA', 'RAP'),
+        ('WUM', 'RAP'),
     ]
         # WWWW/AAA0PPPTYP_YYYYDDDHHMM_LEN_SMP_CNT.FMT.gz
         # PPP : MGX
@@ -61,18 +62,9 @@ def timestamp_to_gps_week_and_dow(ts: pd.Timestamp) -> tuple[int, int]:
     return gps_week, dow
 
 def get_index_of_priority_from_filename(filename : str, day : pd.Timestamp):
-    gps_week, _ = timestamp_to_gps_week_and_dow(day)
-    if gps_week < 2238 :
-        list_priority = priority_before_gps_week_2237
-    else : list_priority = priority_since_gps_week_2238
-    if list_priority == priority_before_gps_week_2237 :
-        for i, p in enumerate(list_priority):
-            if p in filename:
-                return i
-    else :
-        for i, p in enumerate(list_priority):
-            if p[0] in filename and p[1] in filename :
-                return i
+    for i, p in enumerate(priority_since_gps_week_2238):
+        if p[0] in filename and p[1] in filename :
+            return i
 
 def build_sp3_filename(gps_week, dow, day : pd.Timestamp, aaa_typ, priority):
     if priority == priority_since_gps_week_2238 :
@@ -81,8 +73,8 @@ def build_sp3_filename(gps_week, dow, day : pd.Timestamp, aaa_typ, priority):
         ddd = f"{day.day_of_year:03d}"
         aaa = aaa_typ[0]
         typ = aaa_typ[1]
-        sp3_filename = f"{aaa}0OPS{typ}_{yyyy}{ddd}*_01D_*_ORB.SP3.gz"
-        clk_filename = f"{aaa}0OPS{typ}_{yyyy}{ddd}*_01D_*_CLK.CLK.gz"
+        sp3_filename = f"{aaa}0MGX{typ}_{yyyy}{ddd}*_01D_*_ORB.SP3.gz"
+        clk_filename = f"{aaa}0MGX{typ}_{yyyy}{ddd}*_01D_*_CLK.CLK.gz"
         return sp3_filename, clk_filename
     else :
         # priority = priority_before_gps_week_2237
@@ -96,7 +88,7 @@ def build_sp3_filename(gps_week, dow, day : pd.Timestamp, aaa_typ, priority):
 
 
 def sp3_file_database_folder():
-    db_folder = Path(__file__).parent / "sp3_files"
+    db_folder = Path(__file__).parent / "test/datasets"
     db_folder.mkdir(exist_ok=True)
     return db_folder
 
@@ -128,7 +120,10 @@ def list_ftp_directory(server, folder):
 
 def try_downloading_sp3_ftp(gps_week, day : pd.Timestamp, folder : Path, pattern):
     server = "gssc.esa.int"
-    remote_folder = f"/gnss/products/{gps_week}"
+    if gps_week > 2237 :
+        remote_folder = f"/gnss/products/{gps_week}"
+    else : 
+        remote_folder = f"/gnss/products/{gps_week}/mgex"
     candidates = list_ftp_directory(server, remote_folder)
     candidates = [
         c
@@ -158,28 +153,23 @@ def try_downloading_sp3_ftp(gps_week, day : pd.Timestamp, folder : Path, pattern
 def get_sp3_file(mid_day_start: pd.Timestamp, mid_day_end: pd.Timestamp, db_folder = sp3_file_database_folder()):
     day = mid_day_start
     gps_week, dow = timestamp_to_gps_week_and_dow(day)
-    if gps_week < 2238 :
-        priority = priority_before_gps_week_2237
-    else : priority = priority_since_gps_week_2238
     while day <= mid_day_end:
-        for p in priority:
-            sp3_filename , clk_filename = build_sp3_filename(gps_week, dow, day, p, priority)
+        for p in priority_since_gps_week_2238:
+            sp3_filename , clk_filename = build_sp3_filename(gps_week, dow, day, p, priority_since_gps_week_2238)
             sp3_file = get_local_sp3(day, sp3_filename, db_folder)
-            # clk_file = get_local_sp3(day, clk_filename, db_folder)
+            clk_file = get_local_sp3(day, clk_filename, db_folder)
             if sp3_file is None :
                 sp3_file = try_downloading_sp3_ftp(
                     gps_week, day, sp3_file_folder(day, db_folder), sp3_filename
                 )
-            # if clk_file is None :
-            #     clk_file = try_downloading_sp3_ftp(
-            #         gps_week, day, sp3_file_folder(day, db_folder), clk_filename
-            #     )
-            # if sp3_file is not None and clk_file is not None:
-            #     return sp3_file, clk_file
-            if sp3_file is not None:
-                return sp3_file
+            if clk_file is None :
+                clk_file = try_downloading_sp3_ftp(
+                    gps_week, day, sp3_file_folder(day, db_folder), clk_filename
+                )
+            if sp3_file is not None and clk_file is not None:
+                return sp3_file, clk_file
         day += pd.Timedelta(1, unit="days")
-    return None
+    return None, None
 
 
 def discover_or_download_sp3_file(observation_file_path=Path()):
