@@ -55,7 +55,7 @@ def test_compare_to_georinex():
     assert georinex_output.equals(prx_output)
 
 
-def test_compare_to_georinex_with_lli(input_for_test_tlse):
+def test_compare_to_georinex_with_lli():
     file = converters.anything_to_rinex_3(
         Path(__file__).parent
         / "datasets"
@@ -121,7 +121,9 @@ def test_compare_to_georinex_with_lli(input_for_test_tlse):
 
 
 def test_basic_check_on_rinex(input_for_test_tlse):
-    prx_output = prx_obs_parse(input_for_test_tlse)
+    file = converters.anything_to_rinex_3(input_for_test_tlse)
+    repair_with_gfzrnx(file)
+    prx_output = prx_obs_parse(file)
     test_cases = [
         # (timestamp, svid, obs_type, expected_value)
         (

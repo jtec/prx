@@ -126,9 +126,3 @@ system_time_scale_rinex_utc_epoch = {
     # GLONASS time does not use weeks and week seconds, it has no epoch,
     "GLONASST": pd.NaT,
 }
-
-gfzrnx_binary = {
-    "Windows": "gfzrnx_217_win64.exe",
-    "Linux": "gfzrnx_217_lx64",
-    "Darwin": "gfzrnx_217_osx_intl64",
-}
