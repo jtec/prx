@@ -200,66 +200,6 @@ def test_is_sorted():
     assert util.is_sorted([])
 
 
-def test_gfzrnx_execution_on_obs_file(input_for_test):
-    """Check execution of gfzrnx on a RNX OBS file and check"""
-    # convert test file to RX3 format
-    file_obs = converters.anything_to_rinex_3(input_for_test["obs"])
-    # list all gfzrnx binaries contained in the folder "prx/tools/gfzrnx/"
-    path_folder_gfzrnx = util.prx_repository_root() / "src/prx/tools/gfzrnx"
-    path_binary = path_folder_gfzrnx.joinpath(
-        constants.gfzrnx_binary[platform.system()]
-    )
-    # assert len(gfzrnx_binaries) > 0, "Could not find any gfzrnx binary"
-    command = [
-        str(path_binary),
-        "-finp",
-        str(file_obs),
-        "-fout",
-        str(file_obs.parent.joinpath("gfzrnx_out.rnx")),
-    ]
-    result = subprocess.run(
-        command,
-        capture_output=True,
-    )
-    if result.returncode == 0:
-        log.info(
-            f"Ran gfzrnx file repair on {file_obs.name} with {constants.gfzrnx_binary[platform.system()]}"
-        )
-    else:
-        log.info(f"gfzrnx file repair run failed: {result}")
-
-    assert file_obs.parent.joinpath("gfzrnx_out.rnx").exists()
-
-
-def test_gfzrnx_execution_on_nav_file(input_for_test):
-    """Check execution of gfzrnx on a RNX NAV file and check"""
-    file_nav = converters.anything_to_rinex_3(input_for_test["nav"])
-    path_folder_gfzrnx = util.prx_repository_root() / "src/prx/tools/gfzrnx"
-    path_binary = path_folder_gfzrnx.joinpath(
-        constants.gfzrnx_binary[platform.system()]
-    )
-    # assert len(gfzrnx_binaries) > 0, "Could not find any gfzrnx binary"
-    command = [
-        str(path_binary),
-        "-finp",
-        str(file_nav),
-        "-fout",
-        str(file_nav.parent.joinpath("gfzrnx_out.rnx")),
-    ]
-    result = subprocess.run(
-        command,
-        capture_output=True,
-    )
-    if result.returncode == 0:
-        log.info(
-            f"Ran gfzrnx file repair on {file_nav.name} with {constants.gfzrnx_binary[platform.system()]}"
-        )
-    else:
-        log.info(f"gfzrnx file repair run failed: {result}")
-
-    assert file_nav.parent.joinpath("gfzrnx_out.rnx").exists()
-
-
 def test_gfzrnx_function_call(input_for_test):
     """Check function call of gfzrnx on a RNX OBS file and check"""
     file_nav = converters.anything_to_rinex_3(input_for_test["nav"])
