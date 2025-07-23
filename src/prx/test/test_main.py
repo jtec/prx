@@ -502,6 +502,43 @@ def test_prx_level_3(input_for_test_tlse):
         main.process(observation_file_path=input_for_test_tlse, prx_level=3)
 
 
+def test_function_call_with_alternative_tropo(input_for_test_tlse):
+    main.process(
+        observation_file_path=input_for_test_tlse, prx_level=2, model_tropo="unb3m"
+    )
+    expected_prx_file_unb3m = Path(str(input_for_test_tlse).replace("crx.gz", "csv"))
+    assert expected_prx_file_unb3m.exists()
+    df_unb3 = pd.read_csv(expected_prx_file_unb3m, comment="#")
+
+    main.process(
+        observation_file_path=input_for_test_tlse,
+        prx_level=2,
+        model_tropo="saastamoinen",
+    )
+    expected_prx_file_saas = Path(str(input_for_test_tlse).replace("crx.gz", "csv"))
+    assert expected_prx_file_saas.exists()
+    df_saas = pd.read_csv(expected_prx_file_saas, comment="#")
+
+    main.process(
+        observation_file_path=input_for_test_tlse,
+        prx_level=2,
+    )
+    expected_prx_file_default = Path(str(input_for_test_tlse).replace("crx.gz", "csv"))
+    assert expected_prx_file_default.exists()
+    df_default = pd.read_csv(expected_prx_file_default, comment="#")
+
+    # Verify that the tropo delay in each dataframe are equal or close
+    np.testing.assert_array_equal(df_default.tropo_delay_m, df_saas.tropo_delay_m)
+    # Difference are large especially for low elevation. The comparison is done after applying an elevation mask
+    np.testing.assert_allclose(
+        df_unb3.tropo_delay_m.loc[df_default.sat_elevation_deg > 10],
+        df_saas.tropo_delay_m.loc[df_default.sat_elevation_deg > 10],
+        atol=1,  # 1 m difference
+    )
+
+    assert True
+
+
 def test_bootstrap_coarse_receiver_position(input_for_test_tlse):
     # Download RNX NAV file
     aux_files = nav_file_discovery.discover_or_download_auxiliary_files(

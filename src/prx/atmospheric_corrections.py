@@ -460,4 +460,6 @@ def compute_tropo_delay(sat_states, flat_obs, receiver_ecef_position_m, model):
                 days_of_year,
                 sat_states.elevation_rad.to_numpy(),
             )
+        case _:
+            assert False, f"tropospheric model not recognized: {model}"
     return tropo_delay_m
