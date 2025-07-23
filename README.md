@@ -130,6 +130,16 @@ If you don't know how to open a PR, feel free to open an issue instead.
 
 ## Frequently Asked Questions
 
+### `prx` failed to process a RINEX file. What should I do?
+
+Some variations of the RINEX format may exist due to different software creating the RINEX file. Some variations may have not been encountered during the development of `prx`.
+
+The first recommendation is to get your RINEX file through `gfznx` ([website](https://gnss.gfz.de/services/gfzrnx)), a free but licenced tool performing quality control on RINEX files.
+
+If you have access to a `gfzrnx` binary, put it in a directory in `src/prx/tools/gfzrnx/`. `prx` will use it if it is detected at this location.
+
+If the process still fails, feel free to open an [issue](https://github.com/jtec/prx/issues) and share the file with us.
+
 ### How can I use my own RINEX NAV file?
 
 When processing your own GNSS data, your receiver may provide you both the RINEX OBS and NAV files. If you want to
