@@ -418,36 +418,46 @@ def compute_tropo_delay_unb3m(
     )
 
 
-def add_tropo_column(sat_states, flat_obs, receiver_ecef_position_m):
-    # We need Timestamps to compute tropo delays
-    sat_states = sat_states.merge(
-        flat_obs[
-            [
-                "satellite",
-                "time_of_emission_isagpst",
-                "time_of_reception_in_receiver_time",
-            ]
-        ].drop_duplicates(),
-        on=["satellite", "time_of_emission_isagpst"],
-        how="left",
-    )
+def compute_tropo_delay(sat_states, flat_obs, receiver_ecef_position_m, model):
+    """
+    model is either "saastamoinen" or "unb3m"
+    """
     [latitude_user_rad, __, height_user_m] = ecef_2_geodetic(receiver_ecef_position_m)
-    days_of_year = np.array(
-        sat_states["time_of_reception_in_receiver_time"]
-        .apply(lambda element: element.timetuple().tm_yday)
-        .to_numpy()
-    )
-    (
-        tropo_delay_m,
-        __,
-        __,
-        __,
-        __,
-    ) = compute_tropo_delay_unb3m(
-        latitude_user_rad * np.ones(days_of_year.shape),
-        height_user_m * np.ones(days_of_year.shape),
-        days_of_year,
-        sat_states.elevation_rad.to_numpy(),
-    )
-    # sat_states = sat_states.drop(columns=["time_of_reception_in_receiver_time"])
+    match model:
+        case "saastamoinen":
+            tropo_delay_m, _, _ = compute_tropo_delay_saastamoinen(
+                height_user_m * np.ones((len(sat_states),)),
+                sat_states.elevation_rad.to_numpy(),
+                latitude_user_rad * np.ones((len(sat_states),)),
+            )
+        case "unb3m":
+            # We need Timestamps to compute tropo delays
+            sat_states = sat_states.merge(
+                flat_obs[
+                    [
+                        "satellite",
+                        "time_of_emission_isagpst",
+                        "time_of_reception_in_receiver_time",
+                    ]
+                ].drop_duplicates(),
+                on=["satellite", "time_of_emission_isagpst"],
+                how="left",
+            )
+            days_of_year = np.array(
+                sat_states["time_of_reception_in_receiver_time"]
+                .apply(lambda element: element.timetuple().tm_yday)
+                .to_numpy()
+            )
+            (
+                tropo_delay_m,
+                __,
+                __,
+                __,
+                __,
+            ) = compute_tropo_delay_unb3m(
+                latitude_user_rad * np.ones((len(sat_states),)),
+                height_user_m * np.ones((len(sat_states),)),
+                days_of_year,
+                sat_states.elevation_rad.to_numpy(),
+            )
     return tropo_delay_m
