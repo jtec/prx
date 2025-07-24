@@ -17,6 +17,7 @@ from prx.user import (
     bootstrap_coarse_receiver_position,
 )
 from prx.rinex_nav import nav_file_discovery
+from prx.util import hash_of_file_content
 
 log = util.get_logger(__name__)
 
@@ -326,6 +327,8 @@ def test_spp_lsq_tlse_2024(input_for_test_tlse_2024):
 
     Allows to assess the faulty satellite's impact on positioning accuracy
     """
+    print(input_for_test_tlse_2024)
+    print(hash_of_file_content(input_for_test_tlse_2024))
     df, metadata = run_rinex_through_prx(input_for_test_tlse_2024)
     df["sv"] = df["constellation"].astype(str) + df["prn"].astype(str)
     df_first_epoch = df[
@@ -431,9 +434,9 @@ def test_prx_level_1(input_for_test_tlse):
     }
 
     # Checking if all renamed parameters exist in the dataframe columns
-    assert set(df.columns) == expected_column_names, (
-        f"Additional columns in computed prx file: {set(df.columns).difference(expected_column_names)}"
-    )
+    assert (
+        set(df.columns) == expected_column_names
+    ), f"Additional columns in computed prx file: {set(df.columns).difference(expected_column_names)}"
 
 
 def test_prx_level_2(input_for_test_tlse):
@@ -482,9 +485,9 @@ def test_prx_level_2(input_for_test_tlse):
     }
 
     # Checking if all renamed parameters exist in the dataframe columns
-    assert set(df.columns) == expected_column_names, (
-        f"Additional columns in computed prx file: {set(df.columns).difference(expected_column_names)}"
-    )
+    assert (
+        set(df.columns) == expected_column_names
+    ), f"Additional columns in computed prx file: {set(df.columns).difference(expected_column_names)}"
 
 
 def test_prx_level_3(input_for_test_tlse):
