@@ -7,6 +7,7 @@ from prx.rinex_nav.evaluate import (
     set_time_of_validity,
     parse_rinex_nav_file,
 )
+from prx.rinex_obs.parser import parse_rinex_obs_file
 from prx.sp3 import evaluate as sp3_evaluate
 from prx.rinex_nav import evaluate as rinex_nav_evaluate
 from prx import constants, converters, util
@@ -278,9 +279,9 @@ def test_compare_to_sp3(input_for_test):
         expected_max_difference,
     ) in expected_max_differences_broadcast_vs_precise.items():
         assert not diff[column].isnull().values.any()
-        assert diff[column].max() < expected_max_difference, (
-            f"Expected maximum difference {expected_max_difference} for column {column}, but got {diff[column].max()}"
-        )
+        assert (
+            diff[column].max() < expected_max_difference
+        ), f"Expected maximum difference {expected_max_difference} for column {column}, but got {diff[column].max()}"
 
 
 def test_sbas(input_for_test):
@@ -359,9 +360,9 @@ def test_2023_beidou_c27(set_up_test_2023):
     )
 
     rinex_sat_states = rinex_nav_evaluate.compute_parallel(rinex_nav_file, query.copy())
-    assert len(rinex_sat_states.index) == 1, (
-        "Was expecting only one row, make sure to sort before comparing to sp3 with more than one row"
-    )
+    assert (
+        len(rinex_sat_states.index) == 1
+    ), "Was expecting only one row, make sure to sort before comparing to sp3 with more than one row"
     rinex_sat_states = (
         rinex_sat_states.reset_index()
         .drop(
@@ -393,9 +394,9 @@ def test_2023_beidou_c27(set_up_test_2023):
         column,
         expected_max_difference,
     ) in expected_max_differences_broadcast_vs_precise.items():
-        assert diff[column].max() < expected_max_difference, (
-            f"Expected maximum difference {expected_max_difference} for column {column}, but got {diff[column].max()}"
-        )
+        assert (
+            diff[column].max() < expected_max_difference
+        ), f"Expected maximum difference {expected_max_difference} for column {column}, but got {diff[column].max()}"
 
 
 def test_group_delays(input_for_test):
@@ -767,7 +768,7 @@ def test_compute_health_flag(input_for_test_2):
     rinex_3_obs_file = converters.anything_to_rinex_3(
         input_for_test_2["rinex_obs_file"]
     )
-    query = util.parse_rinex_obs_file(rinex_3_obs_file)[["time", "sv", "obs_type"]]
+    query = parse_rinex_obs_file(rinex_3_obs_file)[["time", "sv", "obs_type"]]
     query.time = pd.to_datetime(query.time, format="%Y-%m-%dT%H:%M:%S")
     query.obs_type = query.obs_type.str[1:]
     query = query.loc[~query.obs_type.str.contains("lli")].reset_index(drop=True)
@@ -804,9 +805,9 @@ def test_compute_health_flag(input_for_test_2):
         mask = query["sv"].str.startswith(const)
         if mask.any():
             hf_values = query.loc[mask, "health_flag"].dropna()
-            assert hf_values.between(min_val, max_val).all(), (
-                f"Invalid health flag values {const}"
-            )
+            assert hf_values.between(
+                min_val, max_val
+            ).all(), f"Invalid health flag values {const}"
 
     # Verification of the value for some particular queries.
     # The reference value is read manually from the rinex NAV file

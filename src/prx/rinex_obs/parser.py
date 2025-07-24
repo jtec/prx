@@ -1,9 +1,19 @@
 import math
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
 import re
 
-from prx.util import dataframe_hash, hash_of_file_content
+from prx.util import (
+    dataframe_hash,
+    hash_of_file_content,
+    timeit,
+    disk_cache,
+    try_repair_with_gfzrnx,
+)
+
+logger = logging.getLogger(__name__)
 
 
 def get_obs_types(header):
@@ -111,3 +121,16 @@ def parse(file_path):
         group_dfs.append(group_df)
     result = pd.concat(group_dfs).sort_values(by=["time"]).reset_index(drop=True)
     return result
+
+
+@timeit
+def parse_rinex_obs_file(rinex_file_path: Path):
+    @disk_cache.cache(ignore=["rinex_file"])
+    def parse_rinex_obs_file_cached(rinex_file: Path, file_hash: str):
+        logger.info(f"Parsing {rinex_file} (hash {file_hash}) ...")
+        try_repair_with_gfzrnx(rinex_file)
+        return parse(rinex_file)
+
+    return parse_rinex_obs_file_cached(
+        rinex_file_path, hash_of_file_content(rinex_file_path)
+    )
