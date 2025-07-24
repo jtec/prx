@@ -38,8 +38,17 @@ priority = [
         # WWWW/AAA0PPPTYP_YYYYDDDHHMM_LEN_SMP_CNT.FMT.gz
         # PPP : MGX
         # CNT : ORB 
-        # FMT : SP3  
+        # FMT : SP3 
 
+# This priority list is applied starting from GPS week 2238, to select SP3 orbit and CLK files based on the preferred 
+# analysis centers and product types. Final ("FIN") products are prioritized due to their higher accuracy and reliability. 
+# When final products are unavailable, rapid ("RAP") products serve as a fallback. 
+# Among the analysis centers, COD, GRG, and GFZ are placed at the top based on their long-standing reputation for delivering 
+# precise and complete orbit solutions within the IGS community. ESA, WUM, JAX, JPL, and MIT follow, as they also provide 
+# high-quality products, but may differ slightly in availability, latency, or consistency.
+# Before GPS week 2238, the same type of SP3 files can be found, but they are stored in /{gps_week}/mgex directories, 
+# requiring a different file discovery logic.
+ 
 gps_epoch = pd.Timestamp("1980-01-06 00:00:00", tz="UTC")
 
 def timestamp_to_gps_week_and_dow(ts: pd.Timestamp) -> tuple[int, int]:
@@ -49,12 +58,12 @@ def timestamp_to_gps_week_and_dow(ts: pd.Timestamp) -> tuple[int, int]:
     dow = delta.days % 7    #day of week
     return gps_week, dow
 
-def get_index_of_priority_from_filename(filename : str, day : pd.Timestamp):
+def get_index_of_priority_from_filename(filename : str):
     for i, p in enumerate(priority):
         if p[0] in filename and p[1] in filename :
             return i
 
-def build_sp3_filename(gps_week, dow, day : pd.Timestamp, aaa_typ, priority):
+def build_sp3_filename(day : pd.Timestamp, aaa_typ):
     # aaa_typ : tuple of str (aaa, typ)
     yyyy = day.year
     ddd = f"{day.day_of_year:03d}"
@@ -130,10 +139,10 @@ def try_downloading_sp3_ftp(gps_week, day : pd.Timestamp, folder : Path, pattern
 
 def get_sp3_file(mid_day_start: pd.Timestamp, mid_day_end: pd.Timestamp, db_folder = sp3_file_database_folder()):
     day = mid_day_start
-    gps_week, dow = timestamp_to_gps_week_and_dow(day)
+    gps_week, _ = timestamp_to_gps_week_and_dow(day)
     while day <= mid_day_end:
         for p in priority:
-            sp3_filename , clk_filename = build_sp3_filename(gps_week, dow, day, p, priority)
+            sp3_filename , clk_filename = build_sp3_filename(day, p)
             sp3_file = get_local_sp3(day, sp3_filename, db_folder)
             clk_file = get_local_sp3(day, clk_filename, db_folder)
             if sp3_file is None :

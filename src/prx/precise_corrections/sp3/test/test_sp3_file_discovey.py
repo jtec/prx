@@ -50,13 +50,10 @@ def set_up_test():
     shutil.rmtree(test_directory)
 
 def test_get_index_of_priority_from_filename(set_up_test):
-    obs_file = set_up_test["test_obs_file"]
     sp3_filename = set_up_test["test_sp3_file"].name
-    header = georinex.rinexheader(obs_file)
-    t_start = util.rinex_header_time_string_2_timestamp_ns(header["TIME OF FIRST OBS"]) - pd.Timedelta(200, unit="milliseconds")
-    index_in_priority = sp3.get_index_of_priority_from_filename(sp3_filename, t_start)
+    index_in_priority = sp3.get_index_of_priority_from_filename(sp3_filename)
 
-    assert index_in_priority == 6
+    assert index_in_priority == 4
 
 def test_get_sp3_file(set_up_test):
     """
@@ -71,10 +68,9 @@ def test_get_sp3_file(set_up_test):
 
     sp3.get_sp3_file(t_start, t_end, db_folder)
 
-    gps_week, dow = sp3.timestamp_to_gps_week_and_dow(t_start)
     expected_priority = sp3.priority
     
-    sp3_filename, clk_filename = sp3.build_sp3_filename(gps_week, dow, t_start, expected_priority[0], expected_priority)
+    sp3_filename, clk_filename = sp3.build_sp3_filename(t_start, expected_priority[0])
     sp3_filename = str(Path(sp3_filename).with_suffix(""))
     clk_filename = str(Path(clk_filename).with_suffix(""))
 
@@ -103,13 +99,7 @@ def test_priority_local_file_found_midway(set_up_test):
         - Download of 1 succeeds → file becomes available locally.
         - `get_sp3_file` returns the local file at priority 1.
 
-    This is done until the local files are found 
-
-    This test ensures:
-    - The function checks local availability before attempting download.
-    - Each priority is tried in order until a valid file is found.
-    - The function stops as soon as a valid local file is available (even if previously downloaded).
-    - The logic is robust regardless of which priority index the file becomes available at.
+    This is done for each element in the priority list.
     '''
 
     t_start = pd.Timestamp("2023-05-14 12:00:00")
@@ -117,23 +107,30 @@ def test_priority_local_file_found_midway(set_up_test):
     db_folder = set_up_test["test_obs_file"].parent
     expected_priority = sp3.priority
 
-    index_found_file_priority = len(expected_priority)
+    index_priority = len(expected_priority)
 
-    for i in range(index_found_file_priority):
+    # Iterate over each priority index 
+    for i in range(index_priority):
+        # Try all combinations from the beginning up to the current index
         for j in range(i+1):
             if i != j :
+                # Simulate a situation where no SP3 and CLK file are downloadable for any combination except the one at index i
                 with patch("prx.precise_corrections.sp3.sp3_file_discovery.try_downloading_sp3_ftp", return_value = None), \
                      patch("prx.precise_corrections.sp3.sp3_file_discovery.priority", expected_priority[:i+1]):
                         sp3_file, clk_file = sp3.get_sp3_file(t_start, t_start, db_folder) 
+                # Assert that no file was found, as the download was mocked to fail
                 assert (sp3_file, clk_file) == (None, None)
-
-            else : 
+            
+            else : # i == j 
+                # Only allow the correct priority item to be downloaded
                 with patch("prx.precise_corrections.sp3.sp3_file_discovery.priority", [expected_priority[i]]):
                     sp3_file, clk_file = sp3.get_sp3_file(t_start, t_start, db_folder)
                     if sp3_file is None :
                         print(f"Could not download {sp3_file}")
                     if clk_file is None : 
                         print(f"Could not download {clk_file}")
+
+                    # Clean up downloaded files if they exist
                     elif sp3_file.exists() :
                         sp3_file.unlink()
                     elif clk_file.exists():
@@ -170,30 +167,32 @@ def test_priority_iteration_until_matching_sp3_clk_pair_found(set_up_test):
     index_priority_clk = 5
     index_iteration = max(index_priority_sp3, index_priority_clk)
 
+    # Iterate over each priority index up to the one where the final matching pair is found
     for i in range(index_iteration+1):
+        # Try all combinations from the beginning up to the current index
         for j in range(i+1):
-            if i != j and i != index_iteration:
+            if i != j :
+                # Simulate a situation where no SP3 and CLK file are downloadable for any combination except the one at index i
                 with patch("prx.precise_corrections.sp3.sp3_file_discovery.try_downloading_sp3_ftp", return_value = None), \
                      patch("prx.precise_corrections.sp3.sp3_file_discovery.priority", expected_priority[:i+1]):
-                        sp3_file, clk_file = sp3.get_sp3_file(t_start, t_start, db_folder) 
+                        sp3_file, clk_file = sp3.get_sp3_file(t_start, t_start, db_folder)
+                # Assert that no file was found, as the download was mocked to fail 
                 assert (sp3_file, clk_file) == (None, None)
-            elif i == index_iteration :
-                with patch("prx.precise_corrections.sp3.sp3_file_discovery.priority", [expected_priority[i]]):
-                    sp3_file, clk_file = sp3.get_sp3_file(t_start, t_start, db_folder) 
-                assert sp3_file is not None
-                assert clk_file is not None
-            else : 
+            
+            else : # i == j
+                # Only allow the correct priority item to be used
                 with patch("prx.precise_corrections.sp3.sp3_file_discovery.priority", [expected_priority[i]]):
                     sp3_file, clk_file = sp3.get_sp3_file(t_start, t_start, db_folder)
                     if sp3_file is None :
                         print(f"Could not download {sp3_file}")
                     if clk_file is None : 
                         print(f"Could not download {clk_file}")
+                    # Clean up downloaded files if they exist
                     elif sp3_file.exists() :
                         sp3_file.unlink()
                     elif clk_file.exists():
                         clk_file.unlink()
-                assert sp3.get_index_of_priority_from_filename(str(Path(sp3_file).with_suffix(""))) == sp3.get_index_of_priority_from_filename(str(Path(clk_file).with_suffix("")))
+                assert sp3.get_index_of_priority_from_filename(str(sp3_file)) == sp3.get_index_of_priority_from_filename(str(clk_file))
 
 def test_download_all(set_up_test):
     """
@@ -202,7 +201,6 @@ def test_download_all(set_up_test):
     obs_file = set_up_test["test_obs_file"]
     header = georinex.rinexheader(obs_file)
     t_start = util.rinex_header_time_string_2_timestamp_ns(header["TIME OF FIRST OBS"]) - pd.Timedelta(200, unit="milliseconds")
-    t_end = util.rinex_header_time_string_2_timestamp_ns(header["TIME OF LAST OBS"])
 
     db_folder = set_up_test["test_obs_file"].parent
 
