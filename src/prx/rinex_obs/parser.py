@@ -3,6 +3,8 @@ import numpy as np
 import pandas as pd
 import re
 
+from prx.util import dataframe_hash
+
 
 def get_obs_types(header):
     types = []
@@ -55,11 +57,12 @@ def parse(file_path):
     df["records"] = df.records.str.pad(padded_length, side="right", fillchar=" ")
     df["sv"] = df.records.str[:sat_prefix_length]
     df["records"] = df.records.str[sat_prefix_length:]
-    assert np.isclose(
-        df.records.str.len().max() % block_length, 0
-    ), "Expect padded rows to be an integer multiple of block_length"
+    assert np.isclose(df.records.str.len().max() % block_length, 0), (
+        "Expect padded rows to be an integer multiple of block_length"
+    )
     # Insert character we can split on
     df.records = df.records.str.findall("." * block_length).map("|".join)
+    print(f"df hash: {dataframe_hash(df)}")
     print(df.to_string(max_rows=100))
     obs = (
         df.records.str.split("|", expand=True)

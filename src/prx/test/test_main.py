@@ -434,9 +434,9 @@ def test_prx_level_1(input_for_test_tlse):
     }
 
     # Checking if all renamed parameters exist in the dataframe columns
-    assert (
-        set(df.columns) == expected_column_names
-    ), f"Additional columns in computed prx file: {set(df.columns).difference(expected_column_names)}"
+    assert set(df.columns) == expected_column_names, (
+        f"Additional columns in computed prx file: {set(df.columns).difference(expected_column_names)}"
+    )
 
 
 def test_prx_level_2(input_for_test_tlse):
@@ -485,9 +485,9 @@ def test_prx_level_2(input_for_test_tlse):
     }
 
     # Checking if all renamed parameters exist in the dataframe columns
-    assert (
-        set(df.columns) == expected_column_names
-    ), f"Additional columns in computed prx file: {set(df.columns).difference(expected_column_names)}"
+    assert set(df.columns) == expected_column_names, (
+        f"Additional columns in computed prx file: {set(df.columns).difference(expected_column_names)}"
+    )
 
 
 def test_prx_level_3(input_for_test_tlse):
