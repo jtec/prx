@@ -27,8 +27,8 @@ log = util.get_logger(__name__)
 # whatever is passed to `yield` to the test function, and run the code after `yield` after the test,
 # even if the test crashes.
 @pytest.fixture
-def input_for_test_tlse():
-    test_directory = Path(f"./tmp_test_directory_{__name__}").resolve()
+def input_for_test_tlse(tmp_path_factory):
+    test_directory = tmp_path_factory.mktemp("test_inputs")
     if test_directory.exists():
         # Make sure the expected file has not been generated before and is still on disk due to e.g. a previous
         # test run having crashed:
@@ -55,8 +55,8 @@ def input_for_test_tlse():
 
 
 @pytest.fixture
-def input_for_test_tlse_2024():
-    test_directory = Path(f"./tmp_test_directory_{__name__}").resolve()
+def input_for_test_tlse_2024(tmp_path_factory):
+    test_directory = tmp_path_factory.mktemp("test_inputs")
     if test_directory.exists():
         # Make sure the expected file has not been generated before and is still on disk due to e.g. a previous
         # test run having crashed:
@@ -83,8 +83,8 @@ def input_for_test_tlse_2024():
 
 
 @pytest.fixture
-def input_for_test_nist():
-    test_directory = Path(f"./tmp_test_directory_{__name__}").resolve()
+def input_for_test_nist(tmp_path_factory):
+    test_directory = tmp_path_factory.mktemp("test_inputs")
     if test_directory.exists():
         # Make sure the expected file has not been generated before and is still on disk due to e.g. a previous
         # test run having crashed:
@@ -111,10 +111,10 @@ def input_for_test_nist():
 
 
 @pytest.fixture
-def input_for_test_with_first_epoch_at_midnight():
+def input_for_test_with_first_epoch_at_midnight(tmp_path_factory):
     # Having a first epoch at midnight requires to have the NAV data from the previous day, because we are computing
     # the time of emission as (time of reception - pseudorange/celerity)
-    test_directory = Path(f"./tmp_test_directory_{__name__}").resolve()
+    test_directory = tmp_path_factory.mktemp("test_inputs")
     if test_directory.exists():
         # Make sure the expected file has not been generated before and is still on disk due to e.g. a previous
         # test run having crashed:
@@ -151,7 +151,7 @@ def input_for_test_with_first_epoch_at_midnight():
 def test_prx_command_line_call(input_for_test_tlse):
     test_file = input_for_test_tlse
     prx_path = util.prx_repository_root() / "src/prx/main.py"
-    command = f"python {prx_path} --observation_file_path {test_file}"
+    command = f"uv run python {prx_path} --observation_file_path {test_file}"
     result = subprocess.run(
         command, capture_output=True, shell=True, cwd=str(test_file.parent)
     )

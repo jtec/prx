@@ -145,7 +145,7 @@ def build_metadata(input_files):
         for file in files
     ]
     prx_metadata["prx_git_commit_id"] = git.Repo(
-        search_parent_directories=True
+        path=Path(__file__).parent, search_parent_directories=True
     ).head.object.hexsha
     return prx_metadata
 
