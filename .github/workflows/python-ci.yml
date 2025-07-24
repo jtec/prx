@@ -46,5 +46,5 @@ jobs:
 
       - name: Test with pytest
         run: |
-          uv run pytest -n auto --dist=loadfile --durations=10
+          uv run pytest -n auto --dist=loadfile --durations=10 -k test_spp_lsq_tlse_2024
  

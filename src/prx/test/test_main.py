@@ -357,7 +357,7 @@ def test_spp_lsq_tlse_2024(input_for_test_tlse_2024):
     )
     log.info(f"Position offset: {position_offset_without_G27}")
 
-    # Verification: the position error significantly decrease when excluding G27
+    # Verification: the position error significantly decreases when excluding G27
     assert np.linalg.norm(position_offset_without_G27) < np.linalg.norm(position_offset)
     # Verification: the position error without G27 is within tolerance
     assert np.max(np.abs(position_offset_without_G27)) < 1e1
