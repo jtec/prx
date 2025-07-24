@@ -9,7 +9,7 @@ from joblib import Parallel, delayed
 import georinex
 from prx import util
 from prx import constants
-from prx.util import timeit, repair_with_gfzrnx
+from prx.util import timeit, try_repair_with_gfzrnx
 
 log = logging.getLogger(__name__)
 
@@ -18,7 +18,7 @@ log = logging.getLogger(__name__)
 def parse_rinex_nav_file(rinex_file: Path):
     @util.disk_cache.cache(ignore=["rinex_file_path"])
     def cached_load(rinex_file_path: Path, file_hash: str):
-        repair_with_gfzrnx(rinex_file)
+        try_repair_with_gfzrnx(rinex_file)
         ds = georinex.load(rinex_file)
         ds.attrs["utc_gpst_leap_seconds"] = util.get_gpst_utc_leap_seconds(
             rinex_file_path

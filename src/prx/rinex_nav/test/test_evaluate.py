@@ -35,16 +35,9 @@ expected_max_differences_broadcast_vs_precise = {
 }
 
 
-@pytest.fixture
-def input_for_test():
-    test_directory = (
-        Path(__file__).parent.joinpath(f"./tmp_test_directory_{__name__}").resolve()
-    )
-    if test_directory.exists():
-        # Start from empty directory, might avoid hiding some subtle bugs, e.g.
-        # file decompression not working properly
-        shutil.rmtree(test_directory)
-    os.makedirs(test_directory)
+@pytest.fixture(scope="session")
+def input_for_test(tmp_path_factory):
+    test_directory = tmp_path_factory.mktemp("test_inputs")
     test_files = {
         "rinex_obs_file": test_directory
         / "TLSE00FRA_R_20220010000_01D_30S_MO.rnx_slice_0.24h.rnx",
@@ -93,6 +86,8 @@ def test_parse_nav_file(input_for_test):
     df = parse_rinex_nav_file(path_to_rnx3_nav_file)
     assert not df.empty
     assert df["source"].nunique() == 1
+    a = df["source"].iloc[0]
+    b = str(path_to_rnx3_nav_file.resolve())
     assert df["source"].iloc[0] == str(path_to_rnx3_nav_file.resolve())
 
 

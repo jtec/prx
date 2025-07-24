@@ -42,7 +42,7 @@ def try_downloading_ephemerides_http(day: pd.Timestamp, local_destination_folder
         local_file = converters.compressed_to_uncompressed(local_compressed_file)
         os.remove(local_compressed_file)
         log.info(f"Downloaded broadcast ephemerides file from {url}")
-        prx.util.repair_with_gfzrnx(local_file)
+        prx.util.try_repair_with_gfzrnx(local_file)
         return local_file
     except Exception as e:
         log.warning(f"Could not download broadcast ephemerides file for {day}: {e}")
@@ -85,7 +85,7 @@ def try_downloading_ephemerides_ftp(day: pd.Timestamp, folder: Path):
     local_file = converters.compressed_to_uncompressed(local_compressed_file)
     os.remove(local_compressed_file)
     log.info(f"Downloaded broadcast ephemerides file {ftp_file}")
-    prx.util.repair_with_gfzrnx(local_file)
+    prx.util.try_repair_with_gfzrnx(local_file)
     return local_file
 
 

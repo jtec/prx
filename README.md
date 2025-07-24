@@ -24,7 +24,8 @@ uv sync
 uv run python src/prx/main.py --observation_file_path <path_to_rinex_file> 
 ```
 
-You can specify `--prx_level` according to the type of computation you need. `--prx_level 1` is adapted for DGNSS or RTK processing, `--prx_level 2` is adapted for SPP processing and is the default value.
+You can specify `--prx_level` according to the type of computation you need. `--prx_level 1` is adapted for DGNSS or RTK
+processing, `--prx_level 2` is adapted for SPP processing and is the default value.
 
 You might have to add `<path to prx root>/src/prx` to your `PYTHONPATH` environment variable if you run
 into import errors.
@@ -60,10 +61,10 @@ our virtual environment - and add it to `pyproject.toml` and `uv.lock`.
 
 ## Testing
 
-Run `uv run pytest` in the `prx` repository root to run all tests.
-Run `uv run pytest -x` to stop after the first test that fails.
+Run `uv run pytest -n auto` in the `prx` repository root to run all tests.
+Run `uv run pytest -n auto -x` to stop after the first test that fails.
 Run `uv run pytest -k "my_test"` to run a specific test
-Run `uv run pytest ---durations=10` to run all tests and have pytest list the 10 longest running tests.
+Run `uv run pytest -n auto ---durations=10` to run all tests and have pytest list the 10 longest running tests.
 
 ## Coding style
 
@@ -132,13 +133,15 @@ If you don't know how to open a PR, feel free to open an issue instead.
 
 ### `prx` failed to process a RINEX file. What should I do?
 
-Some variations of the RINEX format may exist due to different software creating the RINEX file. Some variations may have not been encountered during the development of `prx`.
+Not all RINEX encoders implement the standard perfectly. If a variation is not covered by `prx`'s tests, `prx` can fail
+in unexpected ways.
 
-The first recommendation is to get your RINEX file through `gfznx` ([website](https://gnss.gfz.de/services/gfzrnx)), a free but licenced tool performing quality control on RINEX files.
+If that happens, the first recommendation is to run your RINEX file through
+`gfznx` ([website](https://gnss.gfz.de/services/gfzrnx)), a tool performing quality control and repair on RINEX files.
 
-If you have access to a `gfzrnx` binary, put it in a directory in `src/prx/tools/gfzrnx/`. `prx` will use it if it is detected at this location.
-
-If the process still fails, feel free to open an [issue](https://github.com/jtec/prx/issues) and share the file with us.
+If `gfzrnx` is on your path, `prx` will run it to repair each file automatically.
+If the process still fails, feel free to open an [issue](https://github.com/jtec/prx/issues) and share the offending
+RINEX file with us.
 
 ### How can I use my own RINEX NAV file?
 
