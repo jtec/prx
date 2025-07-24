@@ -13,8 +13,8 @@ from prx import converters
 
 
 @pytest.fixture
-def set_up_test():
-    test_directory = Path(f"./tmp_test_directory_{__name__}").resolve()
+def set_up_test(tmp_path_factory):
+    test_directory = tmp_path_factory.mktemp("test_inputs")
     if test_directory.exists():
         # Make sure the expected files has not been generated before and is still on disk due to e.g. a previous
         # test run having crashed:

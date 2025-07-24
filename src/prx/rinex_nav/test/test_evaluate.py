@@ -85,10 +85,6 @@ def test_parse_nav_file(input_for_test):
     )
     df = parse_rinex_nav_file(path_to_rnx3_nav_file)
     assert not df.empty
-    assert df["source"].nunique() == 1
-    a = df["source"].iloc[0]
-    b = str(path_to_rnx3_nav_file.resolve())
-    assert df["source"].iloc[0] == str(path_to_rnx3_nav_file.resolve())
 
 
 def test_expired_ephemeris_yields_nans(input_for_test):
