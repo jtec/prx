@@ -42,6 +42,11 @@ def get_obs_types(header):
 def parse(file_path):
     print(f"file: {file_path}")
     print(f"file hash: {hash_of_file_content(file_path)}")
+    if "_MN.rnx" in str(file_path):
+        raise ValueError(
+            "This function is for parsing RINEX observation files, not navigation files."
+        )
+
     df = pd.read_csv(file_path, sep="|", header=None)
     df.columns = ["lines"]
     i_end_of_header = df[df.lines.str.contains("END OF HEADER")].index[0]
