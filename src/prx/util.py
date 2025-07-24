@@ -456,19 +456,6 @@ def obs_dataset_to_obs_dataframe(ds: xarray.Dataset):
     return flat_obs
 
 
-@timeit
-def parse_rinex_obs_file(rinex_file_path: Path):
-    @disk_cache.cache(ignore=["rinex_file"])
-    def parse_rinex_obs_file_cached(rinex_file: Path, file_hash: str):
-        logger.info(f"Parsing {rinex_file} (hash {file_hash}) ...")
-        try_repair_with_gfzrnx(rinex_file)
-        return prx_obs_parse(rinex_file)
-
-    return parse_rinex_obs_file_cached(
-        rinex_file_path, hash_of_file_content(rinex_file_path)
-    )
-
-
 def get_gpst_utc_leap_seconds(rinex_file: Path):
     leap_seconds_astropy = compute_gps_utc_leap_seconds(
         yyyy=int(rinex_file.name[12:16]), doy=int(rinex_file.name[16:19])
