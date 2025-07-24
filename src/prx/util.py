@@ -35,6 +35,7 @@ def file_exists_and_can_read_first_line(file: Path):
 def is_rinex_3_obs_file(file: Path):
     first_line = file_exists_and_can_read_first_line(file)
     print(f"is_rinex_3_obs_file first line {first_line}")
+    print(f"is_rinex_3_obs_file: {file.name} file_hash: {hash_of_file_content(file)}")
     if first_line is None:
         return False
     if "RINEX VERSION" not in first_line or "3.0" not in first_line:
