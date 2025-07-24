@@ -155,25 +155,22 @@ def check_assumptions(
 ):
     obs_header = georinex.rinexheader(rinex_3_obs_file)
     if "RCV CLOCK OFFS APPL" in obs_header.keys():
-        assert (
-            obs_header["RCV CLOCK OFFS APPL"].strip() == "0"
-        ), "Handling of 'RCV CLOCK OFFS APPL' != 0 not implemented yet."
-    assert (
-        obs_header["TIME OF FIRST OBS"].split()[-1].strip() == "GPS"
-    ), "Handling of observation files using time scales other than GPST not implemented yet."
+        assert obs_header["RCV CLOCK OFFS APPL"].strip() == "0", (
+            "Handling of 'RCV CLOCK OFFS APPL' != 0 not implemented yet."
+        )
+    assert obs_header["TIME OF FIRST OBS"].split()[-1].strip() == "GPS", (
+        "Handling of observation files using time scales other than GPST not implemented yet."
+    )
 
 
 def parse_rinex_nav_or_obs_file(rinex_file_path: Path):
-    print(f"Parsing RINEX file {rinex_file_path}")
-    print("Is obs file:", is_rinex_3_obs_file(rinex_file_path))
-    print("Is nav file:", is_rinex_3_nav_file(rinex_file_path))
     if is_rinex_3_obs_file(rinex_file_path):
         return parse_rinex_obs_file(rinex_file_path)
     elif is_rinex_3_nav_file(rinex_file_path):
         return parse_rinex_nav_file(rinex_file_path)
-    assert (
-        False
-    ), f"File {rinex_file_path} appears to be neither RINEX 3 OBS nor NAV file."
+    assert False, (
+        f"File {rinex_file_path} appears to be neither RINEX 3 OBS nor NAV file."
+    )
 
 
 def warm_up_parser_cache(rinex_files):
@@ -419,9 +416,9 @@ def process(observation_file_path: Path, prx_level=2):
                 prx_level,
             )
         case 3:
-            assert (
-                False
-            ), "prx level 3 (precise corrections for ppp) not implemented yet..."
+            assert False, (
+                "prx level 3 (precise corrections for ppp) not implemented yet..."
+            )
     return write_prx_file(
         metadata,
         records,
