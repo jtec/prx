@@ -10,6 +10,7 @@ import prx.util
 import requests
 
 from prx import converters, util
+from prx.converters import anything_to_rinex_3
 from prx.util import timestamp_to_mid_day
 from prx.util import is_rinex_3_nav_file
 
@@ -157,7 +158,9 @@ def discover_or_download_ephemerides(
 ):
     # If there are any navigation files provided by the user, use them, otherwise use IGS files.
     user_provided_nav_files = [
-        f for f in folder.rglob("*.rnx") if is_rinex_3_nav_file(f)
+        anything_to_rinex_3(f)
+        for f in folder.rglob("*")
+        if is_rinex_3_nav_file(anything_to_rinex_3(f))
     ]
     if len(user_provided_nav_files) > 0:
         return user_provided_nav_files

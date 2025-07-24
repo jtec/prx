@@ -17,7 +17,6 @@ from prx.user import (
     bootstrap_coarse_receiver_position,
 )
 from prx.rinex_nav import nav_file_discovery
-from prx.util import hash_of_file_content
 
 log = util.get_logger(__name__)
 
@@ -327,8 +326,6 @@ def test_spp_lsq_tlse_2024(input_for_test_tlse_2024):
 
     Allows to assess the faulty satellite's impact on positioning accuracy
     """
-    print(input_for_test_tlse_2024)
-    print(hash_of_file_content(input_for_test_tlse_2024))
     df, metadata = run_rinex_through_prx(input_for_test_tlse_2024)
     df["sv"] = df["constellation"].astype(str) + df["prn"].astype(str)
     df_first_epoch = df[
