@@ -1,5 +1,3 @@
-import hashlib
-import io
 import logging
 import math
 import os
@@ -499,14 +497,3 @@ def compute_gps_utc_leap_seconds(yyyy: int, doy: int):
             break
     assert ~np.isnan(ls), "GPS leap second could not be retrieved"
     return ls
-
-
-# Using https://stackoverflow.com/a/62754084/2567449
-def dataframe_hash(df: pd.DataFrame) -> str:
-    # A fast way to hash a DataFrame
-    buffer = io.StringIO()
-    df.info(buf=buffer)
-    row_hashes = pd.util.hash_pandas_object(df).to_numpy()
-    assert isinstance(row_hashes, np.ndarray)
-    row_digest = hashlib.sha1(row_hashes.tobytes()).hexdigest()  # noqa: S324
-    return hashlib.sha1(f"{row_digest}-{buffer.getvalue()}".encode()).hexdigest()  # noqa: S324
