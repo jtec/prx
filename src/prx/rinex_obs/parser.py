@@ -7,7 +7,6 @@ import pandas as pd
 import re
 
 from prx.util import (
-    dataframe_hash,
     hash_of_file_content,
     timeit,
     disk_cache,
@@ -40,13 +39,6 @@ def get_obs_types(header):
 
 
 def parse(file_path):
-    print(f"file: {file_path}")
-    print(f"file hash: {hash_of_file_content(file_path)}")
-    if "_MN.rnx" in str(file_path):
-        raise ValueError(
-            "This function is for parsing RINEX observation files, not navigation files."
-        )
-
     df = pd.read_csv(file_path, sep="|", header=None)
     df.columns = ["lines"]
     i_end_of_header = df[df.lines.str.contains("END OF HEADER")].index[0]
@@ -75,13 +67,11 @@ def parse(file_path):
     df["records"] = df.records.str.pad(padded_length, side="right", fillchar=" ")
     df["sv"] = df.records.str[:sat_prefix_length]
     df["records"] = df.records.str[sat_prefix_length:]
-    assert np.isclose(
-        df.records.str.len().max() % block_length, 0
-    ), "Expect padded rows to be an integer multiple of block_length"
+    assert np.isclose(df.records.str.len().max() % block_length, 0), (
+        "Expect padded rows to be an integer multiple of block_length"
+    )
     # Insert character we can split on
     df.records = df.records.str.findall("." * block_length).map("|".join)
-    print(f"df hash: {dataframe_hash(df)}")
-    print(df.to_string(max_rows=100))
     obs = (
         df.records.str.split("|", expand=True)
         .stack()
