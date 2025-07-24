@@ -1,9 +1,8 @@
-import glob
 import logging
 import math
 import os
-import platform
 import re
+import shutil
 import subprocess
 from functools import wraps
 from pathlib import Path
@@ -84,20 +83,18 @@ def timeit(func):
 
 
 @timeit
-def repair_with_gfzrnx(file):
+def try_repair_with_gfzrnx(file):
     with open(file) as f:
         if "gfzrnx" in f.read():
             logging.warning(f"File {file} already contains 'gfzrnx', skipping repair.")
             return file
-    path_folder_gfzrnx = Path(__file__).parent.joinpath("tools", "gfzrnx")
-    if path_folder_gfzrnx.exists():
-        binary_name = glob.glob("gfzrnx_*", root_dir=path_folder_gfzrnx)
-        assert len(binary_name) == 1, (
-            "Several `gfzrnx` binaries found in 'src/prx/tools/gfzrnx/' folder. Keep only a single one."
-        )
-        path_binary = path_folder_gfzrnx.joinpath(binary_name[0])
+        if shutil.which("gfzrnx") is None:
+            logger.info(
+                "gfzrnx binary not found (try adding it to PATH), skipping repair..."
+            )
+            return file
         command = [
-            str(path_binary),
+            "gfzrnx",
             "-finp",
             str(file),
             "-fout",
@@ -128,8 +125,6 @@ def repair_with_gfzrnx(file):
         else:
             logger.info(f"gfzrnx file repair run failed: {result}")
             assert False
-    else:
-        logger.info("gfzrnx binary not found in 'src/prx/tools/'. Skipping repair...")
     return file
 
 
@@ -465,7 +460,7 @@ def parse_rinex_obs_file(rinex_file_path: Path):
     @disk_cache.cache(ignore=["rinex_file"])
     def parse_rinex_obs_file_cached(rinex_file: Path, file_hash: str):
         logger.info(f"Parsing {rinex_file} (hash {file_hash}) ...")
-        repair_with_gfzrnx(rinex_file)
+        try_repair_with_gfzrnx(rinex_file)
         return prx_obs_parse(rinex_file)
 
     return parse_rinex_obs_file_cached(

@@ -394,7 +394,7 @@ def process(observation_file_path: Path, prx_level=2):
         f"Starting processing {observation_file_path.name} (full path {observation_file_path})"
     )
     rinex_3_obs_file = converters.anything_to_rinex_3(observation_file_path)
-    rinex_3_obs_file = prx.util.repair_with_gfzrnx(rinex_3_obs_file)
+    rinex_3_obs_file = prx.util.try_repair_with_gfzrnx(rinex_3_obs_file)
     prx_file = rinex_3_obs_file.with_suffix("")
     match prx_level:
         case 1 | 2:

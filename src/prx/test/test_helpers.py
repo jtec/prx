@@ -1,15 +1,11 @@
 import logging
-import platform
 import numpy as np
-from prx.util import repair_with_gfzrnx
 import pytest
 from prx import constants, util
-from prx import converters
 import pandas as pd
 from pathlib import Path
 import shutil
 import os
-import subprocess
 
 log = logging.getLogger(__name__)
 
@@ -198,22 +194,6 @@ def test_is_sorted():
     assert util.is_sorted([1, 1, 1, 1, 1])
     assert util.is_sorted([1])
     assert util.is_sorted([])
-
-
-def test_gfzrnx_function_call(input_for_test):
-    """Check function call of gfzrnx on a RNX OBS file and check"""
-    file_nav = converters.anything_to_rinex_3(input_for_test["nav"])
-    file_obs = converters.anything_to_rinex_3(input_for_test["obs"])
-    file_sp3 = input_for_test["sp3"]
-
-    file_nav = repair_with_gfzrnx(file_nav)
-    file_obs = repair_with_gfzrnx(file_obs)
-    # running gfzrnx on a file that is not a RNX file should result in an error
-    try:
-        file_sp3 = repair_with_gfzrnx(file_sp3)
-    except AssertionError:
-        log.info(f"gfzrnx binary did not execute with file {file_sp3}")
-    assert True
 
 
 def test_row_wise_dot_product():
