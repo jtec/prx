@@ -1,5 +1,3 @@
-
-
 import argparse
 import logging
 from ftplib import FTP
@@ -21,49 +19,52 @@ log = logging.getLogger(__name__)
 
 ### Since gps week 2238
 priority = [
-        ('COD', 'FIN'),   
-        ('GRG', 'FIN'),
-        ('GFZ', 'FIN'),
-        ('ESA', 'FIN'),
-        ('WUM', 'FIN'),
-        ('JAX', 'FIN'),
-        ('JPL', 'FIN'),
-        ('MIT', 'FIN'),
-        ('COD', 'RAP'),
-        ('GRG', 'RAP'),
-        ('GFZ', 'RAP'),
-        ('ESA', 'RAP'),
-        ('WUM', 'RAP'),
-    ]
-        # WWWW/AAA0PPPTYP_YYYYDDDHHMM_LEN_SMP_CNT.FMT.gz
-        # PPP : MGX
-        # CNT : ORB 
-        # FMT : SP3 
+    ("COD", "FIN"),
+    ("GRG", "FIN"),
+    ("GFZ", "FIN"),
+    ("ESA", "FIN"),
+    ("WUM", "FIN"),
+    ("JAX", "FIN"),
+    ("JPL", "FIN"),
+    ("MIT", "FIN"),
+    ("COD", "RAP"),
+    ("GRG", "RAP"),
+    ("GFZ", "RAP"),
+    ("ESA", "RAP"),
+    ("WUM", "RAP"),
+]
+# WWWW/AAA0PPPTYP_YYYYDDDHHMM_LEN_SMP_CNT.FMT.gz
+# PPP : MGX
+# CNT : ORB
+# FMT : SP3
 
-# This priority list is applied starting from GPS week 2238, to select SP3 orbit and CLK files based on the preferred 
-# analysis centers and product types. Final ("FIN") products are prioritized due to their higher accuracy and reliability. 
-# When final products are unavailable, rapid ("RAP") products serve as a fallback. 
-# Among the analysis centers, COD, GRG, and GFZ are placed at the top based on their long-standing reputation for delivering 
-# precise and complete orbit solutions within the IGS community. ESA, WUM, JAX, JPL, and MIT follow, as they also provide 
+# This priority list is applied starting from GPS week 2238, to select SP3 orbit and CLK files based on the preferred
+# analysis centers and product types. Final ("FIN") products are prioritized due to their higher accuracy and reliability.
+# When final products are unavailable, rapid ("RAP") products serve as a fallback.
+# Among the analysis centers, COD, GRG, and GFZ are placed at the top based on their long-standing reputation for delivering
+# precise and complete orbit solutions within the IGS community. ESA, WUM, JAX, JPL, and MIT follow, as they also provide
 # high-quality products, but may differ slightly in availability, latency, or consistency.
-# Before GPS week 2238, the same type of SP3 files can be found, but they are stored in /{gps_week}/mgex directories, 
+# Before GPS week 2238, the same type of SP3 files can be found, but they are stored in /{gps_week}/mgex directories,
 # requiring a different file discovery logic.
- 
+
 gps_epoch = pd.Timestamp("1980-01-06 00:00:00", tz="UTC")
+
 
 def timestamp_to_gps_week_and_dow(ts: pd.Timestamp) -> tuple[int, int]:
     ts_utc = ts.tz_convert("UTC") if ts.tzinfo else ts.tz_localize("UTC")
     delta = ts_utc - gps_epoch
     gps_week = delta.days // 7
-    dow = delta.days % 7    #day of week
+    dow = delta.days % 7  # day of week
     return gps_week, dow
 
-def get_index_of_priority_from_filename(filename : str):
+
+def get_index_of_priority_from_filename(filename: str):
     for i, p in enumerate(priority):
-        if p[0] in filename and p[1] in filename :
+        if p[0] in filename and p[1] in filename:
             return i
 
-def build_sp3_filename(date : pd.Timestamp, aaa_typ):
+
+def build_sp3_filename(date: pd.Timestamp, aaa_typ):
     # aaa_typ : tuple of str (aaa, typ)
     # aaa: IGS analysis center
     # typ: IGS product type (RAP or FIN)
@@ -81,15 +82,15 @@ def sp3_file_database_folder():
     db_folder.mkdir(exist_ok=True)
     return db_folder
 
-def sp3_file_folder(day : pd.Timestamp, parent_folder : Path):
+
+def sp3_file_folder(day: pd.Timestamp, parent_folder: Path):
     folder = parent_folder / f"{day.year}/{day.day_of_year:03d}"
     folder.mkdir(parents=True, exist_ok=True)
-    return folder 
+    return folder
 
-def get_local_sp3(day : pd.Timestamp, pattern, db_folder=sp3_file_database_folder()):
-    candidates = list(
-        sp3_file_folder(day, db_folder).glob(pattern)
-    )
+
+def get_local_sp3(day: pd.Timestamp, pattern, db_folder=sp3_file_database_folder()):
+    candidates = list(sp3_file_folder(day, db_folder).glob(pattern))
     if len(candidates) == 0:
         return None
     if len(candidates) > 1:
@@ -99,26 +100,24 @@ def get_local_sp3(day : pd.Timestamp, pattern, db_folder=sp3_file_database_folde
     log.info(f"Found the sp3 local file : {candidates[0]}")
     return candidates[0]
 
+
 def list_ftp_directory(server, folder):
     ftp = FTP(server)
     ftp.login()
     ftp.cwd(folder)
     dir_list = []
     ftp.dir(dir_list.append)
-    return [c.split()[-1].strip() for c in dir_list] 
+    return [c.split()[-1].strip() for c in dir_list]
 
-def try_downloading_sp3_ftp(gps_week, day : pd.Timestamp, folder : Path, pattern):
+
+def try_downloading_sp3_ftp(gps_week, day: pd.Timestamp, folder: Path, pattern):
     server = "gssc.esa.int"
-    if gps_week > 2237 :
+    if gps_week > 2237:
         remote_folder = f"/gnss/products/{gps_week}"
-    else : 
+    else:
         remote_folder = f"/gnss/products/{gps_week}/mgex"
     candidates = list_ftp_directory(server, remote_folder)
-    candidates = [
-        c
-        for c in candidates
-        if fnmatch.fnmatch(c, pattern)
-    ]
+    candidates = [c for c in candidates if fnmatch.fnmatch(c, pattern)]
     if len(candidates) == 0:
         log.warning(f"Could not find sp3 file for {day}")
         return None
@@ -139,19 +138,24 @@ def try_downloading_sp3_ftp(gps_week, day : pd.Timestamp, folder : Path, pattern
     log.info(f"Downloaded sp3 file {ftp_file}")
     return local_file
 
-def get_sp3_file(mid_day_start: pd.Timestamp, mid_day_end: pd.Timestamp, db_folder = sp3_file_database_folder()):
+
+def get_sp3_file(
+    mid_day_start: pd.Timestamp,
+    mid_day_end: pd.Timestamp,
+    db_folder=sp3_file_database_folder(),
+):
     day = mid_day_start
     gps_week, _ = timestamp_to_gps_week_and_dow(day)
     while day <= mid_day_end:
         for p in priority:
-            sp3_filename , clk_filename = build_sp3_filename(day, p)
+            sp3_filename, clk_filename = build_sp3_filename(day, p)
             sp3_file = get_local_sp3(day, sp3_filename, db_folder)
             clk_file = get_local_sp3(day, clk_filename, db_folder)
-            if sp3_file is None :
+            if sp3_file is None:
                 sp3_file = try_downloading_sp3_ftp(
                     gps_week, day, sp3_file_folder(day, db_folder), sp3_filename
                 )
-            if clk_file is None :
+            if clk_file is None:
                 clk_file = try_downloading_sp3_ftp(
                     gps_week, day, sp3_file_folder(day, db_folder), clk_filename
                 )
@@ -170,11 +174,15 @@ def discover_or_download_sp3_file(observation_file_path=Path()):
     rinex_3_obs_file = converters.anything_to_rinex_3(observation_file_path)
     header = georinex.rinexheader(rinex_3_obs_file)
 
-    t_start = timestamp_to_mid_day(util.rinex_header_time_string_2_timestamp_ns(header["TIME OF FIRST OBS"])
-        - pd.Timedelta(200, unit="milliseconds"))
-    t_end = timestamp_to_mid_day(util.rinex_header_time_string_2_timestamp_ns(header["TIME OF LAST OBS"]))
+    t_start = timestamp_to_mid_day(
+        util.rinex_header_time_string_2_timestamp_ns(header["TIME OF FIRST OBS"])
+        - pd.Timedelta(200, unit="milliseconds")
+    )
+    t_end = timestamp_to_mid_day(
+        util.rinex_header_time_string_2_timestamp_ns(header["TIME OF LAST OBS"])
+    )
 
-    sp3_file, clk_file = get_sp3_file(t_start, t_end) 
+    sp3_file, clk_file = get_sp3_file(t_start, t_end)
     return sp3_file, clk_file
 
 

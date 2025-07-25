@@ -96,7 +96,6 @@ def test_parse_nav_file(input_for_test):
     assert df["source"].iloc[0] == str(path_to_rnx3_nav_file.resolve())
 
 
-
 def test_compare_rnx3_gps_sat_pos_with_magnitude(input_for_test):
     """Loads a RNX3 nav file, computes broadcast position for a GPS satellite and compares to
     position computed by MAGNITUDE matlab library"""
