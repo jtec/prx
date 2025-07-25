@@ -7,7 +7,7 @@ from prx.rinex_nav.evaluate import (
     set_time_of_validity,
     parse_rinex_nav_file,
 )
-from prx.sp3 import evaluate as sp3_evaluate
+from prx.precise_corrections.sp3 import evaluate as sp3_evaluate
 from prx.rinex_nav import evaluate as rinex_nav_evaluate
 from prx import constants, converters, util
 from prx.util import week_and_seconds_2_timedelta

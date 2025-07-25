@@ -180,7 +180,7 @@ def test_priority_iteration_until_matching_sp3_clk_pair_found(set_up_test):
                 assert (sp3_file, clk_file) == (None, None)
             
             else : # i == j
-                # Only allow the correct priority item to be used
+                # Only allow the correct priority item to be used, by restricting the priority list to a single element
                 with patch("prx.precise_corrections.sp3.sp3_file_discovery.priority", [expected_priority[i]]):
                     sp3_file, clk_file = sp3.get_sp3_file(t_start, t_start, db_folder)
                     if sp3_file is None :
@@ -193,6 +193,8 @@ def test_priority_iteration_until_matching_sp3_clk_pair_found(set_up_test):
                     elif clk_file.exists():
                         clk_file.unlink()
                 assert sp3.get_index_of_priority_from_filename(str(sp3_file)) == sp3.get_index_of_priority_from_filename(str(clk_file))
+                assert sp3.get_index_of_priority_from_filename(str(sp3_file)) == 0
+
 
 def test_download_all(set_up_test):
     """
@@ -211,7 +213,7 @@ def test_download_all(set_up_test):
     downloaded_sp3_files = []
     downloaded_clk_files = []
     for p in priority:
-        sp3_filename, clk_filename = sp3.build_sp3_filename(gps_week, dow, t_start, p, priority)
+        sp3_filename, clk_filename = sp3.build_sp3_filename(t_start, p)
         downloaded_sp3 = sp3.try_downloading_sp3_ftp(gps_week, t_start, db_folder, sp3_filename)
         downloaded_clk = sp3.try_downloading_sp3_ftp(gps_week, t_start, db_folder, clk_filename)
         

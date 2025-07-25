@@ -63,10 +63,12 @@ def get_index_of_priority_from_filename(filename : str):
         if p[0] in filename and p[1] in filename :
             return i
 
-def build_sp3_filename(day : pd.Timestamp, aaa_typ):
+def build_sp3_filename(date : pd.Timestamp, aaa_typ):
     # aaa_typ : tuple of str (aaa, typ)
-    yyyy = day.year
-    ddd = f"{day.day_of_year:03d}"
+    # aaa: IGS analysis center
+    # typ: IGS product type (RAP or FIN)
+    yyyy = date.year
+    ddd = f"{date.day_of_year:03d}"
     aaa = aaa_typ[0]
     typ = aaa_typ[1]
     sp3_filename = f"{aaa}0MGX{typ}_{yyyy}{ddd}*_01D_*_ORB.SP3.gz"
