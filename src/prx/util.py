@@ -1,8 +1,8 @@
 import logging
 import math
 import os
-import platform
 import re
+import shutil
 import subprocess
 from functools import wraps
 from pathlib import Path
@@ -17,7 +17,6 @@ from astropy.utils import iers
 from astropy import time as astrotime
 
 from prx import constants
-from prx.rinex_obs.parser import parse as prx_obs_parse
 
 logger = logging.getLogger(__name__)
 
@@ -32,23 +31,15 @@ def file_exists_and_can_read_first_line(file: Path):
 
 
 def is_rinex_3_obs_file(file: Path):
-    first_line = file_exists_and_can_read_first_line(file)
-    if first_line is None:
-        return False
-    if "RINEX VERSION" not in first_line or "3.0" not in first_line:
-        return False
-    if "NAVIGATION DATA" in first_line:
-        return False
-    return True
+    if first_line := file_exists_and_can_read_first_line(file):
+        return re.search("3.0.*OBS.*RINEX VERSION.*", first_line) is not None
+    return False
 
 
 def is_rinex_3_nav_file(file: Path):
-    first_line = file_exists_and_can_read_first_line(file)
-    if first_line is None:
-        return False
-    if "NAVIGATION DATA" not in first_line or "3.0" not in first_line:
-        return False
-    return True
+    if first_line := file_exists_and_can_read_first_line(file):
+        return re.search("3.0.*NAV.*RINEX VERSION.*", first_line) is not None
+    return False
 
 
 def is_rinex_2_obs_file(file: Path):
@@ -83,17 +74,19 @@ def timeit(func):
 
 
 @timeit
-def repair_with_gfzrnx(file):
+def try_repair_with_gfzrnx(file):
     with open(file) as f:
         if "gfzrnx" in f.read():
             logging.warning(f"File {file} already contains 'gfzrnx', skipping repair.")
             return file
-    path_folder_gfzrnx = Path(__file__).parent.joinpath("tools", "gfzrnx")
-    path_binary = path_folder_gfzrnx.joinpath(
-        constants.gfzrnx_binary[platform.system()]
-    )
+    tool_path = shutil.which("gfzrnx")
+    if tool_path is None:
+        logger.info(
+            "gfzrnx binary not found (try adding it to PATH), skipping repair..."
+        )
+        return file
     command = [
-        str(path_binary),
+        str(tool_path),
         "-finp",
         str(file),
         "-fout",
@@ -119,7 +112,7 @@ def repair_with_gfzrnx(file):
         with open(file, "w") as f:
             f.write(file_content)
             logger.info(
-                f"Removed repair timestamp from gfzrnx file {file} to avoid content hash changes."
+                f"Removed repair timestamp from gfzrnx file {file} to avoid content file hash changes."
             )
     else:
         logger.info(f"gfzrnx file repair run failed: {result}")
@@ -452,19 +445,6 @@ def obs_dataset_to_obs_dataframe(ds: xarray.Dataset):
         df = df.assign(obs_type=lambda x: obs_label)
         flat_obs = pd.concat([flat_obs, df])
     return flat_obs
-
-
-@timeit
-def parse_rinex_obs_file(rinex_file_path: Path):
-    @disk_cache.cache(ignore=["rinex_file"])
-    def parse_rinex_obs_file_cached(rinex_file: Path, file_hash: str):
-        logger.info(f"Parsing {rinex_file} (hash {file_hash}) ...")
-        repair_with_gfzrnx(rinex_file)
-        return prx_obs_parse(rinex_file)
-
-    return parse_rinex_obs_file_cached(
-        rinex_file_path, hash_of_file_content(rinex_file_path)
-    )
 
 
 def get_gpst_utc_leap_seconds(rinex_file: Path):

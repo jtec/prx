@@ -5,7 +5,7 @@ import os
 import pandas as pd
 
 from prx.util import obs_dataset_to_obs_dataframe
-from prx.util import repair_with_gfzrnx
+from prx.util import try_repair_with_gfzrnx
 from prx.rinex_obs.parser import parse as prx_obs_parse
 from prx import converters
 import georinex
@@ -38,7 +38,7 @@ def test_compare_to_georinex():
         / "datasets"
         / "TLSE00FRA_R_20220010000_01D_30S_MO.rnx_slice_0.24h.rnx.gz"
     )
-    repair_with_gfzrnx(file)
+    try_repair_with_gfzrnx(file)
     prx_output = prx_obs_parse(file).sort_values(by=["time", "sv", "obs_type"])
     # remove lli from prx outputs
     drop_lli = [
@@ -55,13 +55,13 @@ def test_compare_to_georinex():
     assert georinex_output.equals(prx_output)
 
 
-def test_compare_to_georinex_with_lli(input_for_test_tlse):
+def test_compare_to_georinex_with_lli():
     file = converters.anything_to_rinex_3(
         Path(__file__).parent
         / "datasets"
         / "TLSE00FRA_R_20220010000_01D_30S_MO.rnx_slice_0.24h.rnx.gz"
     )
-    repair_with_gfzrnx(file)
+    try_repair_with_gfzrnx(file)
     prx_output = (
         prx_obs_parse(file)
         .sort_values(by=["time", "sv", "obs_type"])
@@ -121,7 +121,9 @@ def test_compare_to_georinex_with_lli(input_for_test_tlse):
 
 
 def test_basic_check_on_rinex(input_for_test_tlse):
-    prx_output = prx_obs_parse(input_for_test_tlse)
+    file = converters.anything_to_rinex_3(input_for_test_tlse)
+    try_repair_with_gfzrnx(file)
+    prx_output = prx_obs_parse(file)
     test_cases = [
         # (timestamp, svid, obs_type, expected_value)
         (
