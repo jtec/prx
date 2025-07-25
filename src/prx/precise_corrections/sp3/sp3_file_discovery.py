@@ -59,8 +59,8 @@ def build_sp3_filename(date: pd.Timestamp, aaa_typ):
     ddd = f"{date.day_of_year:03d}"
     aaa = aaa_typ[0]
     typ = aaa_typ[1]
-    sp3_filename = f"{aaa}0MGX{typ}_{yyyy}{ddd}*_01D_*_ORB.SP3.gz"
-    clk_filename = f"{aaa}0MGX{typ}_{yyyy}{ddd}*_01D_*_CLK.CLK.gz"
+    sp3_filename = f"{aaa}0MGX{typ}_{yyyy}{ddd}0000_01D_05M_ORB.SP3.gz"
+    clk_filename = f"{aaa}0MGX{typ}_{yyyy}{ddd}0000_01D_30S_CLK.CLK.gz"
     return sp3_filename, clk_filename
 
 
@@ -76,16 +76,13 @@ def sp3_file_folder(day: pd.Timestamp, parent_folder: Path):
     return folder
 
 
-def get_local_sp3(day: pd.Timestamp, pattern, db_folder=sp3_file_database_folder()):
-    candidates = list(sp3_file_folder(day, db_folder).glob(pattern))
+def get_local_sp3(day: pd.Timestamp, file, db_folder=sp3_file_database_folder()):
+    candidates = list(sp3_file_folder(day, db_folder).glob(file))
     if len(candidates) == 0:
         return None
-    if len(candidates) > 1:
-        log.warning(
-            f"Found more than one sp3 file for {day}: \n{candidates} \n Will use the first one."
-        )
     log.info(f"Found the sp3 local file : {candidates[0]}")
-    return candidates[0]
+    local_file = converters.compressed_to_uncompressed(candidates[0])
+    return local_file.name
 
 
 def list_ftp_directory(server, folder):
@@ -97,23 +94,29 @@ def list_ftp_directory(server, folder):
     return [c.split()[-1].strip() for c in dir_list]
 
 
-def try_downloading_sp3_ftp(gps_week, day: pd.Timestamp, folder: Path, pattern):
+def check_online_availability(gps_week, day: pd.Timestamp, folder: Path, file):
     server = "gssc.esa.int"
     if gps_week > 2237:
         remote_folder = f"/gnss/products/{gps_week}"
     else:
         remote_folder = f"/gnss/products/{gps_week}/mgex"
-    candidates = list_ftp_directory(server, remote_folder)
-    candidates = [c for c in candidates if fnmatch.fnmatch(c, pattern)]
-    if len(candidates) == 0:
-        log.warning(f"Could not find sp3 file for {day}")
+    ftp = FTP(server)
+    ftp.login()
+    ftp.cwd(remote_folder)
+    try:
+        ftp.size(file)
+        return Path(file).stem
+    except:
+        log.warning(f"{file} not available on {server}")
         return None
-    candidates = sorted(
-        candidates,
-        key=lambda x: int("BRDC00" in x) + int("IGS" in x),
-        reverse=True,
-    )  #
-    file = candidates[0]
+
+
+def try_downloading_sp3_ftp(gps_week, day: pd.Timestamp, folder: Path, file):
+    server = "gssc.esa.int"
+    if gps_week > 2237:
+        remote_folder = f"/gnss/products/{gps_week}"
+    else:
+        remote_folder = f"/gnss/products/{gps_week}/mgex"
     ftp_file = f"ftp://{server}/{remote_folder}/{file}"
     local_compressed_file = folder / file
     urllib.request.urlretrieve(ftp_file, local_compressed_file)
@@ -126,30 +129,35 @@ def try_downloading_sp3_ftp(gps_week, day: pd.Timestamp, folder: Path, pattern):
     return local_file
 
 
-def get_sp3_file(
+def get_sp3_files(
     mid_day_start: pd.Timestamp,
     mid_day_end: pd.Timestamp,
     db_folder=sp3_file_database_folder(),
 ):
+    sp3_files = []
     day = mid_day_start
     gps_week, _ = timestamp_to_gps_week_and_dow(day)
     while day <= mid_day_end:
         for p in priority:
             sp3_filename, clk_filename = build_sp3_filename(day, p)
-            sp3_file = get_local_sp3(day, sp3_filename, db_folder)
-            clk_file = get_local_sp3(day, clk_filename, db_folder)
-            if sp3_file is None:
-                sp3_file = try_downloading_sp3_ftp(
+            file_orb = get_local_sp3(day, sp3_filename, db_folder)
+            file_clk = get_local_sp3(day, clk_filename, db_folder)
+            if file_orb is None:
+                file_orb = try_downloading_sp3_ftp(
                     gps_week, day, sp3_file_folder(day, db_folder), sp3_filename
                 )
-            if clk_file is None:
-                clk_file = try_downloading_sp3_ftp(
+            if file_clk is None:
+                file_clk = try_downloading_sp3_ftp(
                     gps_week, day, sp3_file_folder(day, db_folder), clk_filename
                 )
-            if sp3_file is not None and clk_file is not None:
-                return sp3_file, clk_file
+            if file_orb is not None and file_clk is not None:
+                sp3_files.append((file_orb, file_clk))
+                break
+            # If we reach the end of the priority list without success
+            if file_orb is None and file_clk is None and p == priority[-1]:
+                sp3_files.append((None, None))
         day += pd.Timedelta(1, unit="days")
-    return None, None
+    return sp3_files
 
 
 def discover_or_download_sp3_file(observation_file_path=Path()):
@@ -169,21 +177,5 @@ def discover_or_download_sp3_file(observation_file_path=Path()):
         util.rinex_header_time_string_2_timestamp_ns(header["TIME OF LAST OBS"])
     )
 
-    sp3_file, clk_file = get_sp3_file(t_start, t_end)
-    return sp3_file, clk_file
-
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        prog="rinex_aux_files",
-        description="rinex_aux_files discovers or downloads files needed to get started on positioning: "
-        "broadcast ephemeris, precise ephemeris etc.",
-    )
-    parser.add_argument(
-        "--observation_file_path", type=str, help="Observation file path", required=True
-    )
-    args = parser.parse_args()
-    assert Path(args.observation_file_path).exists(), (
-        f"Cannot find observation file {args.observation_file_path}"
-    )
-    discover_or_download_sp3_file(Path(args.observation_file_path))
+    sp3_files = get_sp3_files(t_start, t_end)
+    return sp3_files
