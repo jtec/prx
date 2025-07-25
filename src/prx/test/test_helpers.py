@@ -28,7 +28,7 @@ def input_for_test():
     assert test_file["obs"].exists()
 
     # Also provide ephemerides so the test does not have to download them:
-    ephemerides_file = "BRDC00IGS_R_20230010000_01D_MN.rnx.zip"
+    ephemerides_file = "BRDC00IGS_R_20230010000_01D_MN.rnx.gz"
     test_file["nav"] = test_directory.joinpath(ephemerides_file)
     shutil.copy(
         Path(__file__).parent / f"datasets/TLSE_2023001/{ephemerides_file}",
