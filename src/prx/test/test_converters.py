@@ -1,5 +1,4 @@
 import os
-from pathlib import Path
 import shutil
 
 import pytest
@@ -8,8 +7,8 @@ from prx import converters, util
 
 
 @pytest.fixture
-def set_up_test():
-    test_directory = Path(f"./tmp_test_directory_{__name__}").resolve()
+def set_up_test(tmp_path_factory):
+    test_directory = tmp_path_factory.mktemp("test_inputs")
     if test_directory.exists():
         # Make sure the expected files have not been generated before and are still on disk
         # due to e.g. a previous

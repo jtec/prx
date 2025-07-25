@@ -10,7 +10,7 @@ import git
 import prx.util
 from prx import atmospheric_corrections as atmo, util
 from prx.constants import carrier_frequencies_hz
-from prx.util import parse_rinex_obs_file
+from prx.rinex_obs.parser import parse_rinex_obs_file
 from prx.util import is_rinex_3_obs_file, is_rinex_3_nav_file
 from prx.rinex_nav import nav_file_discovery
 from prx import constants, converters, user
@@ -145,7 +145,7 @@ def build_metadata(input_files):
         for file in files
     ]
     prx_metadata["prx_git_commit_id"] = git.Repo(
-        search_parent_directories=True
+        path=Path(__file__).parent, search_parent_directories=True
     ).head.object.hexsha
     return prx_metadata
 
@@ -194,7 +194,7 @@ def build_records_levels_12(
         approximate_receiver_ecef_position_m
     )
     check_assumptions(rinex_3_obs_file)
-    flat_obs = util.parse_rinex_obs_file(rinex_3_obs_file)
+    flat_obs = parse_rinex_obs_file(rinex_3_obs_file)
 
     flat_obs.time = pd.to_datetime(flat_obs.time, format="%Y-%m-%dT%H:%M:%S")
     flat_obs.obs_value = flat_obs.obs_value.astype(float)
@@ -394,7 +394,7 @@ def process(observation_file_path: Path, prx_level=2):
         f"Starting processing {observation_file_path.name} (full path {observation_file_path})"
     )
     rinex_3_obs_file = converters.anything_to_rinex_3(observation_file_path)
-    rinex_3_obs_file = prx.util.repair_with_gfzrnx(rinex_3_obs_file)
+    rinex_3_obs_file = prx.util.try_repair_with_gfzrnx(rinex_3_obs_file)
     prx_file = rinex_3_obs_file.with_suffix("")
     match prx_level:
         case 1 | 2:
