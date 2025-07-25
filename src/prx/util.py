@@ -79,43 +79,44 @@ def try_repair_with_gfzrnx(file):
         if "gfzrnx" in f.read():
             logging.warning(f"File {file} already contains 'gfzrnx', skipping repair.")
             return file
-        if shutil.which("gfzrnx") is None:
-            logger.info(
-                "gfzrnx binary not found (try adding it to PATH), skipping repair..."
-            )
-            return file
-        command = [
-            "gfzrnx",
-            "-finp",
-            str(file),
-            "-fout",
-            str(file),
-            "-chk",
-            "-kv",
-            "-f",
-        ]
-        result = subprocess.run(
-            command,
-            capture_output=True,
+    tool_path = shutil.which("gfzrnx")
+    if tool_path is None:
+        logger.info(
+            "gfzrnx binary not found (try adding it to PATH), skipping repair..."
         )
-        if result.returncode == 0:
-            logger.info(f"Ran gfzrnx file repair on {file}")
-            with open(file, "r") as f:
-                file_content = f.read()
-                file_content = re.sub(
-                    r"gfzrnx-(.*?)FILE PROCESSING(.*)UTC COMMENT",
-                    r"gfzrnx-\1FILE PROCESSING (timestamp removed by prx) UTC COMMENT",
-                    file_content,
-                    count=1,
-                )
-            with open(file, "w") as f:
-                f.write(file_content)
-                logger.info(
-                    f"Removed repair timestamp from gfzrnx file {file} to avoid content hash changes."
-                )
-        else:
-            logger.info(f"gfzrnx file repair run failed: {result}")
-            assert False
+        return file
+    command = [
+        str(tool_path),
+        "-finp",
+        str(file),
+        "-fout",
+        str(file),
+        "-chk",
+        "-kv",
+        "-f",
+    ]
+    result = subprocess.run(
+        command,
+        capture_output=True,
+    )
+    if result.returncode == 0:
+        logger.info(f"Ran gfzrnx file repair on {file}")
+        with open(file, "r") as f:
+            file_content = f.read()
+            file_content = re.sub(
+                r"gfzrnx-(.*?)FILE PROCESSING(.*)UTC COMMENT",
+                r"gfzrnx-\1FILE PROCESSING (timestamp removed by prx) UTC COMMENT",
+                file_content,
+                count=1,
+            )
+        with open(file, "w") as f:
+            f.write(file_content)
+            logger.info(
+                f"Removed repair timestamp from gfzrnx file {file} to avoid content file hash changes."
+            )
+    else:
+        logger.info(f"gfzrnx file repair run failed: {result}")
+        assert False
     return file
 
 

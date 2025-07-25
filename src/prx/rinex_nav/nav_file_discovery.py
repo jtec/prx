@@ -161,6 +161,7 @@ def discover_or_download_ephemerides(
         anything_to_rinex_3(f)
         for f in folder.rglob("*")
         if is_rinex_3_nav_file(anything_to_rinex_3(f))
+        and is_rinex_3_mixed_mgex_broadcast_ephemerides_file(anything_to_rinex_3(f))
     ]
     if len(user_provided_nav_files) > 0:
         return user_provided_nav_files

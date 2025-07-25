@@ -137,7 +137,11 @@ Not all RINEX encoders implement the standard perfectly. If a variation is not c
 in unexpected ways.
 
 If that happens, the first recommendation is to run your RINEX file through
-`gfznx` ([website](https://gnss.gfz.de/services/gfzrnx)), a tool performing quality control and repair on RINEX files.
+`gfznx` ([website](https://gnss.gfz.de/services/gfzrnx)), a tool performing quality control and repair on RINEX files:
+
+```commandline
+ gfzrnx -finp <RINEX_file_path> -fout <RINEX__file_path> -chk -kv -f
+```
 
 If `gfzrnx` is on your path, `prx` will run it to repair each file automatically.
 If the process still fails, feel free to open an [issue](https://github.com/jtec/prx/issues) and share the offending

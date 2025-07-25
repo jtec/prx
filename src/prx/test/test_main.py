@@ -42,7 +42,7 @@ def input_for_test_tlse(tmp_path_factory):
         / "TLSE00FRA_R_20230010100_10S_01S_MO.crx.gz"
     )
     ephemerides_file = (
-        datasets_directory / "TLSE_2023001/BRDC00IGS_R_20230010000_01D_MN.rnx.zip"
+        datasets_directory / "TLSE_2023001/BRDC00IGS_R_20230010000_01D_MN.rnx.gz"
     )
     for file in [compressed_compact_rinex_file, ephemerides_file]:
         shutil.copy(
@@ -99,7 +99,7 @@ def input_for_test_nist(tmp_path_factory):
     )
     assert test_file.exists()
     # Also provide ephemerides so the test does not have to download them:
-    ephemerides_file = "BRDC00IGS_R_20230010000_01D_MN.rnx.zip"
+    ephemerides_file = "BRDC00IGS_R_20230010000_01D_MN.rnx.gz"
     shutil.copy(
         Path(__file__).parent / f"datasets/TLSE_2023001/{ephemerides_file}",
         test_file.parent.joinpath(ephemerides_file),
@@ -132,8 +132,8 @@ def input_for_test_with_first_epoch_at_midnight(tmp_path_factory):
     # nav data from same day
     shutil.copy(
         Path(__file__).parent
-        / "datasets/TLSE_2023001/BRDC00IGS_R_20230010000_01D_MN.rnx.zip",
-        test_directory.joinpath("BRDC00IGS_R_20230010000_01D_MN.rnx.zip"),
+        / "datasets/TLSE_2023001/BRDC00IGS_R_20230010000_01D_MN.rnx.gz",
+        test_directory.joinpath("BRDC00IGS_R_20230010000_01D_MN.rnx.gz"),
     )
     # nav data from previous day
     shutil.copy(

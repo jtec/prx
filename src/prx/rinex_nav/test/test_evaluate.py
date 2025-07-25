@@ -56,18 +56,11 @@ def input_for_test(tmp_path_factory):
 
 
 @pytest.fixture
-def input_for_test_2():
-    test_directory = (
-        Path(__file__).parent.joinpath(f"./tmp_test_directory_{__name__}").resolve()
-    )
-    if test_directory.exists():
-        # Start from empty directory, might avoid hiding some subtle bugs, e.g.
-        # file decompression not working properly
-        shutil.rmtree(test_directory)
-    os.makedirs(test_directory)
+def input_for_test_2(tmp_path_factory):
+    test_directory = tmp_path_factory.mktemp("test_inputs")
     test_files = {
         "rinex_obs_file": test_directory / "TLSE00FRA_R_20230010100_10S_01S_MO.crx.gz",
-        "rinex_nav_file": test_directory / "BRDC00IGS_R_20230010000_01D_MN.rnx.zip",
+        "rinex_nav_file": test_directory / "BRDC00IGS_R_20230010000_01D_MN.rnx.gz",
         "sp3_file": test_directory / "WUM0MGXULT_20220010000_01D_05M_ORB.SP3",
     }
     for key, test_file_path in test_files.items():
@@ -329,7 +322,7 @@ def set_up_test_2023():
     os.makedirs(test_directory)
     test_files = DotMap()
     test_files.nav_file = test_directory.joinpath(
-        "BRDC00IGS_R_20230010000_01D_MN.rnx.zip"
+        "BRDC00IGS_R_20230010000_01D_MN.rnx.gz"
     )
     test_files.sp3_file = test_directory.joinpath(
         "GFZ0MGXRAP_20230010000_01D_05M_ORB.SP3"
