@@ -9,11 +9,8 @@ import pandas as pd
 import urllib
 import fnmatch
 
-from prx import converters
-from prx import util
-import prx
-from prx.util import timestamp_to_mid_day
-
+from prx import converters, util, constants
+from prx.util import timestamp_to_mid_day, timestamp_to_gps_week_and_dow
 
 log = logging.getLogger(__name__)
 
@@ -46,16 +43,6 @@ priority = [
 # high-quality products, but may differ slightly in availability, latency, or consistency.
 # Before GPS week 2238, the same type of SP3 files can be found, but they are stored in /{gps_week}/mgex directories,
 # requiring a different file discovery logic.
-
-gps_epoch = pd.Timestamp("1980-01-06 00:00:00", tz="UTC")
-
-
-def timestamp_to_gps_week_and_dow(ts: pd.Timestamp) -> tuple[int, int]:
-    ts_utc = ts.tz_convert("UTC") if ts.tzinfo else ts.tz_localize("UTC")
-    delta = ts_utc - gps_epoch
-    gps_week = delta.days // 7
-    dow = delta.days % 7  # day of week
-    return gps_week, dow
 
 
 def get_index_of_priority_from_filename(filename: str):

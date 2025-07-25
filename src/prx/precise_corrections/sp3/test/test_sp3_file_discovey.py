@@ -7,6 +7,7 @@ import pytest
 import pandas as pd
 from unittest.mock import patch
 import prx
+import prx.util
 from prx import util
 from prx.precise_corrections.sp3 import sp3_file_discovery as sp3
 
@@ -242,7 +243,7 @@ def test_download_all(set_up_test):
 
     db_folder = set_up_test["test_obs_file"].parent
 
-    gps_week, dow = sp3.timestamp_to_gps_week_and_dow(t_start)
+    gps_week, dow = prx.util.timestamp_to_gps_week_and_dow(t_start)
 
     priority = sp3.priority
 

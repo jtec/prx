@@ -518,3 +518,11 @@ def compute_gps_utc_leap_seconds(yyyy: int, doy: int):
             break
     assert ~np.isnan(ls), "GPS leap second could not be retrieved"
     return ls
+
+
+def timestamp_to_gps_week_and_dow(ts: pd.Timestamp) -> tuple[int, int]:
+    ts_utc = ts.tz_convert("UTC") if ts.tzinfo else ts.tz_localize("UTC")
+    delta = ts_utc - constants.cGpstUtcEpoch
+    gps_week = delta.days // 7
+    dow = delta.days % 7  # day of week
+    return gps_week, dow
