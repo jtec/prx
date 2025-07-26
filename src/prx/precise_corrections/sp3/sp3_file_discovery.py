@@ -1,15 +1,21 @@
-import argparse
+# This module aims at create a local database of SP3 ORB and NAV files.
+# Upon request of a particular date, # the availability of the files in the local database will be checked,
+# and if missing, they will be downloaded from the IGS FTP servers.
+# A priority list is defined to provide a preference order of IGS product, in terms of types (final or rapid products)
+# and IGS analysis center.
+
+
 import logging
 from ftplib import FTP
 import os
 from pathlib import Path
+from typing import List, Tuple
 
 import georinex
 import pandas as pd
 import urllib
-import fnmatch
 
-from prx import converters, util, constants
+from prx import converters, util
 from prx.util import timestamp_to_mid_day, timestamp_to_gps_week_and_dow
 
 log = logging.getLogger(__name__)
@@ -45,13 +51,13 @@ priority = [
 # requiring a different file discovery logic.
 
 
-def get_index_of_priority_from_filename(filename: str):
+def get_index_of_priority_from_filename(filename: str) -> int:
     for i, p in enumerate(priority):
         if p[0] in filename and p[1] in filename:
             return i
 
 
-def build_sp3_filename(date: pd.Timestamp, aaa_typ):
+def build_sp3_filename(date: pd.Timestamp, aaa_typ: (str, str)) -> (str, str):
     # aaa_typ : tuple of str (aaa, typ)
     # aaa: IGS analysis center
     # typ: IGS product type (RAP or FIN)
@@ -64,37 +70,41 @@ def build_sp3_filename(date: pd.Timestamp, aaa_typ):
     return sp3_filename, clk_filename
 
 
-def sp3_file_database_folder():
-    db_folder = Path(__file__).parent / "test/datasets"
+def sp3_file_database_folder() -> Path:
+    """
+    Returns the path to the folder where SP3 database files are stored.
+    """
+    db_folder = util.prx_repository_root() / "src/prx/precise_corrections/sp3/sp3_files"
     db_folder.mkdir(exist_ok=True)
     return db_folder
 
 
-def sp3_file_folder(day: pd.Timestamp, parent_folder: Path):
-    folder = parent_folder / f"{day.year}/{day.day_of_year:03d}"
+def sp3_file_folder(
+    date: pd.Timestamp, parent_folder: Path = sp3_file_database_folder()
+) -> Path:
+    """
+    Returns the path to the folder where SP3 files for a specific day are stored.
+    """
+    folder = parent_folder / f"{date.year}/{date.day_of_year:03d}"
     folder.mkdir(parents=True, exist_ok=True)
     return folder
 
 
-def get_local_sp3(day: pd.Timestamp, file, db_folder=sp3_file_database_folder()):
-    candidates = list(sp3_file_folder(day, db_folder).glob(file))
+def get_local_sp3(
+    date: pd.Timestamp, file: str, db_folder=sp3_file_database_folder()
+) -> Path | None:
+    candidates = list(sp3_file_folder(date, db_folder).glob(file))
     if len(candidates) == 0:
         return None
     log.info(f"Found the sp3 local file : {candidates[0]}")
     local_file = converters.compressed_to_uncompressed(candidates[0])
-    return local_file.name
+    return local_file
 
 
-def list_ftp_directory(server, folder):
-    ftp = FTP(server)
-    ftp.login()
-    ftp.cwd(folder)
-    dir_list = []
-    ftp.dir(dir_list.append)
-    return [c.split()[-1].strip() for c in dir_list]
-
-
-def check_online_availability(gps_week, day: pd.Timestamp, folder: Path, file):
+def check_online_availability(gps_week: int, folder: Path, file: str) -> Path | None:
+    """
+    Need to keep the same inputs as try_downloading_sp3_ftp, in order to be able to use `unittest.mock.patch` in tests
+    """
     server = "gssc.esa.int"
     if gps_week > 2237:
         remote_folder = f"/gnss/products/{gps_week}"
@@ -105,13 +115,13 @@ def check_online_availability(gps_week, day: pd.Timestamp, folder: Path, file):
     ftp.cwd(remote_folder)
     try:
         ftp.size(file)
-        return Path(file).stem
+        return folder.joinpath(Path(file).stem)
     except:
         log.warning(f"{file} not available on {server}")
         return None
 
 
-def try_downloading_sp3_ftp(gps_week, day: pd.Timestamp, folder: Path, file):
+def try_downloading_sp3_ftp(gps_week: int, folder: Path, file: str) -> Path | None:
     server = "gssc.esa.int"
     if gps_week > 2237:
         remote_folder = f"/gnss/products/{gps_week}"
@@ -133,22 +143,22 @@ def get_sp3_files(
     mid_day_start: pd.Timestamp,
     mid_day_end: pd.Timestamp,
     db_folder=sp3_file_database_folder(),
-):
+) -> List[Tuple[Path]]:
     sp3_files = []
-    day = mid_day_start
-    gps_week, _ = timestamp_to_gps_week_and_dow(day)
-    while day <= mid_day_end:
+    date = mid_day_start
+    gps_week, _ = timestamp_to_gps_week_and_dow(date)
+    while date <= mid_day_end:
         for p in priority:
-            sp3_filename, clk_filename = build_sp3_filename(day, p)
-            file_orb = get_local_sp3(day, sp3_filename, db_folder)
-            file_clk = get_local_sp3(day, clk_filename, db_folder)
+            sp3_filename, clk_filename = build_sp3_filename(date, p)
+            file_orb = get_local_sp3(date, sp3_filename, db_folder)
+            file_clk = get_local_sp3(date, clk_filename, db_folder)
             if file_orb is None:
                 file_orb = try_downloading_sp3_ftp(
-                    gps_week, day, sp3_file_folder(day, db_folder), sp3_filename
+                    gps_week, sp3_file_folder(date, db_folder), sp3_filename
                 )
             if file_clk is None:
                 file_clk = try_downloading_sp3_ftp(
-                    gps_week, day, sp3_file_folder(day, db_folder), clk_filename
+                    gps_week, sp3_file_folder(date, db_folder), clk_filename
                 )
             if file_orb is not None and file_clk is not None:
                 sp3_files.append((file_orb, file_clk))
@@ -156,16 +166,16 @@ def get_sp3_files(
             # If we reach the end of the priority list without success
             if file_orb is None and file_clk is None and p == priority[-1]:
                 sp3_files.append((None, None))
-        day += pd.Timedelta(1, unit="days")
+        date += pd.Timedelta(1, unit="days")
     return sp3_files
 
 
-def discover_or_download_sp3_file(observation_file_path=Path()):
+def discover_or_download_sp3_file(observation_file_path=Path) -> List[Tuple[Path]]:
     """
     Returns the path to a valid SP3 file (local or downloaded) corresponding to the observation file.
     Tries to respect a priority hierarchy: IGS FIN > COD FIN > GRG FIN > ... > IGS ULR.
     """
-    log.info(f"Finding auxiliary files for {observation_file_path} ...")
+    log.info(f"Finding sp3 files for {observation_file_path} ...")
     rinex_3_obs_file = converters.anything_to_rinex_3(observation_file_path)
     header = georinex.rinexheader(rinex_3_obs_file)
 

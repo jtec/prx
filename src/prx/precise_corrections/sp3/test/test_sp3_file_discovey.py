@@ -70,8 +70,27 @@ def test_get_index_of_priority_from_filename():
     assert index_priority == [0, 10, 5, 4, 4]
 
 
-def test_download_single_sp3():
-    assert False
+def test_download_single_sp3(tmp_path):
+    """
+    This test aims at validating that if a file is reachable with function `sp3.check_online_availability`,
+    then it can be downloaded from IGS servers.
+
+    Then, in other tests, only the online availability will be tested, to avoid data exchange with IGS servers.
+    """
+    db_folder = tmp_path / "sp3_files"
+    t_start = pd.Timestamp("2023-01-01 12:00:00")
+    gps_week, _ = util.timestamp_to_gps_week_and_dow(t_start)
+    filename_orb, _ = sp3.build_sp3_filename(t_start, sp3.priority[0])
+    file_download = sp3.try_downloading_sp3_ftp(
+        gps_week, sp3.sp3_file_folder(t_start, db_folder), filename_orb
+    )
+    assert file_download.exists()
+
+    file_available = sp3.check_online_availability(
+        gps_week, sp3.sp3_file_folder(t_start, db_folder), filename_orb
+    )
+    assert file_available is not None
+    assert file_available == file_download
 
 
 def test_get_sp3_files(set_up_test):
@@ -82,6 +101,7 @@ def test_get_sp3_files(set_up_test):
     header = georinex.rinexheader(obs_file)
     t_start = util.rinex_header_time_string_2_timestamp_ns(header["TIME OF FIRST OBS"])
     t_end = util.rinex_header_time_string_2_timestamp_ns(header["TIME OF LAST OBS"])
+    local_db = set_up_test["test_obs_file"].parent
 
     with (
         patch(  # replace download function by online availability check
@@ -93,10 +113,10 @@ def test_get_sp3_files(set_up_test):
             return_value=None,
         ),
     ):
-        sp3_files = sp3.get_sp3_files(t_start, t_end)
+        sp3_files = sp3.get_sp3_files(t_start, t_end, local_db)
 
-    file_orb = sp3_files[0][0]
-    file_clk = sp3_files[0][1]
+    file_orb = sp3_files[0][0].name
+    file_clk = sp3_files[0][1].name
     assert file_orb is not None
     assert file_clk is not None
     assert sp3.get_index_of_priority_from_filename(
@@ -112,8 +132,8 @@ def test_get_sp3_files_multiple_days(set_up_test):
     header = georinex.rinexheader(obs_file)
     t_start = util.rinex_header_time_string_2_timestamp_ns(header["TIME OF FIRST OBS"])
     t_end = t_start + pd.Timedelta(days=1)
+    local_db = set_up_test["test_obs_file"].parent
 
-    downloaded_files = []
     with (
         patch(  # replace download function by online availability check
             "prx.precise_corrections.sp3.sp3_file_discovery.try_downloading_sp3_ftp",
@@ -124,12 +144,12 @@ def test_get_sp3_files_multiple_days(set_up_test):
             return_value=None,
         ),
     ):
-        sp3_files = sp3.get_sp3_files(t_start, t_end)
+        sp3_files = sp3.get_sp3_files(t_start, t_end, local_db)
 
     assert len(sp3_files) == 2
     for ind_day in range(2):
-        file_orb = sp3_files[ind_day][0]
-        file_clk = sp3_files[ind_day][1]
+        file_orb = sp3_files[ind_day][0].name
+        file_clk = sp3_files[ind_day][1].name
         assert file_orb is not None
         assert file_clk is not None
         assert sp3.get_index_of_priority_from_filename(
@@ -161,8 +181,8 @@ def test_download_FIN_when_local_RAP_is_available(set_up_test):
     ):
         sp3_files = sp3.get_sp3_files(t_start, t_end, local_db)
 
-    file_orb = sp3_files[0][0]
-    file_clk = sp3_files[0][1]
+    file_orb = sp3_files[0][0].name
+    file_clk = sp3_files[0][1].name
     assert "FIN" in file_orb
     assert "FIN" in file_clk
     assert sp3.get_index_of_priority_from_filename(
@@ -203,8 +223,20 @@ def test_match_CLK_and_ORB(set_up_test):
     ):
         sp3_files = sp3.get_sp3_files(t_start, t_end, local_db)
 
-    file_orb = sp3_files[0][0]
-    file_clk = sp3_files[0][1]
+    file_orb = sp3_files[0][0].name
+    file_clk = sp3_files[0][1].name
+    assert sp3.get_index_of_priority_from_filename(
+        file_orb
+    ) == sp3.get_index_of_priority_from_filename(file_clk)
+
+
+def test_main_sp3_file_discovery_function(set_up_test):
+    sp3_files = sp3.discover_or_download_sp3_file(set_up_test["test_obs_file"])
+
+    assert len(sp3_files) != 0
+    assert len(sp3_files[0]) == 2
+    file_orb = sp3_files[0][0].name
+    file_clk = sp3_files[0][1].name
     assert sp3.get_index_of_priority_from_filename(
         file_orb
     ) == sp3.get_index_of_priority_from_filename(file_clk)
