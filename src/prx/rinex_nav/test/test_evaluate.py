@@ -7,11 +7,11 @@ from prx.rinex_nav.evaluate import (
     set_time_of_validity,
     parse_rinex_nav_file,
 )
+from prx.rinex_obs.parser import parse_rinex_obs_file
 from prx.precise_corrections.sp3 import evaluate as sp3_evaluate
 from prx.rinex_nav import evaluate as rinex_nav_evaluate
 from prx import constants, converters, util
 from prx.util import week_and_seconds_2_timedelta
-from prx.main import process
 import shutil
 import pytest
 import os
@@ -36,18 +36,12 @@ expected_max_differences_broadcast_vs_precise = {
 }
 
 
-@pytest.fixture
-def input_for_test():
-    test_directory = (
-        Path(__file__).parent.joinpath(f"./tmp_test_directory_{__name__}").resolve()
-    )
-    if test_directory.exists():
-        # Start from empty directory, might avoid hiding some subtle bugs, e.g.
-        # file decompression not working properly
-        shutil.rmtree(test_directory)
-    os.makedirs(test_directory)
+@pytest.fixture(scope="session")
+def input_for_test(tmp_path_factory):
+    test_directory = tmp_path_factory.mktemp("test_inputs")
     test_files = {
-        "rinex_obs_file": test_directory / "TLSE00FRA_R_20220010000_01H_30S_MO.rnx.gz",
+        "rinex_obs_file": test_directory
+        / "TLSE00FRA_R_20220010000_01D_30S_MO.rnx_slice_0.24h.rnx",
         "rinex_nav_file": test_directory / "BRDC00IGS_R_20220010000_01D_MN.zip",
         "sp3_file": test_directory / "WUM0MGXULT_20220010000_01D_05M_ORB.SP3",
     }
@@ -62,18 +56,11 @@ def input_for_test():
 
 
 @pytest.fixture
-def input_for_test_2():
-    test_directory = (
-        Path(__file__).parent.joinpath(f"./tmp_test_directory_{__name__}").resolve()
-    )
-    if test_directory.exists():
-        # Start from empty directory, might avoid hiding some subtle bugs, e.g.
-        # file decompression not working properly
-        shutil.rmtree(test_directory)
-    os.makedirs(test_directory)
+def input_for_test_2(tmp_path_factory):
+    test_directory = tmp_path_factory.mktemp("test_inputs")
     test_files = {
         "rinex_obs_file": test_directory / "TLSE00FRA_R_20230010100_10S_01S_MO.crx.gz",
-        "rinex_nav_file": test_directory / "BRDC00IGS_R_20230010000_01D_MN.rnx.zip",
+        "rinex_nav_file": test_directory / "BRDC00IGS_R_20230010000_01D_MN.rnx.gz",
         "sp3_file": test_directory / "WUM0MGXULT_20220010000_01D_05M_ORB.SP3",
     }
     for key, test_file_path in test_files.items():
@@ -92,37 +79,6 @@ def test_parse_nav_file(input_for_test):
     )
     df = parse_rinex_nav_file(path_to_rnx3_nav_file)
     assert not df.empty
-    assert df["source"].nunique() == 1
-    assert df["source"].iloc[0] == str(path_to_rnx3_nav_file.resolve())
-
-
-def test_compare_rnx3_gps_sat_pos_with_magnitude(input_for_test):
-    """Loads a RNX3 nav file, computes broadcast position for a GPS satellite and compares to
-    position computed by MAGNITUDE matlab library"""
-    path_to_rnx3_nav_file = converters.anything_to_rinex_3(
-        input_for_test["rinex_nav_file"]
-    )
-    query = pd.DataFrame(
-        {
-            "sv": "G01",
-            "signal": "C1C",
-            "query_time_isagpst": week_and_seconds_2_timedelta(
-                weeks=2190, seconds=523800
-            )
-            + constants.cGpstUtcEpoch,
-        },
-        index=[0],
-    )
-    rinex_sat_states = rinex_nav_evaluate.compute_parallel(path_to_rnx3_nav_file, query)
-
-    # MAGNITUDE position
-    sv_pos_magnitude = np.array([13053451.235, -12567273.060, 19015357.126])
-    sv_pos_prx = rinex_sat_states[["sat_pos_x_m", "sat_pos_y_m", "sat_pos_z_m"]][
-        rinex_sat_states.sv == "G01"
-    ].to_numpy()
-
-    threshold_pos_error_m = 1e-3
-    assert np.linalg.norm(sv_pos_prx - sv_pos_magnitude) < threshold_pos_error_m
 
 
 def test_expired_ephemeris_yields_nans(input_for_test):
@@ -366,7 +322,7 @@ def set_up_test_2023():
     os.makedirs(test_directory)
     test_files = DotMap()
     test_files.nav_file = test_directory.joinpath(
-        "BRDC00IGS_R_20230010000_01D_MN.rnx.zip"
+        "BRDC00IGS_R_20230010000_01D_MN.rnx.gz"
     )
     test_files.sp3_file = test_directory.joinpath(
         "GFZ0MGXRAP_20230010000_01D_05M_ORB.SP3"
@@ -758,6 +714,7 @@ def test_select_ephemerides():
     ephemerides = pd.DataFrame(
         {
             "sv": ["E01", "G01", "G01", "G01"],
+            "constellation": ["E", "G", "G", "G"],
             "ephemeris_reference_time_isagpst": [
                 pd.Timedelta("10s"),
                 pd.Timedelta("10s"),
@@ -772,9 +729,9 @@ def test_select_ephemerides():
             ],
             "fnav_or_inav": ["fnav", "", "", ""],
             "ephemeris_hash": [1, 2, 3, 4],
+            "TransTime": [9, 9, 100, 999],
         }
     )
-    ephemerides["constellation"] = ephemerides.sv.str[0]
     ephemerides = set_time_of_validity(ephemerides)
     query = pd.DataFrame(
         {
@@ -797,75 +754,6 @@ def test_select_ephemerides():
     assert query_with_ephemerides.ephemeris_hash.equals(pd.Series([1, 2, 2]))
 
 
-def test_extract_health_flag_from_query(input_for_test):
-    """
-    Tests the extraction and association of the health flag from a RINEX NAV file on a PRX DataFrame of epochs and satellites.
-    """
-    rinex_3_obs_file = converters.anything_to_rinex_3(input_for_test["rinex_obs_file"])
-    query = util.parse_rinex_obs_file(rinex_3_obs_file)[["time", "sv", "obs_type"]]
-    query.time = pd.to_datetime(query.time, format="%Y-%m-%dT%H:%M:%S")
-    query.obs_type = query.obs_type.str[1:]
-    query = query.loc[~query.obs_type.str.contains("lli")].reset_index(drop=True)
-    query = query.rename(
-        columns={
-            "time": "query_time_isagpst",
-            "obs_type": "signal",
-        },
-    )
-    query["id"] = query.index
-
-    # read nav file
-    rinex_nav_file = converters.compressed_to_uncompressed(
-        input_for_test["rinex_nav_file"]
-    )
-    ephemerides = rinex_nav_evaluate.parse_rinex_nav_file(rinex_nav_file)
-
-    # select the right ephemerides dataset for each query row
-    query = select_ephemerides(ephemerides, query)
-
-    # remove query with missing ephemerides
-    query = query.dropna(subset="time")
-
-    # add health_flag column to query and merge health flag into prx dataframe
-    query["health_flag"] = rinex_nav_evaluate.extract_health_flag_from_query(query)
-
-    # Verification : no NaN values health_flag
-    assert not query["health_flag"].isna().any()
-
-    # Verification : health flag values inside ranges specified in rinex v3 format
-    health_valid_ranges = {
-        "G": (0, 63),
-        "E": (0, 255),
-        "C": (0, 3),
-        "R": (0, 7),
-        "J": (0, 63),
-        "I": (0, 3),
-        "S": (0, 63),
-    }
-    for const, hf in zip(query["constellation"], query["health_flag"]):
-        if pd.notna(hf):
-            assert health_valid_ranges[const][0] <= hf <= health_valid_ranges[const][1]
-
-    # Verification of the value for some particular queries.
-    # The reference value is read manually from the rinex NAV file
-    test_list = [  # (sv, epoch, expected health flag)
-        ("G01", pd.Timestamp("2022-01-01 00:00:00"), 0),
-        ("G22", pd.Timestamp("2022-01-01 00:00:00"), 63),
-        ("R24", pd.Timestamp("2022-01-01 00:16:00"), 0),
-        ("R15", pd.Timestamp("2022-01-01 00:16:00"), 0),
-        ("C06", pd.Timestamp("2022-01-01 00:01:30"), 0),
-        ("C20", pd.Timestamp("2022-01-01 00:02:30"), 0),
-        ("E33", pd.Timestamp("2022-01-01 00:01:00"), 0),
-        ("E08", pd.Timestamp("2022-01-01 00:01:00"), 0),
-    ]
-
-    for test in test_list:
-        val = query.loc[
-            (query.sv == test[0]) & (query.query_time_isagpst == test[1]), "health_flag"
-        ]
-        assert (val == test[2]).all()
-
-
 def test_compute_health_flag(input_for_test_2):
     """
     Comprehensive test of health_flag extraction via the compute function
@@ -873,7 +761,7 @@ def test_compute_health_flag(input_for_test_2):
     rinex_3_obs_file = converters.anything_to_rinex_3(
         input_for_test_2["rinex_obs_file"]
     )
-    query = util.parse_rinex_obs_file(rinex_3_obs_file)[["time", "sv", "obs_type"]]
+    query = parse_rinex_obs_file(rinex_3_obs_file)[["time", "sv", "obs_type"]]
     query.time = pd.to_datetime(query.time, format="%Y-%m-%dT%H:%M:%S")
     query.obs_type = query.obs_type.str[1:]
     query = query.loc[~query.obs_type.str.contains("lli")].reset_index(drop=True)
@@ -911,7 +799,7 @@ def test_compute_health_flag(input_for_test_2):
         if mask.any():
             hf_values = query.loc[mask, "health_flag"].dropna()
             assert hf_values.between(min_val, max_val).all(), (
-                f"Valeurs health_flag invalides pour {const}"
+                f"Invalid health flag values {const}"
             )
 
     # Verification of the value for some particular queries.

@@ -10,6 +10,7 @@ import prx.util
 import requests
 
 from prx import converters, util
+from prx.converters import anything_to_rinex_3
 from prx.util import timestamp_to_mid_day
 from prx.util import is_rinex_3_nav_file
 
@@ -42,7 +43,7 @@ def try_downloading_ephemerides_http(day: pd.Timestamp, local_destination_folder
         local_file = converters.compressed_to_uncompressed(local_compressed_file)
         os.remove(local_compressed_file)
         log.info(f"Downloaded broadcast ephemerides file from {url}")
-        prx.util.repair_with_gfzrnx(local_file)
+        prx.util.try_repair_with_gfzrnx(local_file)
         return local_file
     except Exception as e:
         log.warning(f"Could not download broadcast ephemerides file for {day}: {e}")
@@ -85,7 +86,7 @@ def try_downloading_ephemerides_ftp(day: pd.Timestamp, folder: Path):
     local_file = converters.compressed_to_uncompressed(local_compressed_file)
     os.remove(local_compressed_file)
     log.info(f"Downloaded broadcast ephemerides file {ftp_file}")
-    prx.util.repair_with_gfzrnx(local_file)
+    prx.util.try_repair_with_gfzrnx(local_file)
     return local_file
 
 
@@ -157,7 +158,10 @@ def discover_or_download_ephemerides(
 ):
     # If there are any navigation files provided by the user, use them, otherwise use IGS files.
     user_provided_nav_files = [
-        f for f in folder.rglob("*.rnx") if is_rinex_3_nav_file(f)
+        anything_to_rinex_3(f)
+        for f in folder.rglob("*")
+        if is_rinex_3_nav_file(anything_to_rinex_3(f))
+        and is_rinex_3_mixed_mgex_broadcast_ephemerides_file(anything_to_rinex_3(f))
     ]
     if len(user_provided_nav_files) > 0:
         return user_provided_nav_files

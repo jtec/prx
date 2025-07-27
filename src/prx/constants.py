@@ -47,9 +47,6 @@ cMaxOrbitalSpeedOfAnyGnssSatellite_mps = 1e4
 # SBAS URA limit: used to discard SBAS supposed to have inactive georanging capabilities
 cSbasURALimit = 14
 
-cPrxJsonTextSequenceFileExtension = "jsonseq"
-cPrxCsvFileExtension = "csv"
-
 
 # From RINEX Version 3.05, 1 December, 2020.
 def carrier_frequencies_hz():
@@ -128,10 +125,4 @@ system_time_scale_rinex_utc_epoch = {
     "BDT": cBdtUtcEpoch,
     # GLONASS time does not use weeks and week seconds, it has no epoch,
     "GLONASST": pd.NaT,
-}
-
-gfzrnx_binary = {
-    "Windows": "gfzrnx_217_win64.exe",
-    "Linux": "gfzrnx_217_lx64",
-    "Darwin": "gfzrnx_217_osx_intl64",
 }
