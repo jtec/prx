@@ -6,7 +6,7 @@
 
 
 import logging
-from ftplib import FTP
+import ftplib
 import os
 from pathlib import Path
 from typing import List, Tuple
@@ -110,13 +110,13 @@ def check_online_availability(gps_week: int, folder: Path, file: str) -> Path | 
         remote_folder = f"/gnss/products/{gps_week}"
     else:
         remote_folder = f"/gnss/products/{gps_week}/mgex"
-    ftp = FTP(server)
+    ftp = ftplib.FTP(server)
     ftp.login()
     ftp.cwd(remote_folder)
     try:
         ftp.size(file)
         return folder.joinpath(Path(file).stem)
-    except:
+    except ftplib.error_perm:
         log.warning(f"{file} not available on {server}")
         return None
 
