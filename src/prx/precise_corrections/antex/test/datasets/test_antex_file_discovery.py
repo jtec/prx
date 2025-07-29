@@ -6,6 +6,7 @@ import georinex
 import pandas as pd
 import pytest
 from unittest.mock import patch 
+from types import SimpleNamespace
 
 from prx import util
 from prx.precise_corrections.antex import antex_file_discovery as atx
@@ -32,9 +33,25 @@ def set_up_test():
     yield {"test_obs_file": test_obs_file}
     shutil.rmtree(test_directory)
 
-def test_get_atx_file(set_up_test):
+def test_extract_gps_week():
+    filenames = [
+        'igs20_2134.atx',
+        'igs_10.atx',
+        'igs14_abc.atx',
+    ]
+    expected_returns = [2134, -1, -1]
+    gps_week = [atx.extract_gps_week(f) for f in filenames]
+    assert gps_week == expected_returns
+    
+def test_download_if_not_local(set_up_test):
     """
-    Assert that prx will download the latest ATX file available if it is not present locally. 
+    Tests that the ANTEX file is downloaded when no local file is available, 
+    but a valid remote file exists.
+
+    Scenario : 
+    - No local ANTEX file available
+    - A remote ANTEX file exists
+    -> The function should trigger the download of the remote file. 
     """
     obs_file = set_up_test["test_obs_file"]
     header = georinex.rinexheader(obs_file)
@@ -43,20 +60,69 @@ def test_get_atx_file(set_up_test):
     db_folder = set_up_test["test_obs_file"].parent
     downloaded_atx = atx.get_atx_file(t_start, db_folder)
     
+    # Ensure the file was downloaded and exists
     assert downloaded_atx is not None
     assert downloaded_atx.exists()
     
-def test_fallback_to_latest_existing_atx(set_up_test):
-    """
-    This test checks that if no ANTEX file is available for the target GPS week (e.g. the week is too recent), 
-    the latest available ANTEX file from a previous GPS week is used instead.
-    """
+def test_download_if_remote_is_newer(set_up_test):
+    '''
+    Tests that the ANTEX file is downloaded when the remote file has a newer GPS week 
+    than the local one.
 
+    Scenario : 
+    - local file = igs20_2370.atx
+    - remote file = igs20_2375.atx
+    -> The function should download igs20_2375.atx
+    '''
+    latest_local = SimpleNamespace(name="igs20_2370.atx")
+    latest_remote = SimpleNamespace(name="igs20_2375.atx")
+    date = pd.Timestamp('2025-01-01 12:00:00')
     db_folder = set_up_test["test_obs_file"].parent
-    now = pd.Timestamp.now()
-    gps_week_future = atx.date_to_gps_week(now) + 10
-    atx_filename = f'igs*{str(gps_week_future)}.atx'
-    with patch('prx.precise_corrections.antex.antex_file_discovery.atx_filename', atx_filename):
-        downloaded_atx = atx.get_atx_file(now, db_folder)
 
-    
+    # Mock the dependencies : download, local discovery, and remote fetch
+    # The first patch mock the function `try_downloading_atx_ftp` in order to create a fake downloaded file ('igs20_2375.atx')
+    # so that the files are not downloaded each time the tests are run
+    # The second and third patch are mocking the functions `find_latest_local_antex_file` and `fetch_latest_remote_antex_file`
+    # to be in the scenario where the latest local file is 'igs20_2370.atx', and the remote one is 'igs20_2375.atx'
+    with (
+        patch("prx.precise_corrections.antex.antex_file_discovery.try_downloading_atx_ftp") as mock_download, \
+        patch('prx.precise_corrections.antex.antex_file_discovery.find_latest_local_antex_file', return_value=latest_local.name), \
+        patch('prx.precise_corrections.antex.antex_file_discovery.fetch_latest_remote_antex_file', return_value=latest_remote.name), \
+    ):
+        mock_download.return_value = Path("fake/path/igs20_2375.atx")
+
+        result = atx.get_atx_file(date,db_folder)
+
+        # Ensure `try_downloading_atx_ftp` was triggered with correct arguments
+        mock_download.assert_called_once_with(latest_remote.name, db_folder)
+        assert result.name == "igs20_2375.atx"
+
+def test_skip_download_if_same_week(set_up_test):
+    '''
+    Tests that the ANTEX file is not downloaded when the remote and local files 
+    are from the same GPS week.
+
+    Scenario:
+    - local file = igs20_2375.atx
+    - remote file = igs20_2375.atx
+    → The function should skip download and return the local file
+    '''
+    latest_local = SimpleNamespace(name="igs20_2375.atx")
+    latest_remote = SimpleNamespace(name="igs20_2375.atx")
+    date = pd.Timestamp('2025-01-01 12:00:00')
+    db_folder = set_up_test["test_obs_file"].parent
+    # Mock the dependencies : download, local discovery, and remote fetch
+    # The first patch mock the function `try_downloading_atx_ftp` in order to check if it was used by `get_atx_file`
+    # The second and third patch are mocking the functions `find_latest_local_antex_file` and `fetch_latest_remote_antex_file`
+    # to be in the scenario where the latest local and remote files are both 'igs20_2375.atx'. 
+    with (
+        patch("prx.precise_corrections.antex.antex_file_discovery.try_downloading_atx_ftp") as mock_download, \
+        patch('prx.precise_corrections.antex.antex_file_discovery.find_latest_local_antex_file', return_value=latest_local.name), \
+        patch('prx.precise_corrections.antex.antex_file_discovery.fetch_latest_remote_antex_file', return_value=latest_remote.name), \
+    ):
+        result = atx.get_atx_file(date,db_folder)
+
+        # Ensure `try_downloading_atx_ftp` was not triggered. 
+        mock_download.assert_not_called()
+        # Ensure the returned file is the local one
+        assert result == latest_local.name
