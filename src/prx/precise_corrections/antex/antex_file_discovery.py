@@ -1,7 +1,5 @@
-import argparse
-import logging
 from ftplib import FTP
-import os
+import ftplib
 from pathlib import Path
 import re
 
@@ -12,12 +10,22 @@ import fnmatch
 
 from prx import converters
 from prx import util
-import prx
 from prx.util import timestamp_to_mid_day
+
+"""
+Logic overview:
+- The code first extracts the GPS week from the provided RINEX observation file.
+- It then identifies the most recent ANTEX file available both locally and remotely.
+- If both local and remote ANTEX files are the same, the local version is reused, as the local database is considered up to date.
+- Otherwise, the latest remote file is downloaded and used.
+- Note: If the most recent ANTEX file has a GPS week that is earlier than the observation file's GPS week 
+(e.g., the remote database has not yet been updated), a warning is displayed to indicate that the most recent ANTEX file 
+was still used despite being older than the observation file.
+"""
 
 log = util.get_logger(__name__)
 
-atx_filename = f"igs[0-9][0-9]_????.atx"
+atx_filename = f"igs20_????.atx"
 
 def date_to_gps_week(date:pd.Timestamp):
     """
@@ -55,27 +63,6 @@ def find_latest_local_antex_file(db_folder = atx_file_database_folder()):
         return None
     return max(candidates, key=lambda c: extract_gps_week(c))
 
-# def get_local_atx(gps_week : int, db_folder=atx_file_database_folder()):
-#     candidates = list(
-#         db_folder.glob(atx_filename)
-#     )
-#     candidates = [
-#         c for c in candidates if len(c) == 14 and extract_gps_week(c) != -1
-#         ]  
-#     if len(candidates) == 0:
-#         return None
-#     if len(candidates) > 1:
-#         candidates = sorted(
-#             candidates, 
-#             key=lambda c: extract_gps_week(c),
-#             reverse=True
-#         )
-#         log.warning(
-#                 f"Found more than one ANTEX file for {gps_week}: \n{candidates} \n Will use the first one."
-#             )
-#     log.info(f"Found the ANTEX local file : {candidates[0]}")
-#     return candidates[0]
-
 def list_ftp_directory(server, folder):
     ftp = FTP(server)
     ftp.login()
@@ -91,7 +78,6 @@ def fetch_latest_remote_antex_file():
     server = 'gssc.esa.int'
     remote_folder = f"/igs/station/general"
     candidates = list_ftp_directory(server, remote_folder)
-    candidates = list_ftp_directory(server, remote_folder)
     candidates = [
         c
         for c in candidates
@@ -101,23 +87,28 @@ def fetch_latest_remote_antex_file():
         return None
     return max(candidates, key=lambda c:extract_gps_week(c))
 
-def try_downloading_atx_ftp(remote_file : str, folder : Path):
+def check_online_availability(file: str, folder: Path) -> Path | None:
+    """
+    Need to keep the same inputs as try_downloading_sp3_ftp, in order to be able to use `unittest.mock.patch` in tests
+    """
+    server = "gssc.esa.int"
+    remote_folder = f"/igs/station/general"
+    ftp = FTP(server)
+    ftp.login()
+    ftp.cwd(remote_folder)
+    try:
+        ftp.size(file)
+        return folder.joinpath(file)
+    except ftplib.error_perm:
+        log.warning(f"{file} not available on {server}")
+        return None
+
+def try_downloading_atx_ftp(file : str, folder : Path):
+    """
+    Download the wanted remote file
+    """
     server = 'gssc.esa.int'
     remote_folder = f"/igs/station/general"
-    candidates = list_ftp_directory(server, remote_folder)
-    candidates = [
-        c
-        for c in candidates
-        if fnmatch.fnmatch(c, remote_file)
-    ]
-    if len(candidates) == 0:
-        log.warning(f"Could not find ANTEX file named {remote_file}")
-        return None
-    if len(candidates) > 1 :
-        log.warning(
-            f"Found more than one ANTEX file named {remote_file}: \n{candidates} \n Will use the first one."
-        )
-    file = candidates[0]
     ftp_file = f"ftp://{server}/{remote_folder}/{file}"
     local_file = folder / file
     urllib.request.urlretrieve(ftp_file, local_file)
@@ -129,21 +120,19 @@ def try_downloading_atx_ftp(remote_file : str, folder : Path):
 
 def get_atx_file(date: pd.Timestamp, db_folder = atx_file_database_folder()):
     gps_week = date_to_gps_week(date)
-    atx_file = None
-    while atx_file is None:
-        latest_atx_local =  find_latest_local_antex_file(db_folder)
-        latest_atx_remote = fetch_latest_remote_antex_file()
-        if latest_atx_remote == latest_atx_local :
-            return latest_atx_local
-        elif latest_atx_remote and (not latest_atx_local or extract_gps_week(latest_atx_remote)> extract_gps_week(latest_atx_local)):
-            # Download the latest file 
-            atx_file = try_downloading_atx_ftp(latest_atx_remote, db_folder)
-        if atx_file is not None :
-            if gps_week > extract_gps_week(atx_file.name) :
-                log.warning(
-                f"No ANTEX file found for the target GPS week {gps_week} — using the most recent available instead."
-            )
-            return atx_file
+    latest_atx_local =  find_latest_local_antex_file(db_folder)
+    latest_atx_remote = fetch_latest_remote_antex_file()
+    if latest_atx_remote == latest_atx_local :
+        return latest_atx_local
+    elif latest_atx_remote and (not latest_atx_local or extract_gps_week(latest_atx_remote)> extract_gps_week(latest_atx_local)):
+        # Download the latest file 
+        atx_file = try_downloading_atx_ftp(latest_atx_remote, db_folder)
+    if atx_file is not None :
+        if gps_week > extract_gps_week(atx_file.name) :
+            log.warning(
+            f"No ANTEX file found for the target GPS week {gps_week} — using the most recent available instead."
+        )
+        return atx_file
         
     raise FileNotFoundError("No file ANTEX found locally or online.")
 
