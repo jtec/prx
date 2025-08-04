@@ -344,3 +344,72 @@ def test_timestamp_to_mid_day():
     assert util.timestamp_to_mid_day(
         pd.Timestamp("2023-01-01T01:02:03")
     ) == pd.Timestamp("2023-01-01T12:00:00")
+
+
+def test_sun_pos():
+    pos_sun = (
+        util.compute_sun_ecef_position(
+            np.array(
+                [
+                    pd.Timestamp(
+                        year=2020, month=6, day=20, hour=6
+                    ),  # approx time when the sun is "close" to [0,1,xx] AU (Equinox)pd.Timestamp(
+                    pd.Timestamp(
+                        year=2020, month=6, day=20, hour=12
+                    ),  # approx time when the sun is "close" to [1,0,xx] AU (Equinox)
+                    pd.Timestamp(
+                        year=2020, month=6, day=20, hour=18
+                    ),  # approx time when the sun is "close" to [0,-1,xx] AU
+                ]
+            )
+        )
+        / np.array([149_597_870_700] * 3)
+    )
+    assert pos_sun[0:2, 0] == pytest.approx(np.array([0, 1]), abs=0.1)
+    assert pos_sun[0:2, 1] == pytest.approx(np.array([1, 0]), abs=0.1)
+    assert pos_sun[0:2, 2] == pytest.approx(np.array([0, -1]), abs=0.1)
+
+
+def test_sat_frame():
+    """
+    Some tests to validate the conversion between ECEF and satellite-fixed frame.
+
+    In order to control the sun position, the function util.ecef_2_satellite is not used, but its content is
+    replicated here.
+    """
+    pos_sat_ecef = np.array([26_600_000, 0, 0]).reshape(1, -1)
+    pos_ecef = np.array([6_400_000, 0, 0]).reshape(1, -1)
+
+    k = -pos_sat_ecef / np.linalg.norm(pos_sat_ecef, axis=1).reshape(1, -1)
+    pos_sun_ecef = np.array([0, 149_597_870_700, 0]).reshape(1, -1)  # 1 AU on y
+    unit_vector_sun_ecef = (pos_sun_ecef - pos_sat_ecef) / np.linalg.norm(
+        pos_sun_ecef - pos_sat_ecef, axis=1
+    ).reshape(-1, 1)
+    j = np.cross(k, unit_vector_sun_ecef)
+    i = np.cross(j, k)
+
+    rot_mat_ecef2sat = np.stack([i, j, k], axis=1)
+    pos_sat_frame = np.stack(
+        [
+            rot_mat_ecef2sat[i, :, :] @ (pos_ecef[i, :] - pos_sat_ecef[i, :])
+            for i in range(pos_sat_ecef.shape[0])
+        ]
+    )
+    assert pos_sat_frame[0, :] == pytest.approx(np.array([0, 0, 20_200_000]))
+
+    # other simple examples
+    pos_sun = np.array([0, 149_597_870_700, 0])  # 1 AU on y
+    pos_rx = np.array([6_400_000, 0, 0])  # on +x
+    pos_sat = np.array([26_600_000, 0, 0])  # on +x
+
+    k = -pos_sat / np.linalg.norm(pos_sat)
+    unit_vector_sun_ecef = (pos_sun - pos_sat) / np.linalg.norm(pos_sun - pos_sat)
+    j = np.cross(k, unit_vector_sun_ecef)
+    i = np.cross(j, k)
+
+    pos_rx_sat = np.stack([i, j, k], axis=0) @ (pos_rx - pos_sat)
+    assert (pos_rx_sat == np.array([0, 0, 20_200_000])).all()
+
+    pos_rx = np.array([0, 6_400_000, 0])  # on +y
+    pos_rx_sat = np.stack([i, j, k], axis=0) @ (pos_rx - pos_sat)
+    assert pos_rx_sat == pytest.approx(np.array([6_400_000, 0, 20_200_000 + 6_400_000]))

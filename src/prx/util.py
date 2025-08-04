@@ -443,6 +443,7 @@ def ecef_2_geodetic(pos_ecef):
         )
     return [latitude_rad, longitude_rad, altitude_m]
 
+
 def ecef_2_satellite(pos_ecef: np.array, pos_sat_ecef: np.array, epoch: np.array):
     """
     Converts an ecef position to the satellite-fixed coordinate frame
@@ -468,6 +469,7 @@ def ecef_2_satellite(pos_ecef: np.array, pos_sat_ecef: np.array, epoch: np.array
         ]
     )
     return pos_sat_frame, rot_mat_ecef2sat
+
 
 def obs_dataset_to_obs_dataframe(ds: xarray.Dataset):
     # Flatten the xarray DataSet into a pandas DataFrame:
@@ -545,6 +547,7 @@ def compute_gps_utc_leap_seconds(yyyy: int, doy: int):
             break
     assert ~np.isnan(ls), "GPS leap second could not be retrieved"
     return ls
+
 
 def compute_sun_ecef_position(epochs: np.array) -> np.array:
     """
