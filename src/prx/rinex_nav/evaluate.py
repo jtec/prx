@@ -10,11 +10,13 @@ import georinex
 from prx import util
 from prx import constants
 from prx.util import timeit, try_repair_with_gfzrnx
+from line_profiler import profile
 
 log = logging.getLogger(__name__)
 
 
 @timeit
+@profile
 def parse_rinex_nav_file(rinex_file: Path):
     @util.disk_cache.cache(ignore=["rinex_file_path"])
     def cached_load(rinex_file_path: Path, file_hash: str):
@@ -509,6 +511,9 @@ def convert_nav_dataset_to_dataframe(nav_ds):
     )
     df = df.reset_index(drop=True)
     df = compute_gal_inav_fnav_indicators(df)
+    if "FreqNum" not in df.columns:
+        # Looks like there are no GLONASS ephemerides, so add a dummy column
+        df["FreqNum"] = -1
     df["frequency_slot"] = df.FreqNum.where(df.sv.str[0] == "R", 1).astype(int)
     df.attrs["ionospheric_corr_GPS"] = nav_ds.ionospheric_corr_GPS
     return df

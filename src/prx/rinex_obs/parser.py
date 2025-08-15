@@ -12,6 +12,7 @@ from prx.util import (
     disk_cache,
     try_repair_with_gfzrnx,
 )
+from line_profiler import profile
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +39,7 @@ def get_obs_types(header):
     return {content["constellation"]: content for content in types}
 
 
+@profile
 def parse(file_path):
     df = pd.read_csv(file_path, sep="|", header=None)
     df.columns = ["lines"]
