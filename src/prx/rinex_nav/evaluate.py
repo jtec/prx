@@ -1,5 +1,5 @@
 import logging
-import multiprocessing
+import math
 
 import pandas as pd
 import numpy as np
@@ -630,11 +630,6 @@ def compute_clock_offsets(df):
     return df
 
 
-def compute_parallel(rinex_nav_file_paths, per_signal_query):
-    if not isinstance(rinex_nav_file_paths, list):
-        rinex_nav_file_paths = [rinex_nav_file_paths]
-
-
 def compute_parallel(
     rinex_nav_file_paths, per_signal_query, is_query_corrected_by_sat_clock_offset=False
 ):
@@ -643,10 +638,12 @@ def compute_parallel(
     # Warm up nav file parser cache so that we don't parse the file multiple times
     for rinex_nav_file_path in rinex_nav_file_paths:
         _ = parse_rinex_nav_file(rinex_nav_file_path)
-    parallel = Parallel(n_jobs=round(multiprocessing.cpu_count() / 2), return_as="list")
-    # split dataframe into `n_chunks` smaller dataframes
-    n_chunks = min(len(per_signal_query.index), 4)
-    chunks = np.array_split(per_signal_query, n_chunks)
+    parallel = Parallel(n_jobs=-4, return_as="list")
+    # split dataframe into smaller dataframes
+    len_chunk = 1000
+    chunks = np.array_split(
+        per_signal_query, math.ceil(len(per_signal_query.index) / len_chunk)
+    )
     processed_chunks = parallel(
         delayed(compute)(
             rinex_nav_file_paths, chunk, is_query_corrected_by_sat_clock_offset
