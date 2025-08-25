@@ -180,12 +180,6 @@ def bootstrap_coarse_receiver_position(filepath_obs, filepath_nav):
             "query_time_isagpst": "time_of_emission_isagpst",
         }
     )
-    sat_states["relativistic_clock_effect_m"] = (
-        prx.util.compute_relativistic_clock_effect(
-            sat_states[["sat_pos_x_m", "sat_pos_y_m", "sat_pos_z_m"]].to_numpy(),
-            sat_states[["sat_vel_x_mps", "sat_vel_y_mps", "sat_vel_z_mps"]].to_numpy(),
-        )
-    )
 
     # create obs df by merging query and sat_states
     obs_df = query[

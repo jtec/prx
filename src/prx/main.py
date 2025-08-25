@@ -318,14 +318,6 @@ def build_records_levels_12(
 
     if prx_level == 2:
         # Compute anything else that is satellite-specific
-        sat_states["relativistic_clock_effect_m"] = (
-            util.compute_relativistic_clock_effect(
-                sat_states[["sat_pos_x_m", "sat_pos_y_m", "sat_pos_z_m"]].to_numpy(),
-                sat_states[
-                    ["sat_vel_x_mps", "sat_vel_y_mps", "sat_vel_z_mps"]
-                ].to_numpy(),
-            )
-        )
         sat_states["sagnac_effect_m"] = util.compute_sagnac_effect(
             sat_states[["sat_pos_x_m", "sat_pos_y_m", "sat_pos_z_m"]].to_numpy(),
             approximate_receiver_ecef_position_m,

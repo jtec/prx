@@ -347,12 +347,17 @@ def compute_sagnac_effect(sat_pos_m, rx_pos_m):
     return sagnac_effect_m
 
 
-def compute_relativistic_clock_effect(sat_pos_m: np.array, sat_vel_mps: np.array):
+def compute_relativistic_clock_effect_deprecated(
+    sat_pos_m: np.array, sat_vel_mps: np.array
+):
     """
     Reference:
     GNSS Data Processing, Vol. I: Fundamentals and Algorithms. Equation (5.19)
 
     Expects both arrays to be of shape (rows, columns) (n, 3)
+
+    NOTE: this function is no longer used, due to cm-level difference with a computation based on the osculating
+    orbit parameters, included in rinex_nav.evaluate.py
     """
     relativistic_clock_effect_m = (
         -2

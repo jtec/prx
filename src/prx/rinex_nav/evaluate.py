@@ -127,6 +127,8 @@ def sbas_orbit_position_and_velocity(df):
         df[["dX", "dY", "dZ"]].values
         + df[["dX2", "dY2", "dZ2"]].mul(t_query, axis=0).values
     )
+
+    df["relativistic_clock_effect_m"] = 0  # already contained in satellite clock
     return df
 
 
@@ -153,6 +155,9 @@ def glonass_orbit_position_and_velocity(df):
                     "sat_vel_z_mps",
                 ]
             ] = pv
+            df["relativistic_clock_effect_m"] = (
+                0  # already contained in satellite clock
+            )
 
             return df
         # One step of 4th order Runge-Kutta integration:
@@ -252,10 +257,14 @@ def position_in_orbital_plane(eph):
     # We need to know which orbits are Beidou GEOs later on
     eph["is_bds_geo"] = is_bds_geo(eph.constellation, eph.i_k, eph.A)
 
-    # DEBUG relativistic clock effect
-    eph["relativistic_clock_effect_v2_m"] = -2 * np.sqrt(
-        eph.MuEarthIcd_m3ps2 * eph["A"]
-    ) * eph.e * np.sin(eph["E_k"]) / constants.cGpsSpeedOfLight_mps
+    # relativistic clock effect
+    eph["relativistic_clock_effect_m"] = (
+        -2
+        * np.sqrt(eph.MuEarthIcd_m3ps2 * eph["A"])
+        * eph.e
+        * np.sin(eph["E_k"])
+        / constants.cGpsSpeedOfLight_mps
+    )
 
 
 def orbital_plane_to_earth_centered_cartesian(eph):
@@ -727,7 +736,7 @@ def compute(
         "query_time_isagpst",
         "ephemeris_hash",
         "health_flag",
-        "relativistic_clock_effect_v2_m",  # DEBUG
+        "relativistic_clock_effect_m",
     ]
     per_sat_eph_query = per_sat_eph_query[columns_to_keep]
     # Merge the computed satellite states into the larger signal-specific query dataframe
