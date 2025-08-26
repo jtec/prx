@@ -101,7 +101,6 @@ def repair_with_gfzrnx(file):
         "-fout",
         str(file),
         "-chk",
-        "-kv",
         "-f",
     ]
     result = subprocess.run(

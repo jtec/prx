@@ -1,3 +1,5 @@
+from tempfile import TemporaryDirectory
+
 import numpy as np
 import pandas as pd
 from pathlib import Path
@@ -840,3 +842,14 @@ def test_compute_health_flag(input_for_test_2):
         assert (values == test[2]).all()
 
     print("done")
+
+
+def test_parse_corrupted_file():
+    corrupted_nav_file = (
+        Path(__file__).parent / "datasets" / "BRDC00WRD_R_20252380000_01D_MN.rnx"
+    )
+    with TemporaryDirectory() as test_dir:
+        copy_for_test = Path(test_dir) / corrupted_nav_file.name
+        shutil.copy(corrupted_nav_file, copy_for_test)
+        assert copy_for_test.exists()
+        parse_rinex_nav_file(copy_for_test)
