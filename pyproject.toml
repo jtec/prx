@@ -47,7 +47,7 @@ package = true
 python-preference = "only-managed"
 
 [tool.uv.sources]
-georinex = { git = "https://github.com/geospace-code/georinex", rev = "95ef1d8e7150f998a1b5a429090cadb429128648" }
+georinex = { git = "https://github.com/jtec/georinex", rev = "2383aa2b0cc3c842b2775aabd3ee95d16a161e9c" }
 
 [build-system]
 requires = ["hatchling", "uv-dynamic-versioning"]
