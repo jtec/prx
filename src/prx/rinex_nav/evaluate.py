@@ -258,12 +258,13 @@ def position_in_orbital_plane(eph):
     eph["is_bds_geo"] = is_bds_geo(eph.constellation, eph.i_k, eph.A)
 
     # relativistic clock effect
+    # Use the formula using osculating parameters, not . See GNSS DATA PROCESSING, Vol 1, ESA, p 105, footnote 17)
     eph["relativistic_clock_effect_m"] = (
         -2
         * np.sqrt(eph.MuEarthIcd_m3ps2 * eph["A"])
         * eph.e
         * np.sin(eph["E_k"])
-        / constants.cGpsSpeedOfLight_mps
+        / constants.cGpsSpeedOfLight_mps  # not squared, because expressed in meters, not seconds
     )
 
 
