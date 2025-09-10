@@ -101,7 +101,7 @@ def parse(file_path):
         group_df = pd.concat([group_df, group_lli], axis=1)
         group_df = group_df.stack().reset_index(drop=False)
         group_df.columns = ["time", "constellation", "sv", "obs_type", "obs_value"]
-        group_df = group_df[["time", "sv", "obs_value", "obs_type"]]
+        group_df = group_df[["time", "sv", "constellation", "obs_value", "obs_type"]]
         group_dfs.append(group_df)
     result = pd.concat(group_dfs).sort_values(by=["time"]).reset_index(drop=True)
     return result

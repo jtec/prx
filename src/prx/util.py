@@ -215,28 +215,15 @@ def week_and_seconds_2_timedelta(weeks, seconds):
     return pd.Timedelta(weeks * constants.cSecondsPerWeek + seconds, "seconds")
 
 
-def timedelta_2_seconds(time_delta: pd.Timedelta):
-    if pd.isnull(time_delta):
-        return np.nan
-    assert isinstance(time_delta, pd.Timedelta), (
-        "time_delta must be of type pd.Timedelta"
-    )
-    integer_seconds = np.float64(round(time_delta.total_seconds()))
-    fractional_seconds = (
-        np.float64(
-            timedelta_2_nanoseconds(time_delta)
-            - integer_seconds * constants.cNanoSecondsPerSecond
-        )
-        / constants.cNanoSecondsPerSecond
-    )
-    return integer_seconds + fractional_seconds
+def timedelta_2_seconds(time_delta: pd.Series | pd.Timedelta):
+    return timedelta_2_nanoseconds(time_delta) / constants.cNanoSecondsPerSecond
 
 
-def timedelta_2_nanoseconds(time_delta: pd.Timedelta):
-    assert isinstance(time_delta, pd.Timedelta), (
-        "time_delta must be of type pd.Timedelta"
-    )
-    return np.float64(time_delta / pd.Timedelta(1, "ns"))
+def timedelta_2_nanoseconds(time_delta: pd.Series | pd.Timedelta):
+    if isinstance(time_delta, pd.Timedelta):
+        return timedelta_2_nanoseconds(pd.Series([time_delta])).iloc[0]
+
+    return time_delta / pd.Timedelta(1, "ns")
 
 
 def rinex_header_time_string_2_timestamp_ns(time_string: str) -> pd.Timestamp:
