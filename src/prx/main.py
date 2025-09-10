@@ -11,7 +11,6 @@ import numpy as np
 import polars as pl
 import git
 import prx.util
-from prx.speedo import build_records_polars
 from prx.util import add_range_column, timedelta_2_seconds, timestamp_2_timedelta
 from prx import atmospheric_corrections as atmo, util
 from prx.constants import carrier_frequencies_hz
@@ -27,13 +26,9 @@ log = util.get_logger(__name__)
 
 
 @profile
-def write_csv_file_polars(
+def compute_output_dataframe(
     prx_header: dict, flat_records: pl.DataFrame, file_name_without_extension: Path
 ):
-    output_file = Path(
-        f"{str(file_name_without_extension)}.{constants.cPrxCsvFileExtension}"
-    )
-
     # Convert radians to degrees
     flat_records = flat_records.with_columns(
         [
@@ -44,12 +39,14 @@ def write_csv_file_polars(
 
     # Extract tracking_id (2 chars from pos 1)
     flat_records = flat_records.with_columns(
-        pl.col("observation_type").str.slice(1, 2).alias("tracking_id")
+        pl.col("observation_type").cast(pl.Utf8).str.slice(1, 2).alias("tracking_id")
     )
 
     # Start with code observations (C)
     records = (
-        flat_records.filter(pl.col("observation_type").str.starts_with("C"))
+        flat_records.filter(
+            pl.col("observation_type").cast(pl.Utf8).str.starts_with("C")
+        )
         .with_columns(pl.col("observation_value").alias("C_obs_m"))
         .drop(["observation_value", "observation_type"])
     )
@@ -60,7 +57,7 @@ def write_csv_file_polars(
         obs = (
             flat_records.filter(
                 pl.col("observation_type").str.starts_with(obs_type)
-                & (pl.col("observation_type").str.len_chars() == 3)
+                & (pl.col("observation_type").cast(pl.Utf8).str.len_chars() == 3)
             )
             .select(
                 [
@@ -102,8 +99,8 @@ def write_csv_file_polars(
     # Add constellation and PRN
     records = records.with_columns(
         [
-            pl.col("satellite").str.slice(0, 1).alias("constellation"),
-            pl.col("satellite").str.slice(1).alias("prn"),
+            pl.col("satellite").cast(pl.Utf8).str.slice(0, 1).alias("constellation"),
+            pl.col("satellite").cast(pl.Utf8).str.slice(1).alias("prn"),
         ]
     )
 
@@ -129,7 +126,19 @@ def write_csv_file_polars(
     prx_header["processing_start_time"] = prx_header["processing_start_time"].strftime(
         "%Y-%m-%d %H:%M:%S.%f3"
     )
+    return prx_header, records
 
+
+@profile
+def write_csv_file_polars(
+    prx_header: dict, flat_records: pl.DataFrame, file_name_without_extension: Path
+):
+    prx_header, records = compute_output_dataframe(
+        prx_header, flat_records, file_name_without_extension
+    )
+    output_file = Path(
+        f"{str(file_name_without_extension)}.{constants.cPrxCsvFileExtension}"
+    )
     # Write header manually
     with open(output_file, "w", encoding="utf-8") as file:
         file.write(f"# {json.dumps(prx_header)}\n")
@@ -147,14 +156,35 @@ def write_csv_file_polars(
 
 
 @profile
+def write_feather_file(
+    prx_header: dict, flat_records: pl.DataFrame, file_name_without_extension: Path
+):
+    prx_header, records = compute_output_dataframe(
+        prx_header, flat_records, file_name_without_extension
+    )
+    output_file = Path(f"{str(file_name_without_extension)}.feather")
+    # Write header to separate JSON file
+    metadata_file = output_file.with_suffix(".json")
+    with open(metadata_file, "w", encoding="utf-8") as file:
+        file.write(json.dumps(prx_header))
+    records.write_ipc(
+        output_file,
+        compression="zstd",
+    )
+    log.info(f"Generated feather prx file: {output_file}")
+    return output_file
+
+
+@profile
 def write_prx_file(
     prx_header: dict,
     prx_records: pd.DataFrame,
     file_name_without_extension: Path,
     output_format: str,
 ):
+    prx_records["observation_type"] = prx_records["observation_type"].astype(str)
     output_writers = {
-        "jsonseq": write_json_text_sequence_file,
+        "feather": write_feather_file,
         "csv": write_csv_file_polars,
     }
     if output_format not in output_writers.keys():
@@ -397,8 +427,11 @@ def compute_ephemeris_discontinuities(
     )
     # Now compute satellite states after discontinuity with ephemeris before the discontinuity
     query = sat_states.loc[
-        sat_states.after_discontinuity, ["sv", "signal", "query_time_isagpst"]
+        sat_states.after_discontinuity,
+        ["sv", "constellation", "signal", "query_time_isagpst"],
     ].drop_duplicates()
+    if query.shape[0] == 0:
+        return pd.DataFrame()
     # Select the previous ephemeris
     query["ephemeris_selection_time_isagpst"] = query.query_time_isagpst - pd.Timedelta(
         "10s"
@@ -406,7 +439,7 @@ def compute_ephemeris_discontinuities(
     # But still compute satellite states for after the discontinuity
     query = query.sort_values("ephemeris_selection_time_isagpst")
     df_previous_ephemeris = rinex_evaluate.compute(
-        rinex_3_ephemerides_files, query
+        rinex_3_ephemerides_files, pl.from_pandas(query)
     ).reset_index(drop=True)
     shared_columns = ["query_time_isagpst", "sv", "signal"]
     df_new_ephemeris = df_new_ephemeris.sort_values(by=shared_columns).reset_index(
@@ -442,17 +475,19 @@ def build_records(
         approximate_receiver_ecef_position_m
     )
     check_assumptions(rinex_3_obs_file)
-    return build_records_polars(
-        rinex_3_obs_file,
-        rinex_3_ephemerides_files,
-        approximate_receiver_ecef_position_m,
-    )
+    # return build_records_polars(
+    #    rinex_3_obs_file,
+    #    rinex_3_ephemerides_files,
+    #    approximate_receiver_ecef_position_m,
+    # )
 
     flat_obs = util.parse_rinex_obs_file(rinex_3_obs_file)
 
     flat_obs.time = pd.to_datetime(flat_obs.time, format="%Y-%m-%dT%H:%M:%S")
     flat_obs.obs_value = flat_obs.obs_value.astype(float)
-    flat_obs[["sv", "obs_type"]] = flat_obs[["sv", "obs_type"]].astype(str)
+    flat_obs[["constellation", "sv", "obs_type"]] = flat_obs[
+        ["constellation", "sv", "obs_type"]
+    ].astype("category")
 
     flat_obs = flat_obs.rename(
         columns={
@@ -465,12 +500,12 @@ def build_records(
 
     log.info("Computing times of emission in satellite time")
     per_sat = flat_obs.pivot(
-        index=["time_of_reception_in_receiver_time", "satellite"],
+        index=["time_of_reception_in_receiver_time", "satellite", "constellation"],
         columns=["observation_type"],
         values="observation_value",
     ).reset_index()
-    per_sat["time_scale"] = (
-        per_sat["satellite"].str[0].map(constants.constellation_2_system_time_scale)
+    per_sat["time_scale"] = per_sat["constellation"].map(
+        constants.constellation_2_system_time_scale
     )
     per_sat["system_time_scale_epoch"] = per_sat["time_scale"].map(
         constants.system_time_scale_rinex_utc_epoch
@@ -524,29 +559,32 @@ def build_records(
         },
     )
 
-    sat_states = rinex_evaluate.compute_parallel(
+    sat_states = rinex_evaluate.compute(
         rinex_3_ephemerides_files,
-        query,
+        pl.from_pandas(query),
     ).reset_index(drop=True)
 
     discontinuities = compute_ephemeris_discontinuities(
         rinex_3_ephemerides_files, sat_states, approximate_receiver_ecef_position_m
     )
-    discontinuities = discontinuities[
-        [
-            "sv",
-            "signal",
-            "query_time_isagpst",
-            "ephemeris_hash",
-            "previous_ephemeris_hash",
-            "range_m",
-            "sat_clock_offset_m",
+    if discontinuities.shape[0] > 0:
+        discontinuities = discontinuities[
+            [
+                "sv",
+                "signal",
+                "query_time_isagpst",
+                "ephemeris_hash",
+                "previous_ephemeris_hash",
+                "range_m",
+                "sat_clock_offset_m",
+            ]
         ]
-    ]
-    discontinuities.query_time_isagpst = discontinuities.query_time_isagpst.apply(
-        lambda ts: timedelta_2_seconds(timestamp_2_timedelta(ts, "GPST"))
-    )
-    discontinuities = discontinuities.to_dict("records")
+        discontinuities.query_time_isagpst = discontinuities.query_time_isagpst.apply(
+            lambda ts: timedelta_2_seconds(timestamp_2_timedelta(ts, "GPST"))
+        )
+        discontinuities = discontinuities.to_dict("records")
+    else:
+        discontinuities = []
 
     sat_states = sat_states.rename(
         columns={
@@ -742,20 +780,26 @@ if __name__ == "__main__":
         epilog="P.S. GNSS rules!",
     )
     parser.add_argument(
-        "--observation_file_path", type=str, help="Observation file path", default=None
+        "--observation-file", type=str, help="Observation file path", default=None
     )
     parser.add_argument(
-        "--output_format",
+        "--output-format",
         type=str,
         help="Output file format",
-        choices=["jsonseq", "csv"],
+        choices=["feather", "csv"],
         default="csv",
     )
+    parser.add_argument(
+        "--log-level",
+        default="INFO",
+        help="Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)",
+    )
     args = parser.parse_args()
-    if args.observation_file_path is None:
+    logging.basicConfig(level=args.log_level)
+    if args.observation_file is None:
         log.error("No observation file path provided.")
         sys.exit(1)
-    if not Path(args.observation_file_path).exists():
-        log.error(f"Observation file {args.observation_file_path} does not exist.")
+    if not Path(args.observation_file).exists():
+        log.error(f"Observation file {args.observation_file} does not exist.")
         sys.exit(1)
-    process(Path(args.observation_file_path), args.output_format)
+    process(Path(args.observation_file), args.output_format)
