@@ -157,7 +157,7 @@ def discover_or_download_ephemerides(
 ):
     # If there are any navigation files provided by the user, use them, otherwise use IGS files.
     user_provided_nav_files = [
-        f for f in folder.rglob("*.rnx") if is_rinex_3_nav_file(f)
+        f for f in folder.glob("*.rnx") if is_rinex_3_nav_file(f)
     ]
     if len(user_provided_nav_files) > 0:
         return user_provided_nav_files
