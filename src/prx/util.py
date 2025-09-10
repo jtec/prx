@@ -119,11 +119,11 @@ def repair_with_gfzrnx(file):
             )
         with open(file, "w") as f:
             f.write(file_content)
-            logger.info(
+            logger.debug(
                 f"Removed repair timestamp from gfzrnx file {file} to avoid content hash changes."
             )
     else:
-        logger.info(f"gfzrnx file repair run failed: {result}")
+        logger.error(f"gfzrnx file repair run failed: {result}")
         assert False
     return file
 
