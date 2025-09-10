@@ -11,6 +11,7 @@ import numpy as np
 import polars as pl
 import git
 import prx.util
+from prx.speedo import build_records_polars
 from prx.util import add_range_column, timedelta_2_seconds, timestamp_2_timedelta
 from prx import atmospheric_corrections as atmo, util
 from prx.constants import carrier_frequencies_hz
@@ -143,221 +144,6 @@ def write_csv_file_polars(
 
     log.info(f"Generated CSV prx file: {output_file}")
     return output_file
-
-
-def build_records_polars(
-    rinex_3_obs_file,
-    rinex_3_ephemerides_files,
-    approximate_receiver_ecef_position_m,
-):
-    warm_up_parser_cache([rinex_3_obs_file] + rinex_3_ephemerides_files)
-    approximate_receiver_ecef_position_m = np.array(
-        approximate_receiver_ecef_position_m
-    )
-    check_assumptions(rinex_3_obs_file)
-    flat_obs = pl.from_pandas(util.parse_rinex_obs_file(rinex_3_obs_file))
-    flat_obs = flat_obs.with_columns(
-        [
-            pl.col("time"),
-            pl.col("obs_value").cast(pl.Float64).alias("obs_value"),
-            pl.col("sv").cast(pl.Utf8).alias("sv"),
-            pl.col("obs_type").cast(pl.Utf8).alias("obs_type"),
-        ]
-    ).rename(
-        {
-            "time": "time_of_reception_in_receiver_time",
-            "sv": "satellite",
-            "obs_value": "observation_value",
-            "obs_type": "observation_type",
-        }
-    )
-
-    per_sat = flat_obs.pivot(
-        values="observation_value",
-        index=["time_of_reception_in_receiver_time", "satellite"],
-        columns="observation_type",
-        aggregate_function="first",
-    ).sort(["time_of_reception_in_receiver_time", "satellite"])
-
-    code_phase_columns = [
-        c for c in per_sat.columns if c.startswith("C") and len(c) == 3
-    ]
-    assert len(code_phase_columns) > 0
-
-    per_sat = per_sat.with_columns(
-        pl.concat_list([pl.col(c) for c in code_phase_columns])
-        .arr.mean()
-        .alias("_mean_code_phase")
-    )
-    per_sat = per_sat.with_columns(
-        (
-            (pl.col("_mean_code_phase") / constants.cGpsSpeedOfLight_mps * 1e9)
-            .round(0)
-            .cast(pl.Int64)
-            .alias("_tof_ns")
-        )
-    )
-    per_sat = per_sat.with_columns(
-        (
-            (
-                pl.col("time_of_reception_in_receiver_time").cast(pl.Int64)
-                - pl.col("_tof_ns")
-            )
-            .cast(pl.Datetime("ns"))
-            .alias("time_of_emission_isagpst")
-        )
-    ).drop(["_mean_code_phase", "_tof_ns"])
-
-    per_sat = per_sat.with_columns(
-        pl.col("satellite")
-        .str.slice(0, 1)
-        .map_dict(constants.constellation_2_system_time_scale)
-        .alias("time_scale")
-    )
-    per_sat = per_sat.with_columns(
-        pl.col("time_scale")
-        .map_dict(constants.system_time_scale_rinex_utc_epoch)
-        .alias("system_time_scale_epoch")
-    )
-
-    flat_obs = flat_obs.join(
-        per_sat.select(
-            [
-                "time_of_reception_in_receiver_time",
-                "satellite",
-                "time_of_emission_isagpst",
-            ]
-        ),
-        on=["time_of_reception_in_receiver_time", "satellite"],
-        how="left",
-    )
-
-    query = flat_obs.filter(pl.col("observation_type").str.startswith("C")).rename(
-        {
-            "observation_type": "signal",
-            "satellite": "sv",
-            "time_of_emission_isagpst": "query_time_isagpst",
-        }
-    )
-    query_pd = query.to_pandas()
-    sat_states = compute_parallel(rinex_3_ephemerides_files, query_pd)
-
-    discontinuities = compute_ephemeris_discontinuities(
-        rinex_3_ephemerides_files, sat_states, approximate_receiver_ecef_position_m
-    )
-    discontinuities = discontinuities[
-        [
-            "sv",
-            "signal",
-            "query_time_isagpst",
-            "ephemeris_hash",
-            "previous_ephemeris_hash",
-            "range_m",
-            "sat_clock_offset_m",
-        ]
-    ].copy()
-    discontinuities["query_time_isagpst"] = discontinuities["query_time_isagpst"].apply(
-        lambda ts: timedelta_2_seconds(timestamp_2_timedelta(ts, "GPST"))
-    )
-    discontinuities = discontinuities.to_dict("records")
-
-    sat_states = sat_states.rename(
-        columns={
-            "sv": "satellite",
-            "signal": "observation_type",
-            "query_time_isagpst": "time_of_emission_isagpst",
-        }
-    )
-    sat_states_pl = pl.from_pandas(sat_states)
-
-    flat_obs_times = flat_obs.select(
-        [
-            "satellite",
-            "time_of_emission_isagpst",
-            "time_of_reception_in_receiver_time",
-        ]
-    ).unique()
-    sat_states_pl = sat_states_pl.join(
-        flat_obs_times,
-        on=["satellite", "time_of_emission_isagpst"],
-        how="left",
-    )
-
-    pos_cols = ["sat_pos_x_m", "sat_pos_y_m", "sat_pos_z_m"]
-    vel_cols = ["sat_vel_x_mps", "sat_vel_y_mps", "sat_vel_z_mps"]
-    pos_arr = sat_states_pl.select(pos_cols).to_numpy()
-    vel_arr = sat_states_pl.select(vel_cols).to_numpy()
-
-    sat_states_pl = sat_states_pl.with_columns(
-        [
-            pl.lit(util.compute_relativistic_clock_effect(pos_arr, vel_arr)).alias(
-                "relativistic_clock_effect_m"
-            ),
-            pl.lit(
-                util.compute_sagnac_effect(
-                    pos_arr, approximate_receiver_ecef_position_m
-                )
-            ).alias("sagnac_effect_m"),
-        ]
-    )
-
-    latitude_user_rad, longitude_user_rad, height_user_m = util.ecef_2_geodetic(
-        approximate_receiver_ecef_position_m
-    )
-    sat_states_pl = sat_states_pl.with_columns(
-        pl.col("time_of_reception_in_receiver_time")
-        .dt.day_of_year()
-        .alias("day_of_year")
-    )
-    days_of_year = sat_states_pl["day_of_year"].to_numpy()
-
-    elev_arr, azim_arr = util.compute_satellite_elevation_and_azimuth(
-        pos_arr,
-        approximate_receiver_ecef_position_m,
-    )
-    sat_states_pl = sat_states_pl.with_columns(
-        [
-            pl.Series(elev_arr).alias("elevation_rad"),
-            pl.Series(azim_arr).alias("azimuth_rad"),
-        ]
-    )
-
-    n = days_of_year.shape[0]
-    lat_arr = latitude_user_rad * np.ones(n)
-    height_arr = height_user_m * np.ones(n)
-    tropo_delay_m, _, _, _, _ = atmo.compute_tropo_delay_unb3m(
-        lat_arr, height_arr, days_of_year, elev_arr
-    )
-    sat_states_pl = sat_states_pl.with_columns(
-        [pl.Series(tropo_delay_m).alias("tropo_delay_m")]
-    )
-
-    sat_states_pl = sat_states_pl.with_columns(
-        pl.col("observation_type").str.slice(1, 2).alias("code_id")
-    )
-    flat_obs = flat_obs.with_columns(
-        pl.col("observation_type").str.slice(1, 2).alias("code_id")
-    )
-    sat_states_pl = sat_states_pl.drop(
-        ["observation_type", "time_of_reception_in_receiver_time"], ignore_missing=True
-    )
-
-    flat_obs = flat_obs.join(
-        sat_states_pl,
-        on=["satellite", "code_id", "time_of_emission_isagpst"],
-        how="left",
-    )
-
-    flat_obs = flat_obs.with_columns(
-        [
-            pl.when(pl.col("observation_type").str.startswith("C"))
-            .then(pl.col("sat_code_bias_m"))
-            .otherwise(pl.lit(None).cast(pl.Float64))
-            .alias("sat_code_bias_m")
-        ]
-    )
-
-    return flat_obs, discontinuities
 
 
 @profile
@@ -656,6 +442,12 @@ def build_records(
         approximate_receiver_ecef_position_m
     )
     check_assumptions(rinex_3_obs_file)
+    return build_records_polars(
+        rinex_3_obs_file,
+        rinex_3_ephemerides_files,
+        approximate_receiver_ecef_position_m,
+    )
+
     flat_obs = util.parse_rinex_obs_file(rinex_3_obs_file)
 
     flat_obs.time = pd.to_datetime(flat_obs.time, format="%Y-%m-%dT%H:%M:%S")
@@ -928,7 +720,7 @@ def process(observation_file_path: Path, output_format="csv"):
     )
     metadata["processing_start_time"] = t0
     prx.util.repair_with_gfzrnx(rinex_3_obs_file)
-    records, discontinuities = build_records_polars(
+    records, discontinuities = build_records(
         rinex_3_obs_file,
         aux_files["broadcast_ephemerides"],
         metadata["approximate_receiver_ecef_position_m"],
