@@ -1,11 +1,14 @@
 import argparse
 import json
 import logging
+import math
 import sys
+from datetime import datetime
 from pathlib import Path
 import georinex
 import pandas as pd
 import numpy as np
+import polars as pl
 import git
 import prx.util
 from prx.util import add_range_column, timedelta_2_seconds, timestamp_2_timedelta
@@ -17,18 +20,22 @@ from prx.rinex_nav import nav_file_discovery
 from prx import constants, converters, user
 from prx.rinex_nav import evaluate as rinex_evaluate
 from prx.rinex_nav.evaluate import parse_rinex_nav_file
+from line_profiler import profile
 
 log = util.get_logger(__name__)
 
 
-@prx.util.timeit
+@profile
 def write_prx_file(
     prx_header: dict,
     prx_records: pd.DataFrame,
     file_name_without_extension: Path,
     output_format: str,
 ):
-    output_writers = {"jsonseq": write_json_text_sequence_file, "csv": write_csv_file}
+    output_writers = {
+        "jsonseq": write_json_text_sequence_file,
+        "csv": write_csv_file,
+    }
     if output_format not in output_writers.keys():
         assert False, (
             f"Output format {output_format} not supported,  we can do {list(output_writers.keys())}"
@@ -80,6 +87,127 @@ def write_json_text_sequence_file(
     log.info(f"Generated JSON Text Sequence prx file: {output_file}")
 
 
+@profile
+def write_csv_file_polars(
+    prx_header: dict, flat_records: pl.DataFrame, file_name_without_extension: Path
+):
+    output_file = Path(
+        f"{str(file_name_without_extension)}.{constants.cPrxCsvFileExtension}"
+    )
+
+    # Convert radians to degrees
+    flat_records = flat_records.with_columns(
+        [
+            (pl.col("elevation_rad") * 180 / math.pi).alias("sat_elevation_deg"),
+            (pl.col("azimuth_rad") * 180 / math.pi).alias("sat_azimuth_deg"),
+        ]
+    ).drop(["elevation_rad", "azimuth_rad"])
+
+    # Extract tracking_id (2 chars from pos 1)
+    flat_records = flat_records.with_columns(
+        pl.col("observation_type").str.slice(1, 2).alias("tracking_id")
+    )
+
+    # Start with code observations (C)
+    records = (
+        flat_records.filter(pl.col("observation_type").str.starts_with("C"))
+        .with_columns(pl.col("observation_value").alias("C_obs_m"))
+        .drop(["observation_value", "observation_type"])
+    )
+
+    type_2_unit = {"D": "hz", "L": "cycles", "S": "dBHz", "C": "m"}
+
+    for obs_type in ["D", "L", "S"]:
+        obs = (
+            flat_records.filter(
+                pl.col("observation_type").str.starts_with(obs_type)
+                & (pl.col("observation_type").str.len_chars() == 3)
+            )
+            .select(
+                [
+                    "satellite",
+                    "time_of_reception_in_receiver_time",
+                    "observation_value",
+                    "tracking_id",
+                ]
+            )
+            .rename({"observation_value": f"{obs_type}_obs_{type_2_unit[obs_type]}"})
+        )
+
+        if obs_type == "L":
+            # Add LLI column (observation_type contains "lli")
+            obs_lli = (
+                flat_records.filter(pl.col("observation_type").str.contains("lli"))
+                .select(
+                    [
+                        "satellite",
+                        "time_of_reception_in_receiver_time",
+                        "observation_value",
+                        "tracking_id",
+                    ]
+                )
+                .rename({"observation_value": "LLI"})
+            )
+            obs = obs.join(
+                obs_lli,
+                on=["satellite", "time_of_reception_in_receiver_time", "tracking_id"],
+                how="left",
+            )
+
+        records = records.join(
+            obs,
+            on=["satellite", "time_of_reception_in_receiver_time", "tracking_id"],
+            how="left",
+        )
+
+    # Add constellation and PRN
+    records = records.with_columns(
+        [
+            pl.col("satellite").str.slice(0, 1).alias("constellation"),
+            pl.col("satellite").str.slice(1).alias("prn"),
+        ]
+    )
+
+    # Rename and drop unused cols
+    records = (
+        records.rename({"tracking_id": "rnx_obs_identifier"})
+        .drop(["satellite", "time_of_emission_isagpst"])
+        .sort(
+            [
+                "time_of_reception_in_receiver_time",
+                "constellation",
+                "prn",
+                "rnx_obs_identifier",
+            ]
+        )
+        .filter(pl.col("sat_clock_offset_m").is_not_null())
+    )
+
+    # Update header
+    prx_header["processing_time"] = str(
+        datetime.now() - prx_header["processing_start_time"]
+    )
+    prx_header["processing_start_time"] = prx_header["processing_start_time"].strftime(
+        "%Y-%m-%d %H:%M:%S.%f3"
+    )
+
+    # Write header manually
+    with open(output_file, "w", encoding="utf-8") as file:
+        file.write(f"# {json.dumps(prx_header)}\n")
+
+    with open(output_file, "a", encoding="utf-8", newline="") as f:
+        records.write_csv(
+            f,
+            include_header=True,
+            float_precision=6,  # equivalent to "%.6f"
+            date_format="%Y-%m-%d %H:%M:%S.%f",
+        )
+
+    log.info(f"Generated CSV prx file: {output_file}")
+    return output_file
+
+
+@profile
 def write_csv_file(
     prx_header: dict, flat_records: pd.DataFrame, file_name_without_extension: Path
 ):
@@ -176,6 +304,7 @@ def write_csv_file(
     return output_file
 
 
+@profile
 def build_metadata(input_files):
     # convert input_files to a list of files
     files = []
@@ -224,6 +353,7 @@ def check_assumptions(
     )
 
 
+@profile
 def parse_rinex_nav_or_obs_file(rinex_file_path: Path):
     if is_rinex_3_obs_file(rinex_file_path):
         return parse_rinex_obs_file(rinex_file_path)
@@ -234,10 +364,12 @@ def parse_rinex_nav_or_obs_file(rinex_file_path: Path):
     )
 
 
+@profile
 def warm_up_parser_cache(rinex_files):
     _ = [parse_rinex_nav_or_obs_file(file) for file in rinex_files]
 
 
+@profile
 def compute_ephemeris_discontinuities(
     rinex_3_ephemerides_files: list[Path],
     sat_states: pd.DataFrame,
@@ -298,7 +430,7 @@ def compute_ephemeris_discontinuities(
     return dsc
 
 
-@prx.util.timeit
+@profile
 def build_records(
     rinex_3_obs_file,
     rinex_3_ephemerides_files,
@@ -562,7 +694,7 @@ def build_records(
     return flat_obs, discontinuities
 
 
-@prx.util.timeit
+@profile
 def process(observation_file_path: Path, output_format="csv"):
     t0 = pd.Timestamp.now()
     # We expect a Path, but might get a string here:
