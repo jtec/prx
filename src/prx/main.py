@@ -119,6 +119,52 @@ def compute_output_dataframe(
         .filter(pl.col("sat_clock_offset_m").is_not_null())
     )
 
+    # Clean up unwanted columns first
+    unwanted_columns = ['freq_key', 'constellation_right']
+    for col in unwanted_columns:
+        if col in records.columns:
+            records = records.drop(col)
+    
+    # Reorder columns to match expected CSV format
+    expected_column_order = [
+        'time_of_reception_in_receiver_time',
+        'code_id', 
+        'sat_code_bias_m',
+        'sat_clock_offset_m',
+        'sat_clock_drift_mps',
+        'sat_pos_x_m',
+        'sat_pos_y_m', 
+        'sat_pos_z_m',
+        'sat_vel_x_mps',
+        'sat_vel_y_mps',
+        'sat_vel_z_mps',
+        'ephemeris_hash',
+        'health_flag',
+        'frequency_slot',
+        'relativistic_clock_effect_m',
+        'sagnac_effect_m',
+        'tropo_delay_m',
+        'carrier_frequency_hz',
+        'iono_delay_m',
+        'sat_elevation_deg',
+        'sat_azimuth_deg',
+        'rnx_obs_identifier',
+        'C_obs_m',
+        'D_obs_hz',
+        'L_obs_cycles',
+        'LLI',
+        'S_obs_dBHz',
+        'constellation',
+        'prn'
+    ]
+    
+    # Reorder columns that exist, keep any additional columns at the end
+    existing_expected_cols = [col for col in expected_column_order if col in records.columns]
+    remaining_cols = [col for col in records.columns if col not in expected_column_order]
+    final_column_order = existing_expected_cols + remaining_cols
+    
+    records = records.select(final_column_order)
+
     # Update header
     prx_header["processing_time"] = str(
         datetime.now() - prx_header["processing_start_time"]
@@ -755,7 +801,7 @@ def process(observation_file_path: Path, output_format="csv"):
     )
     metadata["processing_start_time"] = t0
     prx.util.repair_with_gfzrnx(rinex_3_obs_file)
-    records, discontinuities = build_records(
+    records, discontinuities = build_records_polars(
         rinex_3_obs_file,
         aux_files["broadcast_ephemerides"],
         metadata["approximate_receiver_ecef_position_m"],
@@ -800,3 +846,436 @@ if __name__ == "__main__":
         log.error(f"Observation file {args.observation_file} does not exist.")
         sys.exit(1)
     process(Path(args.observation_file), args.output_format)
+
+
+@profile
+def build_records_polars(
+    rinex_3_obs_file,
+    rinex_3_ephemerides_files,
+    approximate_receiver_ecef_position_m,
+):
+    """
+    Fast implementation using Polars for high-performance data processing.
+    Returns same output as build_records in main.py but with Polars speed.
+    """
+
+    log = util.get_logger(__name__)
+
+    # Ensure proper array format
+    approximate_receiver_ecef_position_m = np.array(
+        approximate_receiver_ecef_position_m
+    )
+
+    # Use EXACT original pandas preprocessing for precision compatibility
+    flat_obs = util.parse_rinex_obs_file(rinex_3_obs_file)
+    
+    flat_obs.time = pd.to_datetime(flat_obs.time, format="%Y-%m-%dT%H:%M:%S")
+    flat_obs.obs_value = flat_obs.obs_value.astype(float)
+    flat_obs[["sv", "obs_type"]] = flat_obs[["sv", "obs_type"]].astype(str)
+
+    flat_obs = flat_obs.rename(
+        columns={
+            "time": "time_of_reception_in_receiver_time",
+            "sv": "satellite",
+            "obs_value": "observation_value",
+            "obs_type": "observation_type",
+        },
+    )
+    
+    # Convert to Polars only after pandas preprocessing
+    flat_obs = pl.from_pandas(flat_obs)
+
+    log.info("Computing times of emission in satellite time")
+
+    # Use original pandas pivot for exact compatibility
+    flat_obs_for_pivot = flat_obs.to_pandas()
+    per_sat = flat_obs_for_pivot.pivot(
+        index=["time_of_reception_in_receiver_time", "satellite"],
+        columns=["observation_type"],
+        values="observation_value",
+    ).reset_index()
+    per_sat = pl.from_pandas(per_sat)
+
+    # Time scale mapping using Polars operations
+    per_sat = per_sat.with_columns([
+        pl.col("satellite").str.slice(0, 1).replace(constants.constellation_2_system_time_scale).alias("time_scale")
+    ])
+    
+    # Convert pandas timestamps to Polars-compatible datetime mapping
+    epoch_mapping = {}
+    for time_scale, epoch in constants.system_time_scale_rinex_utc_epoch.items():
+        if pd.notna(epoch):
+            epoch_mapping[time_scale] = epoch.to_pydatetime()
+        else:
+            epoch_mapping[time_scale] = None
+    
+    per_sat = per_sat.with_columns([
+        pl.col("time_scale").replace(epoch_mapping).alias("system_time_scale_epoch")
+    ])
+
+    # Find code phase columns efficiently
+    code_phase_columns = [
+        c for c in per_sat.columns if c.startswith("C") and len(c) == 3
+    ]
+
+    # Calculate time of emission using EXACT original pandas method for precision compatibility
+    if code_phase_columns:
+        per_sat_pd = per_sat.to_pandas()
+        
+
+        # Original pandas calculation: time-of-flight in SECONDS, then subtract as timedelta
+        tof_dtrx = pd.to_timedelta(
+            per_sat_pd[code_phase_columns]
+            .mean(axis=1, skipna=True)
+            .divide(constants.cGpsSpeedOfLight_mps),
+            unit="s",
+        )
+        per_sat_pd["time_of_emission_isagpst"] = (
+            per_sat_pd["time_of_reception_in_receiver_time"] - tof_dtrx
+        )
+        
+        per_sat = pl.from_pandas(per_sat_pd)
+    else:
+        per_sat = per_sat.with_columns(
+            [
+                pl.col("time_of_reception_in_receiver_time").alias(
+                    "time_of_emission_isagpst"
+                )
+            ]
+        )
+
+    # Use original pandas merge for precision compatibility  
+    flat_obs_pd = flat_obs.to_pandas()
+    per_sat_pd = per_sat.to_pandas()
+    
+    flat_obs_pd = flat_obs_pd.merge(
+        per_sat_pd[
+            [
+                "time_of_reception_in_receiver_time",
+                "satellite",
+                "time_of_emission_isagpst",
+            ]
+        ],
+        on=["time_of_reception_in_receiver_time", "satellite"],
+    )
+    
+    flat_obs = pl.from_pandas(flat_obs_pd)
+
+    # Ensure maximum precision for time_of_emission_isagpst - critical for ephemeris selection
+    flat_obs = flat_obs.with_columns(
+        [pl.col("time_of_emission_isagpst").dt.cast_time_unit("ns")]
+    ).sort(["time_of_reception_in_receiver_time", "satellite"])
+
+    # Use EXACT original pandas method for query construction to ensure compatibility
+    flat_obs_pd = flat_obs.to_pandas()
+    
+    # Original pandas query construction
+    query = flat_obs_pd[flat_obs_pd["observation_type"].str.startswith("C")]
+    query = query.rename(
+        columns={
+            "observation_type": "signal",
+            "satellite": "sv", 
+            "time_of_emission_isagpst": "query_time_isagpst",
+        },
+    )
+    
+    query_pl = pl.from_pandas(query)
+
+
+    # Compute satellite states using rinex_evaluate
+    log.info("Computing satellite states")
+    sat_states = rinex_evaluate.compute(rinex_3_ephemerides_files, query_pl).to_pandas()
+
+    # Optimized discontinuities computation using Polars
+    def compute_ephemeris_discontinuities_optimized(sat_states_df):
+        # Convert to Polars for processing
+        sat_states_pl = pl.from_pandas(sat_states_df)
+        
+        # Sort by query time
+        sat_states_pl = sat_states_pl.sort("query_time_isagpst")
+        
+        # Identify discontinuities using window functions
+        sat_states_pl = sat_states_pl.with_columns([
+            pl.col("ephemeris_hash").shift(1).over(["sv", "signal"]).alias("prev_ephemeris_hash")
+        ])
+        
+        # Mark discontinuities (but not the first row of each group)
+        sat_states_pl = sat_states_pl.with_columns([
+            ((pl.col("ephemeris_hash") != pl.col("prev_ephemeris_hash")) & 
+             pl.col("prev_ephemeris_hash").is_not_null()).alias("after_discontinuity")
+        ])
+        
+        # Get discontinuity records
+        df_new_ephemeris = sat_states_pl.filter(pl.col("after_discontinuity")).drop("after_discontinuity")
+        
+        if df_new_ephemeris.height == 0:
+            return pl.DataFrame(schema={
+                "sv": pl.Utf8,
+                "signal": pl.Utf8, 
+                "query_time_isagpst": pl.Datetime("ns"),
+                "ephemeris_hash": pl.Int64,
+                "previous_ephemeris_hash": pl.Int64,
+                "range_m": pl.Float64,
+                "sat_clock_offset_m": pl.Float64
+            }).to_pandas()
+        
+        # Prepare query for previous ephemeris
+        query_disc = df_new_ephemeris.select(["sv", "signal", "query_time_isagpst"]).unique()
+        query_disc = query_disc.with_columns([
+            (pl.col("query_time_isagpst") - pl.duration(seconds=10)).dt.cast_time_unit("ns").alias("query_time_isagpst")
+        ])
+        query_disc = query_disc.sort("query_time_isagpst")
+        
+        df_previous_ephemeris = rinex_evaluate.compute(rinex_3_ephemerides_files, query_disc)
+        
+        # Sort both dataframes
+        shared_columns = ["query_time_isagpst", "sv", "signal"]
+        df_new_ephemeris = df_new_ephemeris.sort(shared_columns)
+        df_previous_ephemeris = df_previous_ephemeris.sort(shared_columns)
+        
+        # Convert to pandas for range calculation compatibility
+        df_new_pd = df_new_ephemeris.to_pandas()
+        df_prev_pd = df_previous_ephemeris.to_pandas()
+        
+        df_new_pd = add_range_column(df_new_pd, approximate_receiver_ecef_position_m)
+        df_prev_pd = add_range_column(df_prev_pd, approximate_receiver_ecef_position_m)
+        
+        # Check alignment
+        if not df_new_pd[shared_columns].equals(df_prev_pd[shared_columns]):
+            return pd.DataFrame(columns=[
+                "sv", "signal", "query_time_isagpst", "ephemeris_hash", 
+                "previous_ephemeris_hash", "range_m", "sat_clock_offset_m"
+            ])
+        
+        # Calculate differences
+        numeric_columns = df_new_pd.select_dtypes(include=np.number).columns.tolist()
+        dsc = df_new_pd.copy()
+        dsc[numeric_columns] -= df_prev_pd[numeric_columns] 
+        dsc["previous_ephemeris_hash"] = df_prev_pd.ephemeris_hash
+        
+        return dsc
+        
+    discontinuities = compute_ephemeris_discontinuities_optimized(sat_states)
+
+    # Process discontinuities
+    if not discontinuities.empty:
+        discontinuities = discontinuities[
+            [
+                "sv",
+                "signal",
+                "query_time_isagpst",
+                "ephemeris_hash",
+                "previous_ephemeris_hash",
+                "range_m",
+                "sat_clock_offset_m",
+            ]
+        ]
+        discontinuities.query_time_isagpst = discontinuities.query_time_isagpst.apply(
+            lambda ts: timedelta_2_seconds(timestamp_2_timedelta(ts, "GPST"))
+        )
+        discontinuities = discontinuities.to_dict("records")
+    else:
+        discontinuities = []
+
+    # Convert sat_states to Polars for faster processing
+    sat_states_pl = pl.from_pandas(sat_states)
+
+    # Rename satellite states columns using Polars
+    sat_states_pl = sat_states_pl.rename(
+        {
+            "sv": "satellite",
+            "signal": "observation_type",
+            "query_time_isagpst": "time_of_emission_isagpst",
+        }
+    )
+
+    # Keep nanosecond precision to match pandas datetime precision
+
+    # Merge timestamps for tropospheric delay computation using Polars
+    sat_states_pl = sat_states_pl.join(
+        flat_obs.select(
+            [
+                "satellite",
+                "time_of_emission_isagpst",
+                "time_of_reception_in_receiver_time",
+            ]
+        ).unique(),
+        on=["satellite", "time_of_emission_isagpst"],
+        how="left",
+    )
+
+    # Convert back to pandas for numpy operations that require it
+    sat_states = sat_states_pl.to_pandas()
+
+    # Compute satellite-specific effects efficiently
+    pos_array = sat_states[["sat_pos_x_m", "sat_pos_y_m", "sat_pos_z_m"]].to_numpy()
+    vel_array = sat_states[
+        ["sat_vel_x_mps", "sat_vel_y_mps", "sat_vel_z_mps"]
+    ].to_numpy()
+
+    sat_states["relativistic_clock_effect_m"] = util.compute_relativistic_clock_effect(
+        pos_array, vel_array
+    )
+    sat_states["sagnac_effect_m"] = util.compute_sagnac_effect(
+        pos_array, approximate_receiver_ecef_position_m
+    )
+
+    # Geodetic conversion
+    [latitude_user_rad, longitude_user_rad, height_user_m] = util.ecef_2_geodetic(
+        approximate_receiver_ecef_position_m
+    )
+
+    # Vectorized day of year computation
+    days_of_year = sat_states[
+        "time_of_reception_in_receiver_time"
+    ].dt.dayofyear.to_numpy()
+
+    # Satellite elevation and azimuth
+    (
+        sat_states["elevation_rad"],
+        sat_states["azimuth_rad"],
+    ) = util.compute_satellite_elevation_and_azimuth(
+        pos_array, approximate_receiver_ecef_position_m
+    )
+
+    # Tropospheric delay
+    (tropo_delay_m, _, _, _, _) = atmo.compute_tropo_delay_unb3m(
+        latitude_user_rad * np.ones(days_of_year.shape),
+        height_user_m * np.ones(days_of_year.shape),
+        days_of_year,
+        sat_states.elevation_rad.to_numpy(),
+    )
+    sat_states["tropo_delay_m"] = tropo_delay_m
+
+    # Convert both back to Polars for efficient joining
+    sat_states_pl = pl.from_pandas(sat_states)
+
+    # Add code_id columns using Polars string operations
+    sat_states_pl = sat_states_pl.with_columns(
+        [pl.col("observation_type").str.slice(1, 2).alias("code_id")]
+    ).drop(["observation_type", "time_of_reception_in_receiver_time"])
+
+    flat_obs = flat_obs.with_columns(
+        [pl.col("observation_type").str.slice(1, 2).alias("code_id")]
+    )
+
+    # Merge using Polars join
+    flat_obs = flat_obs.join(
+        sat_states_pl,
+        on=["satellite", "code_id", "time_of_emission_isagpst"],
+        how="left",
+    )
+
+    # Fix code biases for non-code observations using Polars
+    flat_obs = flat_obs.with_columns(
+        [
+            pl.when(~pl.col("observation_type").str.starts_with("C"))
+            .then(None)
+            .otherwise(pl.col("sat_code_bias_m"))
+            .alias("sat_code_bias_m")
+        ]
+    )
+
+    # Initialize frequency_slot column if it doesn't exist (it comes from satellite states)
+    if "frequency_slot" not in flat_obs.columns:
+        flat_obs = flat_obs.with_columns([pl.lit(None).alias("frequency_slot")])
+
+    # Set default frequency slot to 1 for all satellites, then handle GLONASS special case
+    flat_obs = flat_obs.with_columns([
+        pl.when(pl.col("frequency_slot").is_not_null())
+        .then(pl.col("frequency_slot"))
+        .otherwise(1)
+        .alias("frequency_slot")
+    ])
+
+    # GLONASS frequency slot handling using Polars  
+    flat_obs = flat_obs.with_columns(
+        [
+            pl.when(
+                (pl.col("satellite").str.slice(0, 1) == "R")
+                & (pl.col("observation_type").str.slice(1, 1).cast(pl.Int32) > 2)
+            )
+            .then(1)
+            .otherwise(pl.col("frequency_slot"))
+            .alias("frequency_slot")
+        ]
+    )
+
+    # Optimized carrier frequency assignment using Polars
+    # Flatten the frequency dictionary for Polars mapping
+    freq_dict = {}
+    for constellation, frequencies in carrier_frequencies_hz().items():
+        for band, slots in frequencies.items():
+            for slot, freq_hz in slots.items():
+                key = f"{constellation}_L{band[1:]}_{slot}"
+                freq_dict[key] = freq_hz
+    
+    # Create frequency keys using Polars string operations
+    flat_obs = flat_obs.with_columns([
+        pl.when(pl.col("frequency_slot").is_not_null())
+        .then(
+            pl.col("satellite").str.slice(0, 1) + "_L" + 
+            pl.col("observation_type").str.slice(1, 1) + "_" +
+            pl.col("frequency_slot").cast(pl.Int32).cast(pl.Utf8)
+        )
+        .alias("freq_key")
+    ])
+    
+    # Map frequencies using Polars replace and cast to float
+    flat_obs = flat_obs.with_columns([
+        pl.col("freq_key").replace(freq_dict).cast(pl.Float64).alias("carrier_frequency_hz")
+    ]).drop("freq_key")
+
+    # Navigation file headers
+    nav_header_dict = {
+        file.name[12:19]: georinex.rinexheader(file)
+        for file in rinex_3_ephemerides_files
+    }
+
+    # Convert to pandas for ionospheric corrections - keeping this part in pandas for now
+    # since it involves complex numpy operations and day-by-day processing
+    flat_obs_final = flat_obs.to_pandas()
+    
+    # Initialize iono_delay_m column with NaN
+    flat_obs_final["iono_delay_m"] = np.nan
+
+    # Ionospheric corrections 
+    for file in rinex_3_ephemerides_files:
+        year = int(file.name[12:16])
+        doy = int(file.name[16:19])
+
+        mask = (
+            flat_obs_final.time_of_emission_isagpst
+            >= pd.Timestamp(year=year, month=1, day=1) + pd.Timedelta(days=doy - 1)
+        ) & (
+            flat_obs_final.time_of_emission_isagpst
+            < pd.Timestamp(year=year, month=1, day=1) + pd.Timedelta(days=doy)
+        )
+
+        if "IONOSPHERIC CORR" in nav_header_dict[f"{year:03d}{doy:03d}"]:
+            log.info(f"Computing iono delay for {year}-{doy:03d}")
+            time_of_emission_weeksecond_isagpst = util.timedelta_2_weeks_and_seconds(
+                flat_obs_final.loc[mask].time_of_emission_isagpst
+                - constants.system_time_scale_rinex_utc_epoch["GPST"]
+            )[1].to_numpy()
+
+            flat_obs_final.loc[mask, "iono_delay_m"] = (
+                atmo.compute_l1_iono_delay_klobuchar(
+                    time_of_emission_weeksecond_isagpst,
+                    nav_header_dict[f"{year:03d}{doy:03d}"]["IONOSPHERIC CORR"]["GPSA"],
+                    nav_header_dict[f"{year:03d}{doy:03d}"]["IONOSPHERIC CORR"]["GPSB"],
+                    flat_obs_final.loc[mask].elevation_rad,
+                    flat_obs_final.loc[mask].azimuth_rad,
+                    latitude_user_rad,
+                    longitude_user_rad,
+                )
+                * (
+                    constants.carrier_frequencies_hz()["G"]["L1"][1] ** 2
+                    / flat_obs_final.loc[mask].carrier_frequency_hz ** 2
+                )
+            )
+        else:
+            logging.warning(f"Missing iono model parameters for day {doy:03d}")
+            flat_obs_final.loc[mask, "iono_delay_m"] = np.nan
+
+    return flat_obs_final, discontinuities

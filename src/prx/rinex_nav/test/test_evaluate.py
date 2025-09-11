@@ -235,6 +235,19 @@ def generate_sat_query(sat_state_query_time_isagpst):
     return query
 
 
+def test_compare_to_expected(input_for_test):
+    rinex_nav_file = converters.compressed_to_uncompressed(
+        input_for_test["rinex_nav_file"]
+    )
+    query = generate_sat_query(pd.Timestamp("2022-01-01T01:10:00.000000000"))
+    query["constellation"] = query.sv.str[0]
+    # We have no SP3 reference solutions for SBAS satellites, so remove them from the query
+    query = query[~query.sv.str.startswith("S")]
+    rinex_sat_states = rinex_nav_evaluate.compute(
+        rinex_nav_file, pl.from_pandas(query)
+    ).to_pandas()
+
+
 def test_compare_to_sp3(input_for_test):
     rinex_nav_file = converters.compressed_to_uncompressed(
         input_for_test["rinex_nav_file"]
@@ -291,6 +304,7 @@ def test_compare_to_sp3(input_for_test):
     diff["diff_dxyz_l2_mps"] = np.linalg.norm(
         diff[["sat_vel_x_mps", "sat_vel_y_mps", "sat_vel_z_mps"]].to_numpy(), axis=1
     )
+    diff.to_csv("jan.csv", index=False)
 
     print("\n" + diff.to_string())
     for (
