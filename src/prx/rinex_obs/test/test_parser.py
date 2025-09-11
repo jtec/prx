@@ -46,7 +46,7 @@ def test_compare_to_georinex():
     ]
     prx_output = prx_output.loc[~prx_output.obs_type.isin(drop_lli), :]
     prx_output = prx_output.reset_index(drop=True)
-
+    prx_output = prx_output.drop(columns=["constellation"])
     georinex_output = (
         obs_dataset_to_obs_dataframe(georinex.load(file))
         .sort_values(by=["time", "sv", "obs_type"])
@@ -71,6 +71,7 @@ def test_compare_to_georinex_with_lli(input_for_test_tlse):
     prx_lli_list = set([type for type in prx_output.obs_type.unique() if "lli" in type])
     zero_lli = prx_output.obs_type.isin(prx_lli_list) & (prx_output.obs_value == 0)
     prx_output = prx_output.loc[~zero_lli, :]
+    prx_output = prx_output.drop(columns=["constellation"])
 
     # use the useindicators=True arg to parse lli and ssi indicators
     georinex_output = (
