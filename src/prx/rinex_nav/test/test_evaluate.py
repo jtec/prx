@@ -9,6 +9,8 @@ from prx.rinex_nav.evaluate import (
     set_time_of_validity,
     parse_rinex_nav_file,
 )
+from pandas.testing import assert_frame_equal
+
 from prx.sp3 import evaluate as sp3_evaluate
 from prx.rinex_nav import evaluate as rinex_nav_evaluate
 from prx import constants, converters, util
@@ -243,9 +245,45 @@ def test_compare_to_expected(input_for_test):
     query["constellation"] = query.sv.str[0]
     # We have no SP3 reference solutions for SBAS satellites, so remove them from the query
     query = query[~query.sv.str.startswith("S")]
-    rinex_sat_states = rinex_nav_evaluate.compute(
-        rinex_nav_file, pl.from_pandas(query)
-    ).to_pandas()
+    rinex_sat_states = (
+        rinex_nav_evaluate.compute(rinex_nav_file, pl.from_pandas(query))
+        .to_pandas()
+        .drop("ephemeris_hash", axis=1)
+    )
+    reference_sat_states = pd.read_csv(
+        Path(__file__).parent
+        / "datasets"
+        / "reference_outputs"
+        / "compare_to_sp3_rinex_sat_states_ref.csv"
+    ).drop("ephemeris_hash", axis=1)
+    reference_sat_states["query_time_isagpst"] = pd.to_datetime(
+        reference_sat_states["query_time_isagpst"]
+    )
+    rinex_sat_states["query_time_isagpst"] = rinex_sat_states[
+        "query_time_isagpst"
+    ].view("int64")
+    reference_sat_states["query_time_isagpst"] = rinex_sat_states[
+        "query_time_isagpst"
+    ].view("int64")
+    columns_expected_to_match_exactly = ["sv", "signal"]
+    columns_expected_to_match_within_tolerance = [
+        c
+        for c in reference_sat_states.columns
+        if c not in columns_expected_to_match_exactly
+    ]
+    assert (rinex_sat_states.columns == reference_sat_states.columns).all()
+    assert rinex_sat_states[columns_expected_to_match_exactly].equals(
+        reference_sat_states[columns_expected_to_match_exactly]
+    )
+    assert_frame_equal(
+        rinex_sat_states[columns_expected_to_match_within_tolerance]
+        .fillna(0)
+        .astype(np.float64),
+        reference_sat_states[columns_expected_to_match_within_tolerance]
+        .fillna(0)
+        .astype(np.float64),
+        atol=1e-6,
+    )
 
 
 def test_compare_to_sp3(input_for_test):
