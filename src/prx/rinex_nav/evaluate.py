@@ -1,5 +1,6 @@
 import logging
 import math
+from typing import Union, List, Optional, Any
 
 import pandas as pd
 import numpy as np
@@ -15,7 +16,9 @@ import polars as pl
 log = logging.getLogger(__name__)
 
 
-def time_scale_integer_second_offset_wrt_gpst(time_scale, utc_gpst_leap_seconds=None):
+def time_scale_integer_second_offset_wrt_gpst(
+    time_scale: str, utc_gpst_leap_seconds: Optional[int] = None
+) -> pd.Timedelta:
     if time_scale in ["GPST", "SBAST", "QZSST", "IRNSST", "GST"]:
         return pd.Timedelta(seconds=0)
     if time_scale == "BDT":
@@ -29,123 +32,301 @@ def time_scale_integer_second_offset_wrt_gpst(time_scale, utc_gpst_leap_seconds=
 
 
 @timeit
-def glonass_xdot_rtklib(x, acc_sun_moon):
-    p = x[["X", "Y", "Z"]]
-    v = x[["dX", "dY", "dZ"]]
-    GM_e = 398600.4418 * 1e9
-    R_e = 6378136.0
-    J_2 = 1.0826257 * 1e-3
-    omega_e = 7.292115 * 1e-5
-    xdot = x.copy() * np.nan
-    xdot[["X", "Y", "Z"]] = x[["dX", "dY", "dZ"]]
-    r = np.linalg.norm(p.to_numpy(), axis=1)
-    # How
-    # https://github.com/tomojitakasu/RTKLIB/blob/71db0ffa0d9735697c6adfd06fdf766d0e5ce807/src/ephemeris.c#L261
-    # computes it:
-    a = 1.5 * J_2 * GM_e * (R_e**2 / r**5)
-    b = 5 * p.loc[:, "Z"] ** 2 / r**2
-    c = -GM_e / r**3 - a * (1 - b)
-    xdot.loc[:, "dX"] = (
-        (c + omega_e**2) * p.loc[:, "X"]
-        + 2 * omega_e * v.loc[:, "dY"]
-        + acc_sun_moon.loc[:, "dX2"]
-    )
-    xdot.loc[:, "dY"] = (
-        (c + omega_e**2) * p.loc[:, "Y"]
-        - 2 * omega_e * v.loc[:, "dX"]
-        + acc_sun_moon.loc[:, "dY2"]
-    )
-    xdot.loc[:, "dZ"] = (c - 2 * a) * p.loc[:, "Z"] + acc_sun_moon.loc[:, "dZ2"]
-    return xdot
+def glonass_xdot_rtklib(
+    x: Union[pd.DataFrame, pl.DataFrame],
+    acc_sun_moon: Union[pd.DataFrame, pl.DataFrame],
+) -> Union[pd.DataFrame, pl.DataFrame]:
+    # Use polars operations directly
+    if hasattr(x, "to_pandas"):
+        # Pure polars implementation
+        GM_e = 398600.4418 * 1e9
+        R_e = 6378136.0
+        J_2 = 1.0826257 * 1e-3
+        omega_e = 7.292115 * 1e-5
+
+        # Calculate radius using polars
+        r = (x.select(["X", "Y", "Z"]).to_numpy() ** 2).sum(axis=1) ** 0.5
+
+        # Compute coefficients
+        a = 1.5 * J_2 * GM_e * (R_e**2 / r**5)
+        b = 5 * x.select("Z").to_numpy().flatten() ** 2 / r**2
+        c = -GM_e / r**3 - a * (1 - b)
+
+        # Create result dataframe with computed derivatives
+        xdot = x.with_columns(
+            [
+                x.select("dX").to_series().alias("X"),
+                x.select("dY").to_series().alias("Y"),
+                x.select("dZ").to_series().alias("Z"),
+                pl.lit(
+                    (
+                        (c + omega_e**2) * x.select("X").to_numpy().flatten()
+                        + 2 * omega_e * x.select("dY").to_numpy().flatten()
+                        + acc_sun_moon.select("dX2").to_numpy().flatten()
+                    )
+                ).alias("dX"),
+                pl.lit(
+                    (
+                        (c + omega_e**2) * x.select("Y").to_numpy().flatten()
+                        - 2 * omega_e * x.select("dX").to_numpy().flatten()
+                        + acc_sun_moon.select("dY2").to_numpy().flatten()
+                    )
+                ).alias("dY"),
+                pl.lit(
+                    (
+                        (c - 2 * a) * x.select("Z").to_numpy().flatten()
+                        + acc_sun_moon.select("dZ2").to_numpy().flatten()
+                    )
+                ).alias("dZ"),
+            ]
+        )
+        return xdot
+    else:
+        # Fallback to pandas for non-polars input
+        p = x[["X", "Y", "Z"]]
+        v = x[["dX", "dY", "dZ"]]
+        GM_e = 398600.4418 * 1e9
+        R_e = 6378136.0
+        J_2 = 1.0826257 * 1e-3
+        omega_e = 7.292115 * 1e-5
+        xdot = x.copy() * np.nan
+        xdot[["X", "Y", "Z"]] = x[["dX", "dY", "dZ"]]
+        r = np.linalg.norm(p.to_numpy(), axis=1)
+        a = 1.5 * J_2 * GM_e * (R_e**2 / r**5)
+        b = 5 * p.loc[:, "Z"] ** 2 / r**2
+        c = -GM_e / r**3 - a * (1 - b)
+        xdot.loc[:, "dX"] = (
+            (c + omega_e**2) * p.loc[:, "X"]
+            + 2 * omega_e * v.loc[:, "dY"]
+            + acc_sun_moon.loc[:, "dX2"]
+        )
+        xdot.loc[:, "dY"] = (
+            (c + omega_e**2) * p.loc[:, "Y"]
+            - 2 * omega_e * v.loc[:, "dX"]
+            + acc_sun_moon.loc[:, "dY2"]
+        )
+        xdot.loc[:, "dZ"] = (c - 2 * a) * p.loc[:, "Z"] + acc_sun_moon.loc[:, "dZ2"]
+        return xdot
 
 
 @timeit
-def glonass_xdot_montenbruck(x, acc_sun_moon):
-    p = x[["X", "Y", "Z"]]
-    v = x[["dX", "dY", "dZ"]]
-    GM_e = 398600.4418 * 1e9
-    R_e = 6378136.0
-    J_2 = 1.0826257 * 1e-3
-    omega_e = 7.292115 * 1e-5
-    xdot = x.copy() * np.nan
-    xdot[["X", "Y", "Z"]] = x[["dX", "dY", "dZ"]]
-    r = np.linalg.norm(p.to_numpy(), axis=1)
-    # How Montenbruck, 2017, Handbook of GNSS, section 3.3.3 computes it:
-    c1 = -GM_e / r**3
-    c2 = -(3 / 2) * J_2 * GM_e * (R_e**2 / r**5) * (1 - (5 * p.loc[:, "Z"] ** 2) / r**2)
-    xdot.loc[:, "dX"] = (
-        c1 * p.loc[:, "X"]
-        + c2 * p.loc[:, "X"]
-        + omega_e**2 * p.loc[:, "X"]
-        + 2 * omega_e * v.loc[:, "dY"]
-        + acc_sun_moon.loc[:, "dX2"]
-    )
-    xdot.loc[:, "dY"] = (
-        c1 * p.loc[:, "Y"]
-        + c2 * p.loc[:, "Y"]
-        + omega_e**2 * p.loc[:, "Y"]
-        - 2 * omega_e * v.loc[:, "dX"]
-        + acc_sun_moon.loc[:, "dY2"]
-    )
-    xdot.loc[:, "dZ"] = (
-        c1 * p.loc[:, "Z"] + c2 * p.loc[:, "Z"] + acc_sun_moon.loc[:, "dZ2"]
-    )
-    return xdot
+def glonass_xdot_montenbruck(
+    x: Union[pd.DataFrame, pl.DataFrame],
+    acc_sun_moon: Union[pd.DataFrame, pl.DataFrame],
+) -> Union[pd.DataFrame, pl.DataFrame]:
+    # Use polars operations directly
+    if hasattr(x, "to_pandas"):
+        # Pure polars implementation
+        GM_e = 398600.4418 * 1e9
+        R_e = 6378136.0
+        J_2 = 1.0826257 * 1e-3
+        omega_e = 7.292115 * 1e-5
+
+        # Calculate radius using polars
+        r = (x.select(["X", "Y", "Z"]).to_numpy() ** 2).sum(axis=1) ** 0.5
+
+        # Extract position arrays
+        X = x.select("X").to_numpy().flatten()
+        Y = x.select("Y").to_numpy().flatten()
+        Z = x.select("Z").to_numpy().flatten()
+        dY = x.select("dY").to_numpy().flatten()
+        dX = x.select("dX").to_numpy().flatten()
+
+        # Compute coefficients
+        c1 = -GM_e / r**3
+        c2 = -(3 / 2) * J_2 * GM_e * (R_e**2 / r**5) * (1 - (5 * Z**2) / r**2)
+
+        # Create result dataframe with computed derivatives
+        xdot = x.with_columns(
+            [
+                x.select("dX").to_series().alias("X"),
+                x.select("dY").to_series().alias("Y"),
+                x.select("dZ").to_series().alias("Z"),
+                pl.lit(
+                    (
+                        c1 * X
+                        + c2 * X
+                        + omega_e**2 * X
+                        + 2 * omega_e * dY
+                        + acc_sun_moon.select("dX2").to_numpy().flatten()
+                    )
+                ).alias("dX"),
+                pl.lit(
+                    (
+                        c1 * Y
+                        + c2 * Y
+                        + omega_e**2 * Y
+                        - 2 * omega_e * dX
+                        + acc_sun_moon.select("dY2").to_numpy().flatten()
+                    )
+                ).alias("dY"),
+                pl.lit(
+                    (c1 * Z + c2 * Z + acc_sun_moon.select("dZ2").to_numpy().flatten())
+                ).alias("dZ"),
+            ]
+        )
+        return xdot
+    else:
+        # Fallback to pandas for non-polars input
+        p = x[["X", "Y", "Z"]]
+        v = x[["dX", "dY", "dZ"]]
+        GM_e = 398600.4418 * 1e9
+        R_e = 6378136.0
+        J_2 = 1.0826257 * 1e-3
+        omega_e = 7.292115 * 1e-5
+        xdot = x.copy() * np.nan
+        xdot[["X", "Y", "Z"]] = x[["dX", "dY", "dZ"]]
+        r = np.linalg.norm(p.to_numpy(), axis=1)
+        c1 = -GM_e / r**3
+        c2 = (
+            -(3 / 2)
+            * J_2
+            * GM_e
+            * (R_e**2 / r**5)
+            * (1 - (5 * p.loc[:, "Z"] ** 2) / r**2)
+        )
+        xdot.loc[:, "dX"] = (
+            c1 * p.loc[:, "X"]
+            + c2 * p.loc[:, "X"]
+            + omega_e**2 * p.loc[:, "X"]
+            + 2 * omega_e * v.loc[:, "dY"]
+            + acc_sun_moon.loc[:, "dX2"]
+        )
+        xdot.loc[:, "dY"] = (
+            c1 * p.loc[:, "Y"]
+            + c2 * p.loc[:, "Y"]
+            + omega_e**2 * p.loc[:, "Y"]
+            - 2 * omega_e * v.loc[:, "dX"]
+            + acc_sun_moon.loc[:, "dY2"]
+        )
+        xdot.loc[:, "dZ"] = (
+            c1 * p.loc[:, "Z"] + c2 * p.loc[:, "Z"] + acc_sun_moon.loc[:, "dZ2"]
+        )
+        return xdot
 
 
 @timeit
-def sbas_orbit_position_and_velocity(df):
+def sbas_orbit_position_and_velocity(
+    df: Union[pd.DataFrame, pl.DataFrame],
+) -> Union[pd.DataFrame, pl.DataFrame]:
     # Based on Montenbruck, 2017, Handbook of GNSS, section 3.3.3, eq. 3.59
-    t_query = df["query_time_wrt_ephemeris_reference_time_s"].values.reshape(-1, 1)
-    df[["sat_pos_x_m", "sat_pos_y_m", "sat_pos_z_m"]] = (
-        df[["X", "Y", "Z"]].values
-        + df[["dX", "dY", "dZ"]].mul(t_query, axis=0).values
-        + 0.5 * df[["dX2", "dY2", "dZ2"]].mul(t_query**2, axis=0).values
-    )
-    df[["sat_vel_x_mps", "sat_vel_y_mps", "sat_vel_z_mps"]] = (
-        df[["dX", "dY", "dZ"]].values
-        + df[["dX2", "dY2", "dZ2"]].mul(t_query, axis=0).values
-    )
-    return df
+    if hasattr(df, "to_pandas"):
+        # Pure polars implementation
+        t_query = (
+            df.select("query_time_wrt_ephemeris_reference_time_s").to_numpy().flatten()
+        )
+
+        # Position calculation
+        X = df.select("X").to_numpy().flatten()
+        Y = df.select("Y").to_numpy().flatten()
+        Z = df.select("Z").to_numpy().flatten()
+        dX = df.select("dX").to_numpy().flatten()
+        dY = df.select("dY").to_numpy().flatten()
+        dZ = df.select("dZ").to_numpy().flatten()
+        dX2 = df.select("dX2").to_numpy().flatten()
+        dY2 = df.select("dY2").to_numpy().flatten()
+        dZ2 = df.select("dZ2").to_numpy().flatten()
+
+        return df.with_columns(
+            [
+                pl.lit(X + dX * t_query + 0.5 * dX2 * t_query**2).alias("sat_pos_x_m"),
+                pl.lit(Y + dY * t_query + 0.5 * dY2 * t_query**2).alias("sat_pos_y_m"),
+                pl.lit(Z + dZ * t_query + 0.5 * dZ2 * t_query**2).alias("sat_pos_z_m"),
+                pl.lit(dX + dX2 * t_query).alias("sat_vel_x_mps"),
+                pl.lit(dY + dY2 * t_query).alias("sat_vel_y_mps"),
+                pl.lit(dZ + dZ2 * t_query).alias("sat_vel_z_mps"),
+            ]
+        )
+    else:
+        # Fallback to pandas for non-polars input
+        t_query = df["query_time_wrt_ephemeris_reference_time_s"].values.reshape(-1, 1)
+        df[["sat_pos_x_m", "sat_pos_y_m", "sat_pos_z_m"]] = (
+            df[["X", "Y", "Z"]].values
+            + df[["dX", "dY", "dZ"]].mul(t_query, axis=0).values
+            + 0.5 * df[["dX2", "dY2", "dZ2"]].mul(t_query**2, axis=0).values
+        )
+        df[["sat_vel_x_mps", "sat_vel_y_mps", "sat_vel_z_mps"]] = (
+            df[["dX", "dY", "dZ"]].values
+            + df[["dX2", "dY2", "dZ2"]].mul(t_query, axis=0).values
+        )
+        return df
 
 
 @timeit
-def glonass_orbit_position_and_velocity(df):
+def glonass_orbit_position_and_velocity(
+    df: Union[pd.DataFrame, pl.DataFrame],
+) -> Union[pd.DataFrame, pl.DataFrame]:
     # Based on Montenbruck, 2017, Handbook of GNSS, section 3.3.3
-    pv = df[["X", "Y", "Z", "dX", "dY", "dZ"]]
-    a = df[["dX2", "dY2", "dZ2"]]
-    t = df["query_time_wrt_ephemeris_reference_time_s"] * 0
-    t_query = df["query_time_wrt_ephemeris_reference_time_s"]
+    if hasattr(df, "to_pandas"):
+        # For complex Runge-Kutta integration, we need to work with pandas temporarily
+        # This is because the integration requires complex operations that are hard to vectorize in polars
+        df_pd = df.to_pandas()
 
-    while True:
-        # We integrate in fixed steps until the last step, which is the time between the next-to-last integrated state
-        # and the query time.
-        fixed_integration_time_step = 60
-        h = (t_query - t).clip(0, fixed_integration_time_step)
-        if np.all(h == 0):
-            df[
-                [
-                    "sat_pos_x_m",
-                    "sat_pos_y_m",
-                    "sat_pos_z_m",
-                    "sat_vel_x_mps",
-                    "sat_vel_y_mps",
-                    "sat_vel_z_mps",
-                ]
-            ] = pv
+        pv = df_pd[["X", "Y", "Z", "dX", "dY", "dZ"]]
+        a = df_pd[["dX2", "dY2", "dZ2"]]
+        t = df_pd["query_time_wrt_ephemeris_reference_time_s"] * 0
+        t_query = df_pd["query_time_wrt_ephemeris_reference_time_s"]
 
-            return df
-        # One step of 4th order Runge-Kutta integration:
-        glonass_xdot = glonass_xdot_rtklib
-        k1 = glonass_xdot(pv, a)
-        k2 = glonass_xdot(pv + k1.mul(h / 2, axis=0), a)
-        k3 = glonass_xdot(pv + k2.mul(h / 2, axis=0), a)
-        k4 = glonass_xdot(pv + k3.mul(h, axis=0), a)
-        pv = pv + (k1 + 2 * k2 + 2 * k3 + k4).mul(h / 6, axis=0)
-        t = t + h
+        while True:
+            # We integrate in fixed steps until the last step, which is the time between the next-to-last integrated state
+            # and the query time.
+            fixed_integration_time_step = 60
+            h = (t_query - t).clip(0, fixed_integration_time_step)
+            if np.all(h == 0):
+                # Convert back to polars with computed results
+                result = df.with_columns(
+                    [
+                        pl.lit(pv["X"].values).alias("sat_pos_x_m"),
+                        pl.lit(pv["Y"].values).alias("sat_pos_y_m"),
+                        pl.lit(pv["Z"].values).alias("sat_pos_z_m"),
+                        pl.lit(pv["dX"].values).alias("sat_vel_x_mps"),
+                        pl.lit(pv["dY"].values).alias("sat_vel_y_mps"),
+                        pl.lit(pv["dZ"].values).alias("sat_vel_z_mps"),
+                    ]
+                )
+                return result
+            # One step of 4th order Runge-Kutta integration:
+            glonass_xdot = glonass_xdot_rtklib
+            k1 = glonass_xdot(pv, a)
+            k2 = glonass_xdot(pv + k1.mul(h / 2, axis=0), a)
+            k3 = glonass_xdot(pv + k2.mul(h / 2, axis=0), a)
+            k4 = glonass_xdot(pv + k3.mul(h, axis=0), a)
+            pv = pv + (k1 + 2 * k2 + 2 * k3 + k4).mul(h / 6, axis=0)
+            t = t + h
+    else:
+        # Fallback to pandas for non-polars input
+        pv = df[["X", "Y", "Z", "dX", "dY", "dZ"]]
+        a = df[["dX2", "dY2", "dZ2"]]
+        t = df["query_time_wrt_ephemeris_reference_time_s"] * 0
+        t_query = df["query_time_wrt_ephemeris_reference_time_s"]
+
+        while True:
+            fixed_integration_time_step = 60
+            h = (t_query - t).clip(0, fixed_integration_time_step)
+            if np.all(h == 0):
+                df[
+                    [
+                        "sat_pos_x_m",
+                        "sat_pos_y_m",
+                        "sat_pos_z_m",
+                        "sat_vel_x_mps",
+                        "sat_vel_y_mps",
+                        "sat_vel_z_mps",
+                    ]
+                ] = pv
+                return df
+            glonass_xdot = glonass_xdot_rtklib
+            k1 = glonass_xdot(pv, a)
+            k2 = glonass_xdot(pv + k1.mul(h / 2, axis=0), a)
+            k3 = glonass_xdot(pv + k2.mul(h / 2, axis=0), a)
+            k4 = glonass_xdot(pv + k3.mul(h, axis=0), a)
+            pv = pv + (k1 + 2 * k2 + 2 * k3 + k4).mul(h / 6, axis=0)
+            t = t + h
 
 
-def eccentric_anomaly(M, e, tol=1e-5, max_iter=10):
+def eccentric_anomaly(
+    M: np.ndarray, e: np.ndarray, tol: float = 1e-5, max_iter: int = 10
+) -> np.ndarray:
     E = M.copy()
     for iterations in range(0, max_iter):
         delta_E = -(E - e * np.sin(E) - M) / (1 - e * np.cos(E))
@@ -157,7 +338,11 @@ def eccentric_anomaly(M, e, tol=1e-5, max_iter=10):
 
 
 @timeit
-def is_bds_geo(constellation, inclination_rad, semi_major_axis_m):
+def is_bds_geo(
+    constellation: Union[pd.Series, np.ndarray],
+    inclination_rad: Union[pd.Series, np.ndarray],
+    semi_major_axis_m: Union[pd.Series, np.ndarray],
+) -> Union[pd.Series, np.ndarray]:
     # IGSO and MEO satellites have an inclination of 55 degrees, so we can
     # use that as a threshold to distinguish GEO from IGSO satellites.
     # TODO Ok to ignore eccentricity here?
@@ -182,7 +367,7 @@ def is_bds_geo(constellation, inclination_rad, semi_major_axis_m):
 
 
 @timeit
-def position_in_orbital_plane(eph):
+def position_in_orbital_plane(eph: pd.DataFrame) -> None:
     # Semi-major axis
     eph["A"] = eph.sqrtA**2
     # Computed mean motion
@@ -236,7 +421,7 @@ def position_in_orbital_plane(eph):
 
 
 @timeit
-def orbital_plane_to_earth_centered_cartesian(eph):
+def orbital_plane_to_earth_centered_cartesian(eph: pd.DataFrame) -> None:
     # Corrected longitude of ascending node in ECEF
     eph["Omega_k"] = (
         eph.Omega_0
@@ -283,7 +468,7 @@ def orbital_plane_to_earth_centered_cartesian(eph):
 
 
 @timeit
-def handle_bds_geos(eph):
+def handle_bds_geos(eph: pd.DataFrame) -> None:
     # Do special rotation from inertial to BDCS (ECEF) frame for Beidou GEO satellites, see
     # Beidou_ICD_B3I_v1.0, Table 5-11
     geos = eph[eph.is_bds_geo]
@@ -338,7 +523,7 @@ def handle_bds_geos(eph):
 
 @timeit
 # Adapted from gnss_lib_py's find_sat()
-def kepler_orbit_position_and_velocity(eph):
+def kepler_orbit_position_and_velocity(eph: pd.DataFrame) -> pd.DataFrame:
     eph["gps_week"] = eph["GPSWeek"]
     eph["gnss_id"] = eph["constellation"]
     eph["sv_id"] = eph["sv"]
@@ -376,7 +561,7 @@ def kepler_orbit_position_and_velocity(eph):
 
 
 @timeit
-def set_time_of_validity(df):
+def set_time_of_validity(df: pd.DataFrame) -> pd.DataFrame:
     def set_for_one_constellation(group):
         group_constellation = group["constellation"].iat[0]
         group["validity_start"] = (
@@ -402,7 +587,7 @@ def set_time_of_validity(df):
 
 
 @timeit
-def convert_nav_dataset_to_dataframe(nav_ds):
+def convert_nav_dataset_to_dataframe(nav_ds: Any) -> pd.DataFrame:
     """convert ephemerides from xarray.Dataset to pandas.DataFrame"""
     df = nav_ds.to_dataframe()
     # Drop ephemerides for which all parameters are NaN, as we cannot compute anything from those
@@ -502,7 +687,7 @@ def convert_nav_dataset_to_dataframe(nav_ds):
 
 
 @timeit
-def compute_gal_inav_fnav_indicators(df):
+def compute_gal_inav_fnav_indicators(df: pd.DataFrame) -> pd.DataFrame:
     """
     Based on RINEX 3.05, section A8
     """
@@ -523,7 +708,11 @@ def compute_gal_inav_fnav_indicators(df):
     return df
 
 
-def to_isagpst(time, timescale, gpst_utc_leapseconds):
+def to_isagpst(
+    time: Union[pd.Timedelta, pd.Series],
+    timescale: Union[str, pd.Series],
+    gpst_utc_leapseconds: int,
+) -> Union[pd.Timedelta, pd.Series]:
     if (isinstance(time, pd.Timedelta) or isinstance(time, pd.Series)) and isinstance(
         timescale, str
     ):
@@ -543,39 +732,77 @@ def to_isagpst(time, timescale, gpst_utc_leapseconds):
 
 
 @timeit
-def select_ephemerides(df, query):
-    df = df[df.ephemeris_reference_time_isagpst.notna()]
-    query = query.sort_values(by="ephemeris_selection_time_isagpst")
-    df = df.sort_values(by="ephemeris_reference_time_isagpst")
-    # Add fnav/inav indicator to query for to select the FNAV ephemeris for E5b signals, and INAV for other signals
-    query["fnav_or_inav"] = ""
-    query.loc[(query.constellation == "E"), "fnav_or_inav"] = "inav"
-    query.loc[
-        (query.constellation == "E") & (query.signal.str[1] == "5"), "fnav_or_inav"
-    ] = "fnav"
-    query = pd.merge_asof(
-        query,
+def select_ephemerides(df: pl.DataFrame, query: pl.DataFrame) -> pl.DataFrame:
+    """Polars implementation of ephemeris selection"""
+    # Filter out ephemerides with missing reference times
+    df = df.filter(pl.col("ephemeris_reference_time_isagpst").is_not_null())
+
+    # Sort both dataframes
+    query = query.sort("ephemeris_selection_time_isagpst")
+    df = df.sort("ephemeris_reference_time_isagpst")
+
+    # Add fnav/inav indicator for Galileo signals
+    query = query.with_columns([pl.lit("").alias("fnav_or_inav")])
+
+    # Set INAV for Galileo satellites
+    query = query.with_columns(
+        [
+            pl.when(pl.col("constellation") == "E")
+            .then(pl.lit("inav"))
+            .otherwise(pl.col("fnav_or_inav"))
+            .alias("fnav_or_inav")
+        ]
+    )
+
+    # Set FNAV for E5b signals (signal[1] == "5")
+    query = query.with_columns(
+        [
+            pl.when(
+                (pl.col("constellation") == "E")
+                & (pl.col("signal").str.slice(1, 1) == "5")
+            )
+            .then(pl.lit("fnav"))
+            .otherwise(pl.col("fnav_or_inav"))
+            .alias("fnav_or_inav")
+        ]
+    )
+
+    # Use join_asof for the ephemeris matching
+    query = query.join_asof(
         df,
         left_on="ephemeris_selection_time_isagpst",
         right_on="ephemeris_reference_time_isagpst",
         by=["constellation", "sv", "fnav_or_inav"],
-        direction="backward",
+        strategy="backward",
     )
-    # Compute times w.r.t. orbit and clock reference times used by downstream computations
-    query["query_time_wrt_ephemeris_reference_time_s"] = util.timedelta_2_seconds(
-        query["query_time_isagpst"] - query["ephemeris_reference_time_isagpst"]
+
+    # Compute time differences
+    query = query.with_columns(
+        [
+            (
+                (
+                    pl.col("query_time_isagpst")
+                    - pl.col("ephemeris_reference_time_isagpst")
+                ).dt.total_seconds()
+            ).alias("query_time_wrt_ephemeris_reference_time_s"),
+            (
+                (
+                    pl.col("query_time_isagpst")
+                    - pl.col("clock_reference_time_isagpst")
+                ).dt.total_seconds()
+            ).alias("query_time_wrt_clock_reference_time_s"),
+            (
+                (pl.col("query_time_isagpst") < pl.col("validity_end"))
+                & (pl.col("query_time_isagpst") > pl.col("validity_start"))
+            ).alias("ephemeris_valid"),
+        ]
     )
-    query["query_time_wrt_clock_reference_time_s"] = util.timedelta_2_seconds(
-        query["query_time_isagpst"] - query["clock_reference_time_isagpst"]
-    )
-    query["ephemeris_valid"] = (query["query_time_isagpst"] < query["validity_end"]) & (
-        query["query_time_isagpst"] > query["validity_start"]
-    )
+
     return query
 
 
 @timeit
-def extract_health_flag_from_query(query):
+def extract_health_flag_from_query(query: pd.DataFrame) -> pd.Series:
     """
     Extracts the health flag for each row of a query from a `query` DataFrame containing ephemeris data.
 
@@ -605,25 +832,54 @@ def extract_health_flag_from_query(query):
 
 
 @timeit
-def compute_clock_offsets(df):
-    df["sat_clock_offset_m"] = constants.cGpsSpeedOfLight_mps * (
-        df["SVclockBias"]
-        + df["SVclockDrift"] * df["query_time_wrt_clock_reference_time_s"]
-        + df["SVclockDriftRate"] * df["query_time_wrt_clock_reference_time_s"] ** 2
-    )
-    df["sat_clock_drift_mps"] = constants.cGpsSpeedOfLight_mps * (
-        df["SVclockDrift"]
-        + 2 * df["SVclockDriftRate"] * df["query_time_wrt_clock_reference_time_s"]
-    )
-    return df
+def compute_clock_offsets(
+    df: Union[pd.DataFrame, pl.DataFrame],
+) -> Union[pd.DataFrame, pl.DataFrame]:
+    if hasattr(df, "with_columns"):
+        # Pure polars implementation
+        return df.with_columns(
+            [
+                (
+                    constants.cGpsSpeedOfLight_mps
+                    * (
+                        pl.col("SVclockBias")
+                        + pl.col("SVclockDrift")
+                        * pl.col("query_time_wrt_clock_reference_time_s")
+                        + pl.col("SVclockDriftRate")
+                        * pl.col("query_time_wrt_clock_reference_time_s") ** 2
+                    )
+                ).alias("sat_clock_offset_m"),
+                (
+                    constants.cGpsSpeedOfLight_mps
+                    * (
+                        pl.col("SVclockDrift")
+                        + 2
+                        * pl.col("SVclockDriftRate")
+                        * pl.col("query_time_wrt_clock_reference_time_s")
+                    )
+                ).alias("sat_clock_drift_mps"),
+            ]
+        )
+    else:
+        # Fallback to pandas for non-polars input
+        df["sat_clock_offset_m"] = constants.cGpsSpeedOfLight_mps * (
+            df["SVclockBias"]
+            + df["SVclockDrift"] * df["query_time_wrt_clock_reference_time_s"]
+            + df["SVclockDriftRate"] * df["query_time_wrt_clock_reference_time_s"] ** 2
+        )
+        df["sat_clock_drift_mps"] = constants.cGpsSpeedOfLight_mps * (
+            df["SVclockDrift"]
+            + 2 * df["SVclockDriftRate"] * df["query_time_wrt_clock_reference_time_s"]
+        )
+        return df
 
 
 @timeit
 def compute_parallel(
-    rinex_nav_file_paths,
+    rinex_nav_file_paths: Union[Path, List[Path]],
     per_signal_query: pl.DataFrame,
-    is_query_corrected_by_sat_clock_offset=False,
-):
+    is_query_corrected_by_sat_clock_offset: bool = False,
+) -> pl.DataFrame:
     if not isinstance(rinex_nav_file_paths, list):
         rinex_nav_file_paths = [rinex_nav_file_paths]
     # Warm up nav file parser cache so that we don't parse the file multiple times
@@ -648,83 +904,99 @@ def compute_parallel(
 
 @timeit
 def merge_per_signal_query_with_ephemerides(
-    rinex_nav_file_paths, per_signal_query: pd.DataFrame
-):
+    rinex_nav_file_paths: Union[Path, List[Path]], per_signal_query: pl.DataFrame
+) -> pl.DataFrame:
     if not isinstance(rinex_nav_file_paths, list):
         rinex_nav_file_paths = [rinex_nav_file_paths]
     rinex_nav_file_paths = [Path(path) for path in rinex_nav_file_paths]
     ephemeris_blocks = []
     for path in rinex_nav_file_paths:
         block = parse_rinex_nav_file(path)
-        # Not using iono model parameters here, removing them from dataframe attributes to
-        # enable concatenation
-        # block.attrs.pop("ionospheric_corr_GPS", None)
         ephemeris_blocks.append(block)
     ephemerides = pd.concat(ephemeris_blocks)
+
+    # Convert pandas ephemerides to polars for consistent processing
+    ephemerides_pl = pl.from_pandas(ephemerides)
+
     # Group delays and clock offsets can be signal-specific, so we need to match ephemerides to code signals,
     # not only to satellites
     # Example: Galileo transmits E5a clock and group delay parameters in the F/NAV message, but parameters for other
     # signals in the I/NAV message
     if "ephemeris_selection_time_isagpst" not in per_signal_query.columns:
-        per_signal_query["ephemeris_selection_time_isagpst"] = per_signal_query[
-            "query_time_isagpst"
-        ]
-    per_signal_query = select_ephemerides((ephemerides), (per_signal_query))
-    pass
-    return per_signal_query
+        per_signal_query = per_signal_query.with_columns(
+            pl.col("query_time_isagpst").alias("ephemeris_selection_time_isagpst")
+        )
+
+    # Use polars implementation for ephemeris selection
+    result = select_ephemerides(ephemerides_pl, per_signal_query)
+
+    return result
 
 
 def compute(
-    rinex_nav_file_paths, per_signal_query, is_query_corrected_by_sat_clock_offset=False
-):
-    per_signal_query = per_signal_query.to_pandas()
-    return pl.from_pandas(
-        _compute(
-            merge_per_signal_query_with_ephemerides(
-                rinex_nav_file_paths, per_signal_query
-            ),
-            is_query_corrected_by_sat_clock_offset,
+    rinex_nav_file_paths: Union[Path, List[Path]],
+    per_signal_query: pl.DataFrame,
+    is_query_corrected_by_sat_clock_offset: bool = False,
+) -> pl.DataFrame:
+    if "constellation" not in per_signal_query.columns:
+        per_signal_query = per_signal_query.with_columns(
+            pl.col("sv").str.slice(0, 1).alias("constellation")
         )
+    return _compute(
+        merge_per_signal_query_with_ephemerides(rinex_nav_file_paths, per_signal_query),
+        is_query_corrected_by_sat_clock_offset,
     )
 
 
 def _compute(
-    per_signal_query_with_ephemerides: pd.DataFrame,
-    is_query_corrected_by_sat_clock_offset=False,
-):
-    # compute satellite clock bias
+    per_signal_query_with_ephemerides: pl.DataFrame,
+    is_query_corrected_by_sat_clock_offset: bool = False,
+) -> pl.DataFrame:
+    # compute satellite clock bias using polars
     if is_query_corrected_by_sat_clock_offset:
         per_signal_query_with_ephemerides = compute_clock_offsets(
             per_signal_query_with_ephemerides
         )
     else:  # compute satellite clock offset iteratively
-        t = per_signal_query_with_ephemerides.query_time_wrt_clock_reference_time_s
+        t = per_signal_query_with_ephemerides.select(
+            "query_time_wrt_clock_reference_time_s"
+        )
         for _ in range(2):
             per_signal_query_with_ephemerides = compute_clock_offsets(
                 per_signal_query_with_ephemerides
             )
-            per_signal_query_with_ephemerides.query_time_wrt_clock_reference_time_s = (
-                t
-                - per_signal_query_with_ephemerides.sat_clock_offset_m
-                / constants.cGpsSpeedOfLight_mps
+            per_signal_query_with_ephemerides = (
+                per_signal_query_with_ephemerides.with_columns(
+                    (
+                        t.to_series()
+                        - pl.col("sat_clock_offset_m") / constants.cGpsSpeedOfLight_mps
+                    ).alias("query_time_wrt_clock_reference_time_s")
+                )
             )
         # Apply sat clock correction to the query time for satellite position computation
-        per_signal_query_with_ephemerides.query_time_wrt_ephemeris_reference_time_s -= (
-            per_signal_query_with_ephemerides.sat_clock_offset_m
-            / constants.cGpsSpeedOfLight_mps
+        per_signal_query_with_ephemerides = (
+            per_signal_query_with_ephemerides.with_columns(
+                (
+                    pl.col("query_time_wrt_ephemeris_reference_time_s")
+                    - pl.col("sat_clock_offset_m") / constants.cGpsSpeedOfLight_mps
+                ).alias("query_time_wrt_ephemeris_reference_time_s")
+            )
         )
 
     # Compute orbital states for each (satellite,ephemeris) pair only once:
+    # Use polars groupby operations
     per_sat_eph_query = (
-        per_signal_query_with_ephemerides.groupby(
+        per_signal_query_with_ephemerides.group_by(
             ["sv", "query_time_isagpst", "ephemeris_hash"]
         )
         .first()
-        .reset_index()
+        .drop(["sat_clock_offset_m", "sat_clock_drift_mps"])
     )
-    per_sat_eph_query = per_sat_eph_query.drop(
-        columns=["sat_clock_offset_m", "sat_clock_drift_mps"]
-    )
+
+    # For orbit evaluation, we need to process by orbit type
+    # Convert to pandas temporarily for orbit evaluation since the orbit functions
+    # are complex and need more work to be fully polars-native
+    per_sat_eph_query_pd = per_sat_eph_query.to_pandas()
 
     def evaluate_orbit(sub_df):
         orbit_type = sub_df["orbit_type"].iloc[0]
@@ -741,11 +1013,16 @@ def _compute(
             sub_df[["x_m", "y_m", "z_m", "dx_mps", "dy_mps", "dz_mps"]] = np.nan
         return sub_df
 
-    per_sat_eph_query = per_sat_eph_query.groupby("orbit_type")[
-        per_sat_eph_query.columns
+    per_sat_eph_query_pd = per_sat_eph_query_pd.groupby("orbit_type")[
+        per_sat_eph_query_pd.columns
     ].apply(evaluate_orbit)
-    per_sat_eph_query = per_sat_eph_query.reset_index(drop=True)
-    per_sat_eph_query["health_flag"] = extract_health_flag_from_query(per_sat_eph_query)
+    per_sat_eph_query_pd = per_sat_eph_query_pd.reset_index(drop=True)
+    per_sat_eph_query_pd["health_flag"] = extract_health_flag_from_query(
+        per_sat_eph_query_pd
+    )
+
+    # Convert back to polars
+    per_sat_eph_query = pl.from_pandas(per_sat_eph_query_pd)
     columns_to_keep = [
         "sv",
         "constellation",
@@ -759,34 +1036,35 @@ def _compute(
         "ephemeris_hash",
         "health_flag",
     ]
-    per_sat_eph_query = per_sat_eph_query[columns_to_keep]
-    # Merge the computed satellite states into the larger signal-specific query dataframe
-    per_signal_query_with_ephemerides = per_signal_query_with_ephemerides.merge(
+    per_sat_eph_query = per_sat_eph_query.select(columns_to_keep)
+
+    # Merge the computed satellite states into the larger signal-specific query dataframe using polars
+    per_signal_query_with_ephemerides = per_signal_query_with_ephemerides.join(
         per_sat_eph_query,
         on=["constellation", "sv", "query_time_isagpst", "ephemeris_hash"],
+        how="left",
     )
     columns_to_keep = [
         "sat_clock_offset_m",
         "sat_clock_drift_mps",
     ] + columns_to_keep
-    per_signal_query_with_ephemerides = compute_total_group_delays(
-        per_signal_query_with_ephemerides
-    )
 
-    if "signal" in per_signal_query_with_ephemerides.columns:
+    # Convert to pandas for compute_total_group_delays since it uses complex pandas operations
+    per_signal_query_pd = per_signal_query_with_ephemerides.to_pandas()
+    per_signal_query_pd = compute_total_group_delays(per_signal_query_pd)
+
+    if "signal" in per_signal_query_pd.columns:
         columns_to_keep = ["signal", "sat_code_bias_m"] + columns_to_keep
-    # per_signal_query.loc[
-    #    ~per_signal_query.ephemeris_valid, computed_columns_to_keep
-    # ] = np.nan
-    per_signal_query_with_ephemerides = per_signal_query_with_ephemerides[
-        columns_to_keep
-    ].reset_index(drop=True)
-    return per_signal_query_with_ephemerides
+
+    per_signal_query_pd = per_signal_query_pd[columns_to_keep].reset_index(drop=True)
+
+    # Convert back to polars before returning
+    return pl.from_pandas(per_signal_query_pd)
 
 
 def compute_total_group_delays(
-    query,
-):
+    query: pd.DataFrame,
+) -> pd.DataFrame:
     """
     This computes TGD terms, not ISCs, which are not captured by RINEX 3 - we'll have them with RINEX 4.
     References:
