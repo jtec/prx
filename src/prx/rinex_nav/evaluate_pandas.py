@@ -1,18 +1,42 @@
 import logging
-import math
 
 import pandas as pd
 import numpy as np
 from pathlib import Path
 import scipy
-from joblib import Parallel, delayed
+import georinex
 from prx import util
 from prx import constants
-from prx.rinex_nav.evaluate_pandas import parse_rinex_nav_file
-from prx.util import timeit
+from prx.speedo import select_ephemerides_polars
+from prx.util import timeit, repair_with_gfzrnx
 import polars as pl
 
 log = logging.getLogger(__name__)
+
+
+@timeit
+def parse_rinex_nav_file(rinex_file: Path):
+    @util.disk_cache.cache(ignore=["rinex_file_path"])
+    def cached_load(rinex_file_path: Path, file_hash: str):
+        repair_with_gfzrnx(rinex_file)
+        ds = georinex.load(rinex_file)
+        ds.attrs["utc_gpst_leap_seconds"] = util.get_gpst_utc_leap_seconds(
+            rinex_file_path
+        )
+        df = convert_nav_dataset_to_dataframe(ds)
+        df["source"] = str(rinex_file_path.resolve())
+        df["ephemeris_hash"] = pd.util.hash_pandas_object(df, index=False).astype(str)
+        return df
+
+    t0 = pd.Timestamp.now()
+
+    file_content_hash = util.hash_of_file_content(rinex_file)
+    hash_time = pd.Timestamp.now() - t0
+    if hash_time > pd.Timedelta(seconds=1):
+        log.info(
+            f"Hashing file content took {hash_time}, we might want to partially hash the file"
+        )
+    return cached_load(rinex_file, file_content_hash)
 
 
 def time_scale_integer_second_offset_wrt_gpst(time_scale, utc_gpst_leap_seconds=None):
@@ -553,6 +577,10 @@ def select_ephemerides(df, query):
     query.loc[
         (query.constellation == "E") & (query.signal.str[1] == "5"), "fnav_or_inav"
     ] = "fnav"
+    for col in ["constellation", "sv"]:
+        common_categories = query[col].cat.categories.union(df["sv"].cat.categories)
+        query[col] = query[col].cat.set_categories(common_categories)
+        df[col] = df[col].cat.set_categories(common_categories)
     query = pd.merge_asof(
         query,
         df,
@@ -619,77 +647,69 @@ def compute_clock_offsets(df):
 
 
 @timeit
-def compute_parallel(
-    rinex_nav_file_paths,
-    per_signal_query: pl.DataFrame,
-    is_query_corrected_by_sat_clock_offset=False,
-):
-    if not isinstance(rinex_nav_file_paths, list):
-        rinex_nav_file_paths = [rinex_nav_file_paths]
-    # Warm up nav file parser cache so that we don't parse the file multiple times
-    for rinex_nav_file_path in rinex_nav_file_paths:
-        _ = parse_rinex_nav_file(rinex_nav_file_path)
-    parallel = Parallel(n_jobs=1, return_as="list", verbose=10, backend="loky")
-    # split dataframe into smaller dataframes
-    per_signal_query = per_signal_query.to_pandas()
-    len_chunk = int(1e5)
-    chunks = np.array_split(
-        per_signal_query, math.ceil(len(per_signal_query.index) / len_chunk)
-    )
-    log.info(f"Evaluating ephemerides in {len(chunks)} chunks...")
-    processed_chunks = parallel(
-        delayed(compute)(
-            rinex_nav_file_paths, chunk, is_query_corrected_by_sat_clock_offset
+def parse_rinex_nav_file(rinex_file: Path) -> pd.DataFrame:
+    @util.disk_cache.cache(ignore=["rinex_file_path"])
+    def cached_load(rinex_file_path: Path, file_hash: str):
+        repair_with_gfzrnx(rinex_file)
+        ds = georinex.load(rinex_file)
+        ds.attrs["utc_gpst_leap_seconds"] = util.get_gpst_utc_leap_seconds(
+            rinex_file_path
         )
-        for chunk in chunks
-    )
-    return pl.from_pandas(pd.concat(processed_chunks))
+        df = convert_nav_dataset_to_dataframe(ds)
+        df["source"] = str(rinex_file_path.resolve())
+        df["ephemeris_hash"] = pd.util.hash_pandas_object(df, index=False).astype(str)
+        return df
+
+    t0 = pd.Timestamp.now()
+
+    file_content_hash = util.hash_of_file_content(rinex_file)
+    hash_time = pd.Timestamp.now() - t0
+    if hash_time > pd.Timedelta(seconds=1):
+        log.info(
+            f"Hashing file content took {hash_time}, we might want to partially hash the file"
+        )
+    return cached_load(rinex_file, file_content_hash)
 
 
 @timeit
 def merge_per_signal_query_with_ephemerides(
-    rinex_nav_file_paths, per_signal_query: pd.DataFrame
+    rinex_nav_file_paths, per_signal_query: pl.DataFrame
 ):
     if not isinstance(rinex_nav_file_paths, list):
         rinex_nav_file_paths = [rinex_nav_file_paths]
     rinex_nav_file_paths = [Path(path) for path in rinex_nav_file_paths]
     ephemeris_blocks = []
     for path in rinex_nav_file_paths:
-        block = parse_rinex_nav_file(path)
+        block = pl.from_pandas(parse_rinex_nav_file(path))
         # Not using iono model parameters here, removing them from dataframe attributes to
         # enable concatenation
         # block.attrs.pop("ionospheric_corr_GPS", None)
         ephemeris_blocks.append(block)
-    ephemerides = pd.concat(ephemeris_blocks)
+    ephemerides = pl.concat(ephemeris_blocks)
     # Group delays and clock offsets can be signal-specific, so we need to match ephemerides to code signals,
     # not only to satellites
     # Example: Galileo transmits E5a clock and group delay parameters in the F/NAV message, but parameters for other
     # signals in the I/NAV message
     if "ephemeris_selection_time_isagpst" not in per_signal_query.columns:
-        per_signal_query["ephemeris_selection_time_isagpst"] = per_signal_query[
-            "query_time_isagpst"
-        ]
-    per_signal_query = select_ephemerides((ephemerides), (per_signal_query))
-    pass
+        per_signal_query = per_signal_query.with_columns(
+            pl.col("query_time_isagpst").alias("ephemeris_selection_time_isagpst")
+        )
+    per_signal_query = select_ephemerides_polars((ephemerides), (per_signal_query))
+
     return per_signal_query
 
 
 def compute(
     rinex_nav_file_paths, per_signal_query, is_query_corrected_by_sat_clock_offset=False
 ):
-    per_signal_query = per_signal_query.to_pandas()
-    return pl.from_pandas(
-        _compute(
-            merge_per_signal_query_with_ephemerides(
-                rinex_nav_file_paths, per_signal_query
-            ),
-            is_query_corrected_by_sat_clock_offset,
-        )
+    return _compute(
+        merge_per_signal_query_with_ephemerides(rinex_nav_file_paths, per_signal_query),
+        is_query_corrected_by_sat_clock_offset,
     )
 
 
 def _compute(
-    per_signal_query_with_ephemerides: pd.DataFrame,
+    per_signal_query_with_ephemerides: pl.DataFrame,
     is_query_corrected_by_sat_clock_offset=False,
 ):
     # compute satellite clock bias
