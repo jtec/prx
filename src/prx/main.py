@@ -485,9 +485,6 @@ def build_records(
 
     flat_obs.time = pd.to_datetime(flat_obs.time, format="%Y-%m-%dT%H:%M:%S")
     flat_obs.obs_value = flat_obs.obs_value.astype(float)
-    flat_obs[["constellation", "sv", "obs_type"]] = flat_obs[
-        ["constellation", "sv", "obs_type"]
-    ].astype("category")
 
     flat_obs = flat_obs.rename(
         columns={

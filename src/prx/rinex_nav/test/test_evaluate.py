@@ -3,7 +3,7 @@ from tempfile import TemporaryDirectory
 import numpy as np
 import pandas as pd
 from pathlib import Path
-
+import polars as pl
 from prx.rinex_nav.evaluate import (
     select_ephemerides,
     set_time_of_validity,
@@ -124,7 +124,9 @@ def test_expired_ephemeris_yields_nans(input_for_test):
             },
         ]
     )
-    rinex_sat_states = rinex_nav_evaluate.compute(path_to_rnx3_nav_file, query)
+    rinex_sat_states = rinex_nav_evaluate.compute(
+        path_to_rnx3_nav_file, pl.from_pandas(query)
+    ).to_pandas()
     rinex_sat_states = rinex_sat_states.sort_values(by="query_time_isagpst")
     # We expect to be the first row to be filled with values
     assert not rinex_sat_states.iloc[0, :].isna().any()
@@ -236,9 +238,13 @@ def test_compare_to_sp3(input_for_test):
         input_for_test["rinex_nav_file"]
     )
     query = generate_sat_query(pd.Timestamp("2022-01-01T01:10:00.000000000"))
+    query["constellation"] = query.sv.str[0]
     # We have no SP3 reference solutions for SBAS satellites, so remove them from the query
     query = query[~query.sv.str.startswith("S")]
-    rinex_sat_states = rinex_nav_evaluate.compute_parallel(rinex_nav_file, query.copy())
+    rinex_sat_states = rinex_nav_evaluate.compute(
+        rinex_nav_file, pl.from_pandas(query)
+    ).to_pandas()
+    pass
     rinex_sat_states = (
         rinex_sat_states.sort_values(by=["sv", "query_time_isagpst"])
         .sort_index(axis=1)
@@ -248,7 +254,6 @@ def test_compare_to_sp3(input_for_test):
                 "index",
                 "signal",
                 "sat_code_bias_m",
-                "frequency_slot",
                 "ephemeris_hash",
             ]
         )
@@ -274,7 +279,9 @@ def test_compare_to_sp3(input_for_test):
     )
     # Verify that sorting columns worked as expected
     assert sp3_sat_states.columns.equals(rinex_sat_states.columns)
-    diff = rinex_sat_states.drop(columns=["sv"]) - sp3_sat_states.drop(columns="sv")
+    diff = rinex_sat_states.drop(columns=["sv", "constellation"]) - sp3_sat_states.drop(
+        columns="sv"
+    )
     diff = pd.concat((rinex_sat_states["sv"], diff), axis=1)
     diff["diff_xyz_l2_m"] = np.linalg.norm(
         diff[["sat_pos_x_m", "sat_pos_y_m", "sat_pos_z_m"]].to_numpy(), axis=1
@@ -302,7 +309,9 @@ def test_sbas(input_for_test):
     # We have no SP3 reference solutions for SBAS satellites, so we only test that reasonable broadcast
     # satellite states are computed here.
     query = query[query.sv.str.startswith("S")]
-    rinex_sat_states = rinex_nav_evaluate.compute(rinex_nav_file, query.copy())
+    rinex_sat_states = rinex_nav_evaluate.compute(
+        rinex_nav_file, pl.from_pandas(query)
+    ).to_pandas()
     assert not rinex_sat_states.empty
     assert (
         not rinex_sat_states[
@@ -369,7 +378,9 @@ def test_2023_beidou_c27(set_up_test_2023):
         ]
     )
 
-    rinex_sat_states = rinex_nav_evaluate.compute_parallel(rinex_nav_file, query.copy())
+    rinex_sat_states = rinex_nav_evaluate.compute_parallel(
+        rinex_nav_file, pl.from_pandas(query)
+    ).to_pandas()
     assert len(rinex_sat_states.index) == 1, (
         "Was expecting only one row, make sure to sort before comparing to sp3 with more than one row"
     )
@@ -387,7 +398,8 @@ def test_2023_beidou_c27(set_up_test_2023):
         .sort_index(axis="columns")
     )
     sp3_sat_states = (
-        sp3_evaluate.compute(set_up_test_2023["sp3_file"], query.copy())
+        sp3_evaluate.compute(set_up_test_2023["sp3_file"], pl.from_pandas(query))
+        .to_pandas()
         .drop(columns=["signal"])
         .sort_index(axis="columns")
     )
@@ -431,7 +443,9 @@ def test_group_delays(input_for_test):
             {"sv": "J02", "signal": "C2S", "query_time_isagpst": query_time_isagpst},
         ]
     )
-    rinex_sat_states = rinex_nav_evaluate.compute_parallel(rinex_nav_file, query)
+    rinex_sat_states = rinex_nav_evaluate.compute_parallel(
+        rinex_nav_file, pl.from_pandas(query)
+    ).to_pandas()
     # Check that group delays are computed for all signals
     assert not rinex_sat_states["sat_code_bias_m"].isna().any()
 
@@ -458,7 +472,9 @@ def test_group_delays_over_long_period(input_for_test):
             for x in range(32)
         ]
     )
-    rinex_sat_states = rinex_nav_evaluate.compute(rinex_nav_file, query)
+    rinex_sat_states = rinex_nav_evaluate.compute(
+        rinex_nav_file, pl.from_pandas(query)
+    ).to_pandas()
     # Check that group delays are computed for all signals
     assert not rinex_sat_states["sat_code_bias_m"].isna().any()
     # Check that the group delays are not affected by a large jump
@@ -521,7 +537,9 @@ def test_gps_group_delay(input_for_test):
                 ),
             ]
         )
-    tgds = rinex_nav_evaluate.compute_parallel(rinex_3_navigation_file, query)
+    tgds = rinex_nav_evaluate.compute_parallel(
+        rinex_3_navigation_file, pl.from_pandas(query)
+    ).to_pandas()
     # Verify that rows are in chronological order
     for code in codes:
         assert (
@@ -578,7 +596,9 @@ def test_gps_group_delay_multi_prn(input_for_test):
             for sv in svs
         ]
     )
-    tgds = rinex_nav_evaluate.compute(rinex_3_navigation_file, query)
+    tgds = rinex_nav_evaluate.compute(
+        rinex_3_navigation_file, pl.from_pandas(query)
+    ).to_pandas()
     assert np.all(
         tgds.sat_code_bias_m.values
         == constants.cGpsSpeedOfLight_mps
@@ -630,7 +650,9 @@ def test_gal_group_delay(input_for_test):
                 code_query,
             ]
         )
-    tgds = rinex_nav_evaluate.compute_parallel(rinex_3_navigation_file, query)
+    tgds = rinex_nav_evaluate.compute_parallel(
+        rinex_3_navigation_file, pl.from_pandas(query)
+    ).to_pandas()
     assert max_abs_diff_smaller_than(
         tgds[tgds.signal == "C1C"]["sat_code_bias_m"],
         4.889443516730e-09 * constants.cGpsSpeedOfLight_mps,
@@ -707,7 +729,9 @@ def test_bds_group_delay(input_for_test):
                 code_query,
             ]
         )
-    tgds = rinex_nav_evaluate.compute_parallel(rinex_3_navigation_file, query)
+    tgds = rinex_nav_evaluate.compute_parallel(
+        rinex_3_navigation_file, pl.from_pandas(query)
+    ).to_pandas()
 
     tgd_c2i_s_expected = -5.800000000000e-09 * constants.cGpsSpeedOfLight_mps
     tgd_c7i_s_expected = -1.020000000000e-08 * constants.cGpsSpeedOfLight_mps
@@ -763,7 +787,7 @@ def test_select_ephemerides():
     )
     query["ephemeris_selection_time_isagpst"] = query["query_time_isagpst"]
 
-    query_with_ephemerides = select_ephemerides(ephemerides, query)
+    query_with_ephemerides = select_ephemerides(ephemerides, query).to_pandas()
     query_with_ephemerides = query_with_ephemerides.sort_values(
         by=["sv", "query_time_isagpst"]
     ).reset_index(drop=True)
@@ -795,7 +819,9 @@ def test_compute_health_flag(input_for_test_2):
     rinex_nav_path = converters.compressed_to_uncompressed(
         input_for_test_2["rinex_nav_file"]
     )
-    query = rinex_nav_evaluate.compute(rinex_nav_path, query)
+    query = rinex_nav_evaluate.compute(
+        rinex_nav_path, pl.from_pandas(query)
+    ).to_pandas()
 
     # Verifies the presence of the health_column
     assert "health_flag" in query.columns
