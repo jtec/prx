@@ -172,8 +172,8 @@ def bootstrap_coarse_receiver_position(filepath_obs, filepath_nav):
     # TODO find correct ephemeris file in list
     current_nav_file_index = 0
     sat_states = prx.rinex_nav.evaluate.compute(
-        filepath_nav[current_nav_file_index], query
-    )
+        filepath_nav[current_nav_file_index], pl.from_pandas(query)
+    ).to_pandas()
     sat_states = sat_states.rename(
         columns={
             "signal": "observation_type",
