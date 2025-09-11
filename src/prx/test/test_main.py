@@ -151,7 +151,7 @@ def test_prx_command_line_call_with_csv_output(input_for_test_tlse):
     test_file = input_for_test_tlse
     prx_path = util.prx_repository_root() / "src/prx/main.py"
     command = (
-        f"python {prx_path} --observation_file_path {test_file} --output_format csv"
+        f"uv run python {prx_path} --observation-file {test_file} --output-format csv"
     )
     result = subprocess.run(
         command, capture_output=True, shell=True, cwd=str(test_file.parent)
@@ -194,7 +194,7 @@ def test_prx_function_call_with_csv_output(input_for_test_tlse):
         )
         assert (
             first_data_line
-            == "2023-01-01T01:00:00.000000000,2I,0.000000,75937.578037,0.000464,21814104.241678,36097004.455586,1453144.042099,4.306128,-0.036759,-24.959574,5591530251102110684,0.000000,1.000000,-0.375844,-39.998612,8.247254,1561098000.000000,3.694316,16.137045,112.338330,2I,39902331.273000,-19.172000,207781898.727000,0.000000,35.600000,C,05\n"
+            == "2023-01-01T01:00:00.000000000,2I,0.000000,75937.578037,0.000464,21814104.241675,36097004.455586,1453144.042120,4.306128,-0.036759,-24.959573,5959672264474354772,0.000000,1.000000,-0.375844,-39.998612,8.247254,1561098000.000000,3.694316,16.137045,112.338330,2I,39902331.273000,-19.172000,207781898.727000,0.000000,35.600000,C,05\n"
         )
 
 

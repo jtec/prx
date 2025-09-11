@@ -1,15 +1,12 @@
 import logging
-import math
 
 import pandas as pd
 import numpy as np
 from pathlib import Path
 import scipy
-from joblib import Parallel, delayed
 from prx import util
 from prx import constants
 from prx.rinex_nav.evaluate_pandas import parse_rinex_nav_file
-from prx.util import timeit
 import polars as pl
 
 log = logging.getLogger(__name__)
@@ -28,7 +25,6 @@ def time_scale_integer_second_offset_wrt_gpst(time_scale, utc_gpst_leap_seconds=
     assert False, f"Unexpected time scale: {time_scale}"
 
 
-@timeit
 def glonass_xdot_rtklib(x, acc_sun_moon):
     p = x[["X", "Y", "Z"]]
     v = x[["dX", "dY", "dZ"]]
@@ -59,7 +55,6 @@ def glonass_xdot_rtklib(x, acc_sun_moon):
     return xdot
 
 
-@timeit
 def glonass_xdot_montenbruck(x, acc_sun_moon):
     p = x[["X", "Y", "Z"]]
     v = x[["dX", "dY", "dZ"]]
@@ -93,7 +88,6 @@ def glonass_xdot_montenbruck(x, acc_sun_moon):
     return xdot
 
 
-@timeit
 def sbas_orbit_position_and_velocity(df):
     # Based on Montenbruck, 2017, Handbook of GNSS, section 3.3.3, eq. 3.59
     t_query = df["query_time_wrt_ephemeris_reference_time_s"].values.reshape(-1, 1)
@@ -109,7 +103,6 @@ def sbas_orbit_position_and_velocity(df):
     return df
 
 
-@timeit
 def glonass_orbit_position_and_velocity(df):
     # Based on Montenbruck, 2017, Handbook of GNSS, section 3.3.3
     pv = df[["X", "Y", "Z", "dX", "dY", "dZ"]]
@@ -156,7 +149,6 @@ def eccentric_anomaly(M, e, tol=1e-5, max_iter=10):
     assert False, f"Eccentric Anomaly may not have converged: delta_E = {delta_E}"
 
 
-@timeit
 def is_bds_geo(constellation, inclination_rad, semi_major_axis_m):
     # IGSO and MEO satellites have an inclination of 55 degrees, so we can
     # use that as a threshold to distinguish GEO from IGSO satellites.
@@ -181,7 +173,6 @@ def is_bds_geo(constellation, inclination_rad, semi_major_axis_m):
     return is_geo
 
 
-@timeit
 def position_in_orbital_plane(eph):
     # Semi-major axis
     eph["A"] = eph.sqrtA**2
@@ -235,7 +226,6 @@ def position_in_orbital_plane(eph):
     eph["is_bds_geo"] = is_bds_geo(eph.constellation, eph.i_k, eph.A)
 
 
-@timeit
 def orbital_plane_to_earth_centered_cartesian(eph):
     # Corrected longitude of ascending node in ECEF
     eph["Omega_k"] = (
@@ -282,7 +272,6 @@ def orbital_plane_to_earth_centered_cartesian(eph):
     pass
 
 
-@timeit
 def handle_bds_geos(eph):
     # Do special rotation from inertial to BDCS (ECEF) frame for Beidou GEO satellites, see
     # Beidou_ICD_B3I_v1.0, Table 5-11
@@ -336,7 +325,6 @@ def handle_bds_geos(eph):
     eph[eph.is_bds_geo] = geos
 
 
-@timeit
 # Adapted from gnss_lib_py's find_sat()
 def kepler_orbit_position_and_velocity(eph):
     eph["gps_week"] = eph["GPSWeek"]
@@ -375,7 +363,6 @@ def kepler_orbit_position_and_velocity(eph):
     return eph
 
 
-@timeit
 def set_time_of_validity(df):
     def set_for_one_constellation(group):
         group_constellation = group["constellation"].iat[0]
@@ -401,7 +388,6 @@ def set_time_of_validity(df):
     return df
 
 
-@timeit
 def convert_nav_dataset_to_dataframe(nav_ds):
     """convert ephemerides from xarray.Dataset to pandas.DataFrame"""
     df = nav_ds.to_dataframe()
@@ -501,7 +487,6 @@ def convert_nav_dataset_to_dataframe(nav_ds):
     return df
 
 
-@timeit
 def compute_gal_inav_fnav_indicators(df):
     """
     Based on RINEX 3.05, section A8
@@ -542,8 +527,9 @@ def to_isagpst(time, timescale, gpst_utc_leapseconds):
     )
 
 
-@timeit
-def select_ephemerides(df, query):
+def select_ephemerides(df: pl.DataFrame, query: pl.DataFrame):
+    df = df.to_pandas()
+    query = query.to_pandas()
     df = df[df.ephemeris_reference_time_isagpst.notna()]
     query = query.sort_values(by="ephemeris_selection_time_isagpst")
     df = df.sort_values(by="ephemeris_reference_time_isagpst")
@@ -571,10 +557,9 @@ def select_ephemerides(df, query):
     query["ephemeris_valid"] = (query["query_time_isagpst"] < query["validity_end"]) & (
         query["query_time_isagpst"] > query["validity_start"]
     )
-    return query
+    return pl.from_pandas(query)
 
 
-@timeit
 def extract_health_flag_from_query(query):
     """
     Extracts the health flag for each row of a query from a `query` DataFrame containing ephemeris data.
@@ -604,7 +589,6 @@ def extract_health_flag_from_query(query):
     return query["health_flag"]
 
 
-@timeit
 def compute_clock_offsets(df):
     df["sat_clock_offset_m"] = constants.cGpsSpeedOfLight_mps * (
         df["SVclockBias"]
@@ -618,38 +602,10 @@ def compute_clock_offsets(df):
     return df
 
 
-@timeit
-def compute_parallel(
-    rinex_nav_file_paths,
-    per_signal_query: pl.DataFrame,
-    is_query_corrected_by_sat_clock_offset=False,
-):
-    if not isinstance(rinex_nav_file_paths, list):
-        rinex_nav_file_paths = [rinex_nav_file_paths]
-    # Warm up nav file parser cache so that we don't parse the file multiple times
-    for rinex_nav_file_path in rinex_nav_file_paths:
-        _ = parse_rinex_nav_file(rinex_nav_file_path)
-    parallel = Parallel(n_jobs=1, return_as="list", verbose=10, backend="loky")
-    # split dataframe into smaller dataframes
-    per_signal_query = per_signal_query.to_pandas()
-    len_chunk = int(1e5)
-    chunks = np.array_split(
-        per_signal_query, math.ceil(len(per_signal_query.index) / len_chunk)
-    )
-    log.info(f"Evaluating ephemerides in {len(chunks)} chunks...")
-    processed_chunks = parallel(
-        delayed(compute)(
-            rinex_nav_file_paths, chunk, is_query_corrected_by_sat_clock_offset
-        )
-        for chunk in chunks
-    )
-    return pl.from_pandas(pd.concat(processed_chunks))
-
-
-@timeit
 def merge_per_signal_query_with_ephemerides(
-    rinex_nav_file_paths, per_signal_query: pd.DataFrame
-):
+    rinex_nav_file_paths: list[Path], per_signal_query: pl.DataFrame
+) -> pl.DataFrame:
+    per_signal_query = per_signal_query.to_pandas()
     if not isinstance(rinex_nav_file_paths, list):
         rinex_nav_file_paths = [rinex_nav_file_paths]
     rinex_nav_file_paths = [Path(path) for path in rinex_nav_file_paths]
@@ -658,7 +614,7 @@ def merge_per_signal_query_with_ephemerides(
         block = parse_rinex_nav_file(path)
         # Not using iono model parameters here, removing them from dataframe attributes to
         # enable concatenation
-        # block.attrs.pop("ionospheric_corr_GPS", None)
+        block.attrs.pop("ionospheric_corr_GPS", None)
         ephemeris_blocks.append(block)
     ephemerides = pd.concat(ephemeris_blocks)
     # Group delays and clock offsets can be signal-specific, so we need to match ephemerides to code signals,
@@ -669,30 +625,37 @@ def merge_per_signal_query_with_ephemerides(
         per_signal_query["ephemeris_selection_time_isagpst"] = per_signal_query[
             "query_time_isagpst"
         ]
-    per_signal_query = select_ephemerides((ephemerides), (per_signal_query))
-    pass
+    per_signal_query = select_ephemerides(
+        pl.from_pandas(ephemerides), pl.from_pandas(per_signal_query)
+    )
     return per_signal_query
 
 
 def compute(
-    rinex_nav_file_paths, per_signal_query, is_query_corrected_by_sat_clock_offset=False
-):
-    per_signal_query = per_signal_query.to_pandas()
-    return pl.from_pandas(
-        _compute(
-            merge_per_signal_query_with_ephemerides(
-                rinex_nav_file_paths, per_signal_query
-            ),
-            is_query_corrected_by_sat_clock_offset,
+    rinex_nav_file_paths,
+    per_signal_query: pl.DataFrame,
+    is_query_corrected_by_sat_clock_offset: bool = False,
+) -> pl.DataFrame:
+    if "constellation" not in per_signal_query.columns:
+        per_signal_query = per_signal_query.with_columns(
+            pl.col("sv").str.slice(0, 1).alias("constellation")
         )
+
+    per_signal_query = per_signal_query.to_pandas()
+    return _compute(
+        merge_per_signal_query_with_ephemerides(
+            rinex_nav_file_paths, pl.from_pandas(per_signal_query)
+        ),
+        is_query_corrected_by_sat_clock_offset,
     )
 
 
 def _compute(
-    per_signal_query_with_ephemerides: pd.DataFrame,
-    is_query_corrected_by_sat_clock_offset=False,
-):
+    per_signal_query_with_ephemerides: pl.DataFrame,
+    is_query_corrected_by_sat_clock_offset: bool = False,
+) -> pl.DataFrame:
     # compute satellite clock bias
+    per_signal_query_with_ephemerides = per_signal_query_with_ephemerides.to_pandas()
     if is_query_corrected_by_sat_clock_offset:
         per_signal_query_with_ephemerides = compute_clock_offsets(
             per_signal_query_with_ephemerides
@@ -783,7 +746,7 @@ def _compute(
     per_signal_query_with_ephemerides = per_signal_query_with_ephemerides[
         columns_to_keep
     ].reset_index(drop=True)
-    return per_signal_query_with_ephemerides
+    return pl.from_pandas(per_signal_query_with_ephemerides)
 
 
 def compute_total_group_delays(
