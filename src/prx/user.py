@@ -47,7 +47,10 @@ def spp_vt_lsq(df, p_ecef_m):
         + df.sat_clock_drift_mps.to_numpy().reshape(-1, 1)
         - df["satellite_los_velocities"].to_numpy().reshape(-1, 1)
     )
-    df = df[df.D_obs_corrected_mps.notna()].reset_index(drop=True)
+    usable_obs = df.D_obs_corrected_mps.notna()
+    df = df.loc[usable_obs, :].reset_index(drop=True)
+    unit_vectors = unit_vectors[usable_obs, :]
+    assert len(df.index) > 0
     # Jacobian of Doppler observation w.r.t. receiver clock offset drift w.r.t. constellation system clock
     H_dclock = np.zeros(
         (
@@ -73,6 +76,7 @@ def spp_pt_lsq(df, dx_convergence_l2=1e-6, max_iterations=10):
         - df.sat_code_bias_m
     )
     df = df[df.C_obs_m_corrected.notna()].reset_index(drop=True)
+    assert len(df.index) > 0
     # Jacobian of pseudorange observation w.r.t. receiver clock offset w.r.t. constellation system clock
     H_clock = np.zeros(
         (
