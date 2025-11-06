@@ -29,7 +29,6 @@ def parse_prx_csv_file(prx_file: Path):
 
 
 def spp_vt_lsq(df, p_ecef_m):
-    df = df[df.D_obs_hz.notna() & df.sat_clock_drift_mps.notna()].reset_index(drop=True)
     df["D_obs_mps"] = -df.D_obs_hz * cGpsSpeedOfLight_mps / df.carrier_frequency_hz
     # Remove satellite velocity projected onto line of sight
     rx_sat_vectors = (
@@ -48,6 +47,10 @@ def spp_vt_lsq(df, p_ecef_m):
         + df.sat_clock_drift_mps.to_numpy().reshape(-1, 1)
         - df["satellite_los_velocities"].to_numpy().reshape(-1, 1)
     )
+    usable_obs = df.D_obs_corrected_mps.notna()
+    df = df.loc[usable_obs, :].reset_index(drop=True)
+    unit_vectors = unit_vectors[usable_obs, :]
+    assert len(df.index) > 0
     # Jacobian of Doppler observation w.r.t. receiver clock offset drift w.r.t. constellation system clock
     H_dclock = np.zeros(
         (
@@ -63,7 +66,6 @@ def spp_vt_lsq(df, p_ecef_m):
 
 
 def spp_pt_lsq(df, dx_convergence_l2=1e-6, max_iterations=10):
-    df = df[df.C_obs_m.notna() & df.sat_clock_offset_m.notna()]
     df["C_obs_m_corrected"] = (
         df.C_obs_m
         + df.sat_clock_offset_m
@@ -73,6 +75,8 @@ def spp_pt_lsq(df, dx_convergence_l2=1e-6, max_iterations=10):
         - df.tropo_delay_m
         - df.sat_code_bias_m
     )
+    df = df[df.C_obs_m_corrected.notna()].reset_index(drop=True)
+    assert len(df.index) > 0
     # Jacobian of pseudorange observation w.r.t. receiver clock offset w.r.t. constellation system clock
     H_clock = np.zeros(
         (
