@@ -15,6 +15,8 @@ import xarray
 from imohash import imohash
 from astropy.utils import iers
 from astropy import time as astrotime
+from astropy.coordinates import get_sun, ITRS
+import astropy.units
 
 from prx import constants
 
@@ -419,6 +421,33 @@ def ecef_2_geodetic(pos_ecef):
     return [latitude_rad, longitude_rad, altitude_m]
 
 
+def ecef_2_satellite(pos_ecef: np.array, pos_sat_ecef: np.array, epoch: np.array):
+    """
+    Converts an ecef position to the satellite-fixed coordinate frame
+
+    pos_sat_ecef: shape (n,3)
+    pos_ecef: shape (n,3)
+    epoch: shape (n,)
+    """
+    k = -pos_sat_ecef / np.linalg.norm(pos_sat_ecef, axis=1).reshape(-1, 1)
+    pos_sun_ecef = compute_sun_ecef_position(epoch).T
+    unit_vector_sun_ecef = (pos_sun_ecef - pos_sat_ecef) / np.linalg.norm(
+        pos_sun_ecef - pos_sat_ecef, axis=1
+    ).reshape(-1, 1)
+    j = np.cross(k, unit_vector_sun_ecef)
+    j = j / np.linalg.norm(j, axis=1).reshape(-1, 1)
+    i = np.cross(j, k)
+
+    rot_mat_ecef2sat = np.stack([i, j, k], axis=1)
+    pos_sat_frame = np.stack(
+        [
+            rot_mat_ecef2sat[i, :, :] @ (pos_ecef[i, :] - pos_sat_ecef[i, :])
+            for i in range(pos_sat_ecef.shape[0])
+        ]
+    )
+    return pos_sat_frame, rot_mat_ecef2sat
+
+
 def obs_dataset_to_obs_dataframe(ds: xarray.Dataset):
     # Flatten the xarray DataSet into a pandas DataFrame:
     logger.info("Converting Dataset into flat Dataframe of observations")
@@ -482,3 +511,13 @@ def compute_gps_utc_leap_seconds(yyyy: int, doy: int):
             break
     assert ~np.isnan(ls), "GPS leap second could not be retrieved"
     return ls
+
+
+def compute_sun_ecef_position(epochs: np.array) -> np.array:
+    """
+    Compute the Sun's ECEF position using the Astropy library
+    """
+    time = astrotime.Time(epochs, scale="utc")
+    sun_gcrs = get_sun(time)
+    sun_ecef = sun_gcrs.transform_to(ITRS(obstime=time))
+    return sun_ecef.cartesian.xyz.to(astropy.units.meter).value
