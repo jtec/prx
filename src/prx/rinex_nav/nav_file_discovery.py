@@ -157,12 +157,17 @@ def discover_or_download_ephemerides(
     t_start: pd.Timestamp, t_end: pd.Timestamp, folder, constellations
 ):
     # If there are any navigation files provided by the user, use them, otherwise use IGS files.
+    candidates = [anything_to_rinex_3(file) for file in folder.rglob("*")]
+    candidates = [candidate for candidate in candidates if candidate is not None]
     user_provided_nav_files = [
-        anything_to_rinex_3(f)
-        for f in folder.rglob("*")
-        if is_rinex_3_nav_file(anything_to_rinex_3(f))
-        and is_rinex_3_mixed_mgex_broadcast_ephemerides_file(anything_to_rinex_3(f))
+        f
+        for f in candidates
+        if (
+            is_rinex_3_nav_file(f)
+            and is_rinex_3_mixed_mgex_broadcast_ephemerides_file(f)
+        )
     ]
+    user_provided_nav_files = list(set(user_provided_nav_files))
     if len(user_provided_nav_files) > 0:
         return user_provided_nav_files
     # Ephemeris files cover at least a day, so first round time stamps to midday here

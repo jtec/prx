@@ -183,6 +183,7 @@ def build_records_levels_12(
     rinex_3_ephemerides_files,
     approximate_receiver_ecef_position_m,
     prx_level,
+    model_tropo,
 ):
     """
     Creates a flat_obs dataframe including columns for prx processing levels 1 and 2.
@@ -322,8 +323,8 @@ def build_records_levels_12(
             sat_states[["sat_pos_x_m", "sat_pos_y_m", "sat_pos_z_m"]].to_numpy(),
             approximate_receiver_ecef_position_m,
         )
-        sat_states["tropo_delay_m"] = atmo.add_tropo_column(
-            sat_states, flat_obs, approximate_receiver_ecef_position_m
+        sat_states["tropo_delay_m"] = atmo.compute_tropo_delay(
+            sat_states, flat_obs, approximate_receiver_ecef_position_m, model_tropo
         )
 
     # Merge sat states into observation dataframe. Due to Galileo's FNAV/INAV ephemerides
@@ -378,7 +379,7 @@ def build_records_levels_12(
 
 
 @prx.util.timeit
-def process(observation_file_path: Path, prx_level=2):
+def process(observation_file_path: Path, prx_level=2, model_tropo="saastamoinen"):
     t0 = pd.Timestamp.now()
     # We expect a Path, but might get a string here:
     observation_file_path = Path(observation_file_path)
@@ -406,6 +407,7 @@ def process(observation_file_path: Path, prx_level=2):
                 aux_files["broadcast_ephemerides"],
                 metadata["approximate_receiver_ecef_position_m"],
                 prx_level,
+                model_tropo,
             )
         case 3:
             assert False, (
@@ -439,6 +441,12 @@ if __name__ == "__main__":
         choices=[1, 2, 3],
         default=2,
     )
+    parser.add_argument(
+        "--tropo",
+        type=str,
+        choices=["saastamoinen", "unb3m"],
+        default="saastamoinen",
+    )
     args = parser.parse_args()
     if args.observation_file_path is None:
         log.error("No observation file path provided.")
@@ -446,4 +454,4 @@ if __name__ == "__main__":
     if not Path(args.observation_file_path).exists():
         log.error(f"Observation file {args.observation_file_path} does not exist.")
         sys.exit(1)
-    process(Path(args.observation_file_path), args.prx_level)
+    process(Path(args.observation_file_path), args.prx_level, args.tropo)
