@@ -233,6 +233,7 @@ def test_compare_to_sp3(input_for_test):
                 "sat_code_bias_m",
                 "frequency_slot",
                 "ephemeris_hash",
+                "relativistic_clock_effect_m",
             ]
         )
     )
@@ -365,6 +366,7 @@ def test_2023_beidou_c27(set_up_test_2023):
                 "sat_code_bias_m",
                 "frequency_slot",
                 "ephemeris_hash",
+                "relativistic_clock_effect_m",
             ]
         )
         .sort_index(axis="columns")
