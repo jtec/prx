@@ -347,22 +347,6 @@ def compute_sagnac_effect(sat_pos_m, rx_pos_m):
     return sagnac_effect_m
 
 
-def compute_relativistic_clock_effect(sat_pos_m: np.array, sat_vel_mps: np.array):
-    """
-    Reference:
-    GNSS Data Processing, Vol. I: Fundamentals and Algorithms. Equation (5.19)
-
-    Expects both arrays to be of shape (rows, columns) (n, 3)
-    """
-    relativistic_clock_effect_m = (
-        -2
-        * np.einsum("ij, ij->i", sat_pos_m, sat_vel_mps)
-        / constants.cGpsSpeedOfLight_mps
-    )
-
-    return relativistic_clock_effect_m
-
-
 def compute_satellite_elevation_and_azimuth(sat_pos_ecef, receiver_pos_ecef):
     """
     sat_pos_ecef: np.array of shape (n, 3)
