@@ -16,3 +16,5 @@ __pycache__
 **/tmp_test*/*
 **.profile
 **.pstat
+src/prx/sp3/sp3_files/*
+src/prx/precise_corrections/sp3/sp3_files/2023/001/IGS0OPSFIN_20230010000_01D_15M_ORB.SP3
