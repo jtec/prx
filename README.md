@@ -32,8 +32,9 @@ There is an optional argument to select the tropospheric delay model, by adding 
 You might have to add `<path to prx root>/src/prx` to your `PYTHONPATH` environment variable if you run
 into import errors.
 
-## How we manage python version and dependencies
+## Prerequisites
 
+## uv
 We use `uv` to make sure every developer and user of prx runs the same python version
 and the same set of dependencies such as `numpy` and `pandas`.
 
@@ -61,9 +62,14 @@ would use `pip` or some other package manager for), run
 `uv` will resolve dependencies - i.e. figure out which is the latest version of `new_package` that is compatible with
 our virtual environment - and add it to `pyproject.toml` and `uv.lock`.
 
+## Make
+GNU make might not be installed on Windows, you find it on e.g. https://gnuwin32.sourceforge.net/packages/make.htm.
+
 ## Testing
 
-Run `uv run pytest -n auto` in the `prx` repository root to run all tests.
+Run `make test` in the `prx` repository root to run all tests.
+
+This runs `uv run pytest -n auto` under the hood.
 Run `uv run pytest -n auto -x` to stop after the first test that fails.
 Run `uv run pytest -k "my_test"` to run a specific test
 Run `uv run pytest -n auto ---durations=10` to run all tests and have pytest list the 10 longest running tests.

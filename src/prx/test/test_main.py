@@ -270,7 +270,6 @@ def test_spp_lsq_nist(input_for_test_nist):
         position_offset = pt_lsq[0:3, :] - np.array(
             metadata["approximate_receiver_ecef_position_m"]
         ).reshape(-1, 1)
-        # Static receiver, so:
         log.info(
             f"Using constellations: {constellations_to_use}, {len(obs.sv.unique())} SVs"
         )
