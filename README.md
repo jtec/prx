@@ -27,6 +27,8 @@ uv run python src/prx/main.py --observation_file_path <path_to_rinex_file>
 You can specify `--prx_level` according to the type of computation you need. `--prx_level 1` is adapted for DGNSS or RTK
 processing, `--prx_level 2` is adapted for SPP processing and is the default value.
 
+There is an optional argument to select the tropospheric delay model, by adding `--tropo saastamoinen` (default) or `--tropo unb3m` 
+
 You might have to add `<path to prx root>/src/prx` to your `PYTHONPATH` environment variable if you run
 into import errors.
 
