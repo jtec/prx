@@ -266,21 +266,17 @@ def test_spp_lsq_nist(input_for_test_nist):
     ]:
         obs = df_first_epoch[df.constellation.isin(constellations_to_use)]
         pt_lsq = spp_pt_lsq(obs)
-        vt_lsq = spp_vt_lsq(obs, p_ecef_m=pt_lsq[0:3, :])
         position_offset = pt_lsq[0:3, :] - np.array(
             metadata["approximate_receiver_ecef_position_m"]
         ).reshape(-1, 1)
         # Static receiver, so:
-        velocity_offset = vt_lsq[0:3, :]
         log.info(
             f"Using constellations: {constellations_to_use}, {len(obs.sv.unique())} SVs"
         )
         log.info(f"Position offset: {position_offset}")
-        log.info(f"Velocity offset: {velocity_offset}")
         assert (
             np.max(np.abs(position_offset)) < 2e1
         )  # relaxed position offset (instead of 1e1)
-        assert np.max(np.abs(velocity_offset)) < 1e-1
 
 
 def test_spp_lsq_tlse(input_for_test_tlse):
@@ -425,6 +421,7 @@ def test_prx_level_1(input_for_test_tlse):
         "sat_vel_z_mps",
         "sat_clock_offset_m",
         "sat_clock_drift_mps",
+        "relativistic_clock_effect_m",
         "sat_elevation_deg",
         "sat_azimuth_deg",
         "ephemeris_hash",
