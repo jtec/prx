@@ -421,6 +421,7 @@ def test_prx_level_1(input_for_test_tlse):
         "sat_vel_z_mps",
         "sat_clock_offset_m",
         "sat_clock_drift_mps",
+        "relativistic_clock_effect_m",
         "sat_elevation_deg",
         "sat_azimuth_deg",
         "ephemeris_hash",
