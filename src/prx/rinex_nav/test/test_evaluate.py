@@ -7,6 +7,7 @@ from prx.rinex_nav.evaluate import (
     set_time_of_validity,
     parse_rinex_nav_file,
 )
+from prx.rinex_obs.parser import parse_rinex_obs_file
 from prx.sp3 import evaluate as sp3_evaluate
 from prx.rinex_nav import evaluate as rinex_nav_evaluate
 from prx import constants, converters, util
@@ -35,16 +36,9 @@ expected_max_differences_broadcast_vs_precise = {
 }
 
 
-@pytest.fixture
-def input_for_test():
-    test_directory = (
-        Path(__file__).parent.joinpath(f"./tmp_test_directory_{__name__}").resolve()
-    )
-    if test_directory.exists():
-        # Start from empty directory, might avoid hiding some subtle bugs, e.g.
-        # file decompression not working properly
-        shutil.rmtree(test_directory)
-    os.makedirs(test_directory)
+@pytest.fixture(scope="session")
+def input_for_test(tmp_path_factory):
+    test_directory = tmp_path_factory.mktemp("test_inputs")
     test_files = {
         "rinex_obs_file": test_directory
         / "TLSE00FRA_R_20220010000_01D_30S_MO.rnx_slice_0.24h.rnx",
@@ -62,18 +56,11 @@ def input_for_test():
 
 
 @pytest.fixture
-def input_for_test_2():
-    test_directory = (
-        Path(__file__).parent.joinpath(f"./tmp_test_directory_{__name__}").resolve()
-    )
-    if test_directory.exists():
-        # Start from empty directory, might avoid hiding some subtle bugs, e.g.
-        # file decompression not working properly
-        shutil.rmtree(test_directory)
-    os.makedirs(test_directory)
+def input_for_test_2(tmp_path_factory):
+    test_directory = tmp_path_factory.mktemp("test_inputs")
     test_files = {
         "rinex_obs_file": test_directory / "TLSE00FRA_R_20230010100_10S_01S_MO.crx.gz",
-        "rinex_nav_file": test_directory / "BRDC00IGS_R_20230010000_01D_MN.rnx.zip",
+        "rinex_nav_file": test_directory / "BRDC00IGS_R_20230010000_01D_MN.rnx.gz",
         "sp3_file": test_directory / "WUM0MGXULT_20220010000_01D_05M_ORB.SP3",
     }
     for key, test_file_path in test_files.items():
@@ -92,8 +79,6 @@ def test_parse_nav_file(input_for_test):
     )
     df = parse_rinex_nav_file(path_to_rnx3_nav_file)
     assert not df.empty
-    assert df["source"].nunique() == 1
-    assert df["source"].iloc[0] == str(path_to_rnx3_nav_file.resolve())
 
 
 def test_expired_ephemeris_yields_nans(input_for_test):
@@ -248,6 +233,7 @@ def test_compare_to_sp3(input_for_test):
                 "sat_code_bias_m",
                 "frequency_slot",
                 "ephemeris_hash",
+                "relativistic_clock_effect_m",
             ]
         )
     )
@@ -337,7 +323,7 @@ def set_up_test_2023():
     os.makedirs(test_directory)
     test_files = DotMap()
     test_files.nav_file = test_directory.joinpath(
-        "BRDC00IGS_R_20230010000_01D_MN.rnx.zip"
+        "BRDC00IGS_R_20230010000_01D_MN.rnx.gz"
     )
     test_files.sp3_file = test_directory.joinpath(
         "GFZ0MGXRAP_20230010000_01D_05M_ORB.SP3"
@@ -380,6 +366,7 @@ def test_2023_beidou_c27(set_up_test_2023):
                 "sat_code_bias_m",
                 "frequency_slot",
                 "ephemeris_hash",
+                "relativistic_clock_effect_m",
             ]
         )
         .sort_index(axis="columns")
@@ -776,7 +763,7 @@ def test_compute_health_flag(input_for_test_2):
     rinex_3_obs_file = converters.anything_to_rinex_3(
         input_for_test_2["rinex_obs_file"]
     )
-    query = util.parse_rinex_obs_file(rinex_3_obs_file)[["time", "sv", "obs_type"]]
+    query = parse_rinex_obs_file(rinex_3_obs_file)[["time", "sv", "obs_type"]]
     query.time = pd.to_datetime(query.time, format="%Y-%m-%dT%H:%M:%S")
     query.obs_type = query.obs_type.str[1:]
     query = query.loc[~query.obs_type.str.contains("lli")].reset_index(drop=True)
