@@ -29,6 +29,7 @@ log = util.get_logger(__name__)
 @pytest.fixture
 def input_for_test_tlse(tmp_path_factory):
     test_directory = tmp_path_factory.mktemp("test_inputs")
+    print(test_directory)
     if test_directory.exists():
         # Make sure the expected file has not been generated before and is still on disk due to e.g. a previous
         # test run having crashed:
@@ -269,7 +270,6 @@ def test_spp_lsq_nist(input_for_test_nist):
         position_offset = pt_lsq[0:3, :] - np.array(
             metadata["approximate_receiver_ecef_position_m"]
         ).reshape(-1, 1)
-        # Static receiver, so:
         log.info(
             f"Using constellations: {constellations_to_use}, {len(obs.sv.unique())} SVs"
         )
@@ -283,8 +283,11 @@ def test_spp_lsq_tlse(input_for_test_tlse):
     df, metadata = run_rinex_through_prx(input_for_test_tlse)
     df["sv"] = df["constellation"].astype(str) + df["prn"].astype(str)
     df_first_epoch = df[
-        df.time_of_reception_in_receiver_time
-        == df.time_of_reception_in_receiver_time.min()
+        (
+            df.time_of_reception_in_receiver_time
+            == df.time_of_reception_in_receiver_time.min()
+        )
+        & (df.sat_elevation_deg > 10)
     ]
     for constellations_to_use in [
         (
@@ -325,8 +328,11 @@ def test_spp_lsq_tlse_2024(input_for_test_tlse_2024):
     df, metadata = run_rinex_through_prx(input_for_test_tlse_2024)
     df["sv"] = df["constellation"].astype(str) + df["prn"].astype(str)
     df_first_epoch = df[
-        df.time_of_reception_in_receiver_time
-        == df.time_of_reception_in_receiver_time.min()
+        (
+            df.time_of_reception_in_receiver_time
+            == df.time_of_reception_in_receiver_time.min()
+        )
+        & (df.sat_elevation_deg > 10)
     ]
     constellation_to_use = ["G"]
 
@@ -491,6 +497,40 @@ def test_prx_level_3(input_for_test_tlse):
     # check that calling main.process with "prx_level=3" will raise an AssertionError
     with pytest.raises(AssertionError):
         main.process(observation_file_path=input_for_test_tlse, prx_level=3)
+
+
+def test_function_call_with_alternative_tropo(input_for_test_tlse):
+    expected_prx_file_saas = main.process(
+        observation_file_path=input_for_test_tlse,
+        prx_level=2,
+        model_tropo="saastamoinen",
+    )
+    assert expected_prx_file_saas.exists()
+    df_saas = pd.read_csv(expected_prx_file_saas, comment="#")
+
+    expected_prx_file_unb3m = main.process(
+        observation_file_path=input_for_test_tlse, prx_level=2, model_tropo="unb3m"
+    )
+    assert expected_prx_file_unb3m.exists()
+    df_unb3 = pd.read_csv(expected_prx_file_unb3m, comment="#")
+
+    expected_prx_file_default = main.process(
+        observation_file_path=input_for_test_tlse,
+        prx_level=2,
+    )
+    assert expected_prx_file_default.exists()
+    df_default = pd.read_csv(expected_prx_file_default, comment="#")
+
+    # Verify that the tropo delays in each dataframe are equal or close, i.e. that the default model is Saastamoinen
+    np.testing.assert_array_equal(df_default.tropo_delay_m, df_saas.tropo_delay_m)
+    # Differences are large especially for low elevation. The comparison is done after applying an elevation mask
+    np.testing.assert_allclose(
+        df_unb3.tropo_delay_m.loc[df_default.sat_elevation_deg > 10],
+        df_saas.tropo_delay_m.loc[df_default.sat_elevation_deg > 10],
+        atol=1,  # 1 m difference
+    )
+
+    assert True
 
 
 def test_bootstrap_coarse_receiver_position(input_for_test_tlse):
