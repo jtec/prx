@@ -420,6 +420,7 @@ def ecef_2_geodetic(pos_ecef):
         )
     return [latitude_rad, longitude_rad, altitude_m]
 
+
 def ecef_2_satellite(pos_ecef: np.array, pos_sat_ecef: np.array, epoch: np.array):
     """
     Converts an ecef position to the satellite-fixed coordinate frame
@@ -445,6 +446,7 @@ def ecef_2_satellite(pos_ecef: np.array, pos_sat_ecef: np.array, epoch: np.array
         ]
     )
     return pos_sat_frame, rot_mat_ecef2sat
+
 
 def obs_dataset_to_obs_dataframe(ds: xarray.Dataset):
     # Flatten the xarray DataSet into a pandas DataFrame:
@@ -517,6 +519,7 @@ def timestamp_to_gps_week_and_dow(ts: pd.Timestamp) -> tuple[int, int]:
     gps_week = delta.days // 7
     dow = delta.days % 7  # day of week
     return gps_week, dow
+
 
 def compute_sun_ecef_position(epochs: np.array) -> np.array:
     """
