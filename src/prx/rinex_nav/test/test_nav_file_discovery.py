@@ -56,6 +56,14 @@ def test_download_remote_ephemeris_files(set_up_test):
     assert isinstance(aux_files, dict)
 
 
+def test_nav_file_remote_availability_after_2016():
+    dates = [pd.Timestamp(y, 1, 1) for y in range(2016, pd.Timestamp.now().year)]
+    for date in dates:
+        assert aux.check_online_availability(date), (
+            f"NAV file for day {date} not available"
+        )
+
+
 def test_command_line_call(set_up_test):
     test_file = set_up_test["test_obs_file"]
     aux_file_script_path = (
