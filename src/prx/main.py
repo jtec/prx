@@ -22,9 +22,9 @@ log = util.get_logger(__name__)
 
 @prx.util.timeit
 def write_prx_file(
-        prx_header: dict,
-        prx_records: pd.DataFrame,
-        file_name_without_extension: Path,
+    prx_header: dict,
+    prx_records: pd.DataFrame,
+    file_name_without_extension: Path,
 ):
     output_file = Path(f"{str(file_name_without_extension)}.csv")
     prx_records["sat_elevation_deg"] = np.rad2deg(prx_records.elevation_rad.to_numpy())
@@ -43,7 +43,7 @@ def write_prx_file(
         obs = prx_records.loc[
             (prx_records.observation_type.str.startswith(obs_type))
             & (prx_records.observation_type.str.len() == 3)
-            ][
+        ][
             [
                 "satellite",
                 "time_of_reception_in_receiver_time",
@@ -157,7 +157,7 @@ def build_metadata(input_files):
 
 
 def check_assumptions(
-        rinex_3_obs_file,
+    rinex_3_obs_file,
 ):
     obs_header = georinex.rinexheader(rinex_3_obs_file)
     if "RCV CLOCK OFFS APPL" in obs_header.keys():
@@ -185,11 +185,11 @@ def warm_up_parser_cache(rinex_files):
 
 @prx.util.timeit
 def build_records_levels_12(
-        rinex_3_obs_file,
-        rinex_3_ephemerides_files,
-        approximate_receiver_ecef_position_m,
-        prx_level,
-        model_tropo,
+    rinex_3_obs_file,
+    rinex_3_ephemerides_files,
+    approximate_receiver_ecef_position_m,
+    prx_level,
+    model_tropo,
 ):
     """
     Creates a flat_obs dataframe including columns for prx processing levels 1 and 2.
@@ -253,7 +253,7 @@ def build_records_levels_12(
     # As error terms are tens of nanoseconds here, and the receiver clock is integer-second aligned to GPST, we
     # already have times-of-emission that are integer-second aligned GPST here.
     per_sat["time_of_emission_isagpst"] = (
-            per_sat["time_of_reception_in_receiver_time"] - tof_dtrx
+        per_sat["time_of_reception_in_receiver_time"] - tof_dtrx
     )
 
     flat_obs = flat_obs.merge(
@@ -285,14 +285,14 @@ def build_records_levels_12(
         doy = int(file.name[16:19])
         day_query = query.loc[
             (
-                    query.query_time_isagpst
-                    >= pd.Timestamp(year=year, month=1, day=1) + pd.Timedelta(days=doy - 1)
+                query.query_time_isagpst
+                >= pd.Timestamp(year=year, month=1, day=1) + pd.Timedelta(days=doy - 1)
             )
             & (
-                    query.query_time_isagpst
-                    < pd.Timestamp(year=year, month=1, day=1) + pd.Timedelta(days=doy)
+                query.query_time_isagpst
+                < pd.Timestamp(year=year, month=1, day=1) + pd.Timedelta(days=doy)
             )
-            ]
+        ]
         if day_query.empty:
             continue
 
@@ -354,7 +354,7 @@ def build_records_levels_12(
     glo_cdma = flat_obs[
         (flat_obs.satellite.str[0] == "R")
         & (flat_obs["observation_type"].str[1].astype(int) > 2)
-        ]
+    ]
     flat_obs.loc[glo_cdma.index, "frequency_slot"] = int(1)
 
     def assign_carrier_frequencies(flat_obs):
@@ -363,11 +363,11 @@ def build_records_levels_12(
         )[0]
         assignable = flat_obs.frequency_slot.notna()
         keys = (
-                flat_obs.satellite[assignable].str[0]
-                + "_L"
-                + flat_obs["observation_type"][assignable].str[1]
-                + "_"
-                + flat_obs.frequency_slot[assignable].astype(int).astype(str)
+            flat_obs.satellite[assignable].str[0]
+            + "_L"
+            + flat_obs["observation_type"][assignable].str[1]
+            + "_"
+            + flat_obs.frequency_slot[assignable].astype(int).astype(str)
         )
         flat_obs.loc[:, "carrier_frequency_hz"] = keys.map(freq_dict)
         return flat_obs
@@ -430,7 +430,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         prog="prx",
         description="prx processes RINEX observations, computes a few useful things such as satellite position, "
-                    "relativistic effects etc. and outputs everything to a text file in a convenient format.",
+        "relativistic effects etc. and outputs everything to a text file in a convenient format.",
         epilog="P.S. GNSS rules!",
     )
     parser.add_argument(
