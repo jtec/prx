@@ -144,9 +144,15 @@ def build_metadata(input_files):
         }
         for file in files
     ]
-    prx_metadata["prx_git_commit_id"] = git.Repo(
-        path=Path(__file__).parent, search_parent_directories=True
-    ).head.object.hexsha
+    try:
+        repo = prx_metadata["prx_git_commit_id"] = git.Repo(
+            path=Path(__file__).parents[2], search_parent_directories=False
+        )
+        prx_metadata["prx_git_commit_id"] = (
+            f"{repo.head.object.hexsha}_{'dirty' if repo.is_dirty() else ''}"
+        )
+    except git.exc.InvalidGitRepositoryError:
+        prx_metadata["prx_git_commit_id"] = "not_a_git_repository"
     return prx_metadata
 
 
