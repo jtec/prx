@@ -1,3 +1,4 @@
+import json
 import logging
 import math
 import os
@@ -6,6 +7,8 @@ import shutil
 import subprocess
 from functools import wraps
 from pathlib import Path
+import importlib.metadata as md
+import git
 
 import georinex
 import joblib
@@ -482,3 +485,39 @@ def compute_gps_utc_leap_seconds(yyyy: int, doy: int):
             break
     assert ~np.isnan(ls), "GPS leap second could not be retrieved"
     return ls
+
+
+def git_sha_of_this_package() -> str | None:
+    if (Path(__file__).parent.resolve() / ".git").exists():
+        repo = git.Repo(path=Path(__file__).parent)
+        git_commit_id = (
+            f"{repo.head.object.hexsha}{'_dirty' if repo.is_dirty() else ''}"
+        )
+        return git_commit_id
+    return None  # not a git checkout (e.g., installed wheel)
+
+
+def git_sha_from_dist_info(dist_name: str) -> str | None:
+    try:
+        dist = md.distribution(dist_name)
+    except md.PackageNotFoundError:
+        return None
+
+    # Look for the PEP 610 file
+    direct_url = Path(dist.locate_file("direct_url.json"))
+    if not direct_url.exists():
+        # some installers nest it inside the dist-info directory
+        dist_info_dir = Path(dist._path) if hasattr(dist, "_path") else None
+        if dist_info_dir:
+            direct_url = dist_info_dir / "direct_url.json"
+    if not direct_url.exists():
+        return None
+
+    try:
+        data = json.loads(direct_url.read_text(encoding="utf-8"))
+        # Expected shape for VCS installs:
+        # {"url": "...", "vcs_info": {"vcs": "git", "requested_revision": "...", "commit_id": "..."}}
+        vcs_info = data.get("vcs_info") or {}
+        return vcs_info.get("commit_id") or vcs_info.get("requested_revision")
+    except Exception:
+        return None
