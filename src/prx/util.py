@@ -488,5 +488,5 @@ def timestamp_to_gps_week_and_dow(ts: pd.Timestamp) -> tuple[int, int]:
     ts_utc = ts.tz_convert("UTC") if ts.tzinfo else ts.tz_localize("UTC")
     delta = ts_utc - constants.cGpstUtcEpoch.tz_localize("UTC")
     gps_week = delta.days // 7
-    dow = delta.days % 7  # day of week
-    return gps_week, dow
+    day_of_week = delta.days % 7
+    return gps_week, day_of_week
