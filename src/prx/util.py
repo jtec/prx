@@ -493,8 +493,8 @@ def timestamp_to_gps_week_and_dow(ts: pd.Timestamp) -> tuple[int, int]:
     gps_week = delta.days // 7
     day_of_week = delta.days % 7
     return gps_week, day_of_week
-  
-  
+
+
 def git_sha_of_this_package() -> str | None:
     if (Path(__file__).parent.resolve() / ".git").exists():
         repo = git.Repo(path=Path(__file__).parent)
