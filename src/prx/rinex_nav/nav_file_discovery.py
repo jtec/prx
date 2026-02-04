@@ -4,6 +4,7 @@ import re
 from pathlib import Path
 import georinex
 import urllib.request
+import urllib.error
 import pandas as pd
 import prx.util
 import ftplib
@@ -26,7 +27,7 @@ def is_rinex_3_mixed_mgex_broadcast_ephemerides_file(file: Path):
     return bool(re.match(pattern, file.name))
 
 
-def check_online_availability(day: pd.Timestamp) -> bool:
+def check_online_availability_ftp(day: pd.Timestamp) -> bool:
     """
     Check availability of NAV file on FTP server without downloading it.
     """
@@ -44,9 +45,59 @@ def check_online_availability(day: pd.Timestamp) -> bool:
             return False
 
 
-def try_downloading_ephemerides_ftp(day: pd.Timestamp, folder: Path):
+def check_online_availability_http(day: pd.Timestamp) -> bool:
+    """
+    Check if a remote file exists/accessible without downloading it.
+    """
+    availability = False
     file = f"BRDC00IGS_R_{day.year}{day.day_of_year:03}0000_01D_MN.rnx.gz"
-    local_compressed_file = folder / file
+    remote_directory = (
+        f"https://igs.bkg.bund.de/root_ftp/IGS/BRDC/{day.year}/{day.day_of_year:03}/"
+    )
+    url = remote_directory + file
+    # Try HEAD first
+    try:
+        req = urllib.request.Request(url, method="HEAD")
+        _ = urllib.request.urlopen(req)
+        return True
+    except urllib.error.HTTPError:
+        availability = False
+
+    # Fallback: request only the first byte so we avoid full download
+    try:
+        req = urllib.request.Request(url, headers={"Range": "bytes=0-0"})
+        _ = urllib.request.urlopen(req)
+        return True
+    except urllib.error.HTTPError:
+        availability = False
+
+    return availability
+
+
+def try_downloading_ephemerides_http(day: pd.Timestamp, local_destination_folder: Path):
+    # IGS BKG Rinex 3.04 mixed file paths follow this pattern:
+    # https://igs.bkg.bund.de/root_ftp/IGS/BRDC/2023/002/BRDC00IGS_R_20230020000_01D_MN.rnx.gz
+    file = f"BRDC00IGS_R_{day.year}{day.day_of_year:03}0000_01D_MN.rnx.gz"
+    remote_directory = (
+        f"https://igs.bkg.bund.de/root_ftp/IGS/BRDC/{day.year}/{day.day_of_year:03}/"
+    )
+    try:
+        local_compressed_file = local_destination_folder / file
+        url = remote_directory + file
+        urllib.request.urlretrieve(url, local_compressed_file)
+        local_file = converters.compressed_to_uncompressed(local_compressed_file)
+        os.remove(local_compressed_file)
+        log.info(f"Downloaded broadcast ephemerides file from {url}")
+        prx.util.try_repair_with_gfzrnx(local_file)
+        return local_file
+    except Exception as e:
+        log.warning(f"Could not download broadcast ephemerides file for {day}: {e}")
+        return None
+
+
+def try_downloading_ephemerides_ftp(day: pd.Timestamp, local_destination_folder: Path):
+    file = f"BRDC00IGS_R_{day.year}{day.day_of_year:03}0000_01D_MN.rnx.gz"
+    local_compressed_file = local_destination_folder / file
     for server, remote_folder in IGS_FTP_SERVER.items():
         remote_folder_for_day = remote_folder + f"{day.year}/{day.day_of_year:03}"
         ftp_file = f"ftp://{server}/{remote_folder_for_day}/{file}"
@@ -65,6 +116,8 @@ def try_downloading_ephemerides_ftp(day: pd.Timestamp, folder: Path):
 
 def try_downloading_ephemerides(mid_day: pd.Timestamp, folder: Path):
     local_file = try_downloading_ephemerides_ftp(mid_day, folder)
+    if not local_file:
+        local_file = try_downloading_ephemerides_http(mid_day, folder)
     if not local_file:
         log.warning(f"Could not download broadcast ephemerides for {mid_day}")
     return local_file
