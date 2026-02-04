@@ -7,8 +7,8 @@ import georinex
 import pandas as pd
 import numpy as np
 import git
-import prx.util
-from prx import atmospheric_corrections as atmo, util
+import prx.util as util
+from prx import atmospheric_corrections as atmo
 from prx.constants import carrier_frequencies_hz
 from prx.rinex_obs.parser import parse_rinex_obs_file
 from prx.util import is_rinex_3_obs_file, is_rinex_3_nav_file
@@ -20,7 +20,7 @@ from prx.rinex_nav.evaluate import parse_rinex_nav_file
 log = util.get_logger(__name__)
 
 
-@prx.util.timeit
+@util.timeit
 def write_prx_file(
     prx_header: dict,
     prx_records: pd.DataFrame,
@@ -144,9 +144,14 @@ def build_metadata(input_files):
         }
         for file in files
     ]
-    prx_metadata["prx_git_commit_id"] = git.Repo(
-        path=Path(__file__).parent, search_parent_directories=True
-    ).head.object.hexsha
+    try:
+        prx_metadata["prx_git_commit_id"] = (
+            util.git_sha_of_this_package()
+            or util.git_sha_from_dist_info("prx")
+            or "unknown"
+        )
+    except git.exc.InvalidGitRepositoryError:
+        prx_metadata["prx_git_commit_id"] = "not_a_git_repository"
     return prx_metadata
 
 
@@ -177,7 +182,7 @@ def warm_up_parser_cache(rinex_files):
     _ = [parse_rinex_nav_or_obs_file(file) for file in rinex_files]
 
 
-@prx.util.timeit
+@util.timeit
 def build_records_levels_12(
     rinex_3_obs_file,
     rinex_3_ephemerides_files,
@@ -378,7 +383,7 @@ def build_records_levels_12(
     return flat_obs
 
 
-@prx.util.timeit
+@util.timeit
 def process(observation_file_path: Path, prx_level=2, model_tropo="saastamoinen"):
     t0 = pd.Timestamp.now()
     # We expect a Path, but might get a string here:
@@ -387,7 +392,7 @@ def process(observation_file_path: Path, prx_level=2, model_tropo="saastamoinen"
         f"Starting processing {observation_file_path.name} (full path {observation_file_path})"
     )
     rinex_3_obs_file = converters.anything_to_rinex_3(observation_file_path)
-    rinex_3_obs_file = prx.util.try_repair_with_gfzrnx(rinex_3_obs_file)
+    rinex_3_obs_file = util.try_repair_with_gfzrnx(rinex_3_obs_file)
     prx_file = rinex_3_obs_file.with_suffix("")
     match prx_level:
         case 1 | 2:
