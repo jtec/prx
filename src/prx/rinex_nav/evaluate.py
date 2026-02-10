@@ -524,7 +524,8 @@ def convert_nav_dataset_to_dataframe(nav_ds):
     )
     df = df.reset_index(drop=True)
     df = compute_gal_inav_fnav_indicators(df)
-    df["frequency_slot"] = df.FreqNum.where(df.sv.str[0] == "R", 1).astype(int)
+    if "R" in df.constellation.unique():
+        df["frequency_slot"] = df.FreqNum.where(df.sv.str[0] == "R", 1).astype(int)
     df.attrs["ionospheric_corr_GPS"] = nav_ds.ionospheric_corr_GPS
     return df
 
