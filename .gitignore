@@ -4,6 +4,10 @@ __pycache__
 *.csv
 *.rnx
 *.crx
+*.SP3
+*.sp3
+*.clk
+*.CLK
 *.prof
 *.json*
 */tmp_*
