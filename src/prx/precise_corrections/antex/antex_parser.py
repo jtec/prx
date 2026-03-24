@@ -237,4 +237,3 @@ def compute_pco_sat(
 
     pco_effect = np.stack(pco_effect_list, axis=1)
     return pco_effect, freq_list
-

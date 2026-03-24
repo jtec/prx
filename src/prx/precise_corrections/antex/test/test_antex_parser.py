@@ -5,7 +5,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from prx import util
+from prx.precise_corrections.antex import antex_parser
+
 
 @pytest.fixture
 def input_for_test():
@@ -44,6 +45,7 @@ def input_for_test():
 
     yield test_file
     shutil.rmtree(test_directory)
+
 
 def test_pco_sat():
     # sat frame: z pointing to the geocenter, y perpendicular to the plane (geocenter,sun,sat), x = cross(e_y,e_z)
@@ -99,7 +101,7 @@ def test_pco_sat():
     pco_corr_list.append(pco_ecef.dot(rx_pos_ecef) / np.linalg.norm(rx_pos_ecef))
 
     # pco correction computation with function
-    pco_corr_function, _ = util.compute_pco_sat(
+    pco_corr_function, _ = antex_parser.compute_pco_sat(
         np.array(["G01"] * 2),
         np.array([sat_pos_ecef] * 2),
         np.array([rx_pos_ecef] * 2),
@@ -127,4 +129,3 @@ def test_pco_sat():
         ),
     )
     assert pco_corr_list == pytest.approx(pco_corr_function[:, 0])
-
