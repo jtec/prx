@@ -7,10 +7,10 @@ import georinex
 import pandas as pd
 import numpy as np
 import git
-import prx.util
-from prx import atmospheric_corrections as atmo, util
+import prx.util as util
+from prx import atmospheric_corrections as atmo
 from prx.constants import carrier_frequencies_hz
-from prx.util import parse_rinex_obs_file
+from prx.rinex_obs.parser import parse_rinex_obs_file
 from prx.util import is_rinex_3_obs_file, is_rinex_3_nav_file
 from prx.rinex_nav import nav_file_discovery
 from prx import constants, converters, user
@@ -20,7 +20,7 @@ from prx.rinex_nav.evaluate import parse_rinex_nav_file
 log = util.get_logger(__name__)
 
 
-@prx.util.timeit
+@util.timeit
 def write_prx_file(
     prx_header: dict,
     prx_records: pd.DataFrame,
@@ -144,9 +144,14 @@ def build_metadata(input_files):
         }
         for file in files
     ]
-    prx_metadata["prx_git_commit_id"] = git.Repo(
-        search_parent_directories=True
-    ).head.object.hexsha
+    try:
+        prx_metadata["prx_git_commit_id"] = (
+            util.git_sha_of_this_package()
+            or util.git_sha_from_dist_info("prx")
+            or "unknown"
+        )
+    except git.exc.InvalidGitRepositoryError:
+        prx_metadata["prx_git_commit_id"] = "not_a_git_repository"
     return prx_metadata
 
 
@@ -177,12 +182,13 @@ def warm_up_parser_cache(rinex_files):
     _ = [parse_rinex_nav_or_obs_file(file) for file in rinex_files]
 
 
-@prx.util.timeit
+@util.timeit
 def build_records_levels_12(
     rinex_3_obs_file,
     rinex_3_ephemerides_files,
     approximate_receiver_ecef_position_m,
     prx_level,
+    model_tropo,
 ):
     """
     Creates a flat_obs dataframe including columns for prx processing levels 1 and 2.
@@ -194,7 +200,7 @@ def build_records_levels_12(
         approximate_receiver_ecef_position_m
     )
     check_assumptions(rinex_3_obs_file)
-    flat_obs = util.parse_rinex_obs_file(rinex_3_obs_file)
+    flat_obs = parse_rinex_obs_file(rinex_3_obs_file)
 
     flat_obs.time = pd.to_datetime(flat_obs.time, format="%Y-%m-%dT%H:%M:%S")
     flat_obs.obs_value = flat_obs.obs_value.astype(float)
@@ -318,20 +324,12 @@ def build_records_levels_12(
 
     if prx_level == 2:
         # Compute anything else that is satellite-specific
-        sat_states["relativistic_clock_effect_m"] = (
-            util.compute_relativistic_clock_effect(
-                sat_states[["sat_pos_x_m", "sat_pos_y_m", "sat_pos_z_m"]].to_numpy(),
-                sat_states[
-                    ["sat_vel_x_mps", "sat_vel_y_mps", "sat_vel_z_mps"]
-                ].to_numpy(),
-            )
-        )
         sat_states["sagnac_effect_m"] = util.compute_sagnac_effect(
             sat_states[["sat_pos_x_m", "sat_pos_y_m", "sat_pos_z_m"]].to_numpy(),
             approximate_receiver_ecef_position_m,
         )
-        sat_states["tropo_delay_m"] = atmo.add_tropo_column(
-            sat_states, flat_obs, approximate_receiver_ecef_position_m
+        sat_states["tropo_delay_m"] = atmo.compute_tropo_delay(
+            sat_states, flat_obs, approximate_receiver_ecef_position_m, model_tropo
         )
 
     # Merge sat states into observation dataframe. Due to Galileo's FNAV/INAV ephemerides
@@ -385,8 +383,8 @@ def build_records_levels_12(
     return flat_obs
 
 
-@prx.util.timeit
-def process(observation_file_path: Path, prx_level=2):
+@util.timeit
+def process(observation_file_path: Path, prx_level=2, model_tropo="saastamoinen"):
     t0 = pd.Timestamp.now()
     # We expect a Path, but might get a string here:
     observation_file_path = Path(observation_file_path)
@@ -394,7 +392,7 @@ def process(observation_file_path: Path, prx_level=2):
         f"Starting processing {observation_file_path.name} (full path {observation_file_path})"
     )
     rinex_3_obs_file = converters.anything_to_rinex_3(observation_file_path)
-    rinex_3_obs_file = prx.util.repair_with_gfzrnx(rinex_3_obs_file)
+    rinex_3_obs_file = util.try_repair_with_gfzrnx(rinex_3_obs_file)
     prx_file = rinex_3_obs_file.with_suffix("")
     match prx_level:
         case 1 | 2:
@@ -414,6 +412,7 @@ def process(observation_file_path: Path, prx_level=2):
                 aux_files["broadcast_ephemerides"],
                 metadata["approximate_receiver_ecef_position_m"],
                 prx_level,
+                model_tropo,
             )
         case 3:
             assert False, (
@@ -447,6 +446,12 @@ if __name__ == "__main__":
         choices=[1, 2, 3],
         default=2,
     )
+    parser.add_argument(
+        "--tropo",
+        type=str,
+        choices=["saastamoinen", "unb3m"],
+        default="saastamoinen",
+    )
     args = parser.parse_args()
     if args.observation_file_path is None:
         log.error("No observation file path provided.")
@@ -454,4 +459,4 @@ if __name__ == "__main__":
     if not Path(args.observation_file_path).exists():
         log.error(f"Observation file {args.observation_file_path} does not exist.")
         sys.exit(1)
-    process(Path(args.observation_file_path), args.prx_level)
+    process(Path(args.observation_file_path), args.prx_level, args.tropo)

@@ -5,18 +5,11 @@ import numpy as np
 import pandas as pd
 from pathlib import Path
 
-from prx import converters, constants, util
+from prx import converters, util
 from prx.rinex_obs.parser import parse as prx_obs_parse
 from plotly.subplots import make_subplots
 import plotly.graph_objects as go
 import georinex
-import platform
-
-path_gfzrnx_binary = (
-    util.prx_repository_root()
-    .joinpath("tools", "gfzrnx")
-    .joinpath(constants.gfzrnx_binary[platform.system()])
-)
 
 
 def generate_data():
@@ -40,7 +33,7 @@ def generate_data():
             / f"{base_file.name}_slice_{duration / pd.Timedelta('1h'):.2f}h.rnx"
         )
         cmd = (
-            f"{path_gfzrnx_binary} -finp {base_file}"
+            f"gfzrnx -finp {base_file}"
             f" -fout {slice_file}"
             f" -epo_beg {t_start.strftime('%Y-%m-%d_%H%M%S')}"
             f" -d {int(duration / pd.Timedelta('1s'))}"

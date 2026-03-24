@@ -25,7 +25,7 @@ was still used despite being older than the observation file.
 
 log = util.get_logger(__name__)
 
-atx_filename = f"igs20_????.atx"
+atx_filename = "igs20_????.atx"
 
 
 def date_to_gps_week(date: pd.Timestamp):
@@ -82,7 +82,7 @@ def fetch_latest_remote_antex_file():
     List the ANTEX files available online and returns the latest
     """
     server = "gssc.esa.int"
-    remote_folder = f"/igs/station/general"
+    remote_folder = "/igs/station/general"
     candidates = list_ftp_directory(server, remote_folder)
     candidates = [c for c in candidates if fnmatch.fnmatch(c, atx_filename)]
     if not candidates:
@@ -95,7 +95,7 @@ def check_online_availability(file: str, folder: Path) -> Path | None:
     Need to keep the same inputs as try_downloading_sp3_ftp, in order to be able to use `unittest.mock.patch` in tests
     """
     server = "gssc.esa.int"
-    remote_folder = f"/igs/station/general"
+    remote_folder = "/igs/station/general"
     ftp = FTP(server)
     ftp.login()
     ftp.cwd(remote_folder)
@@ -112,7 +112,7 @@ def try_downloading_atx_ftp(file: str, folder: Path):
     Download the wanted remote file
     """
     server = "gssc.esa.int"
-    remote_folder = f"/igs/station/general"
+    remote_folder = "/igs/station/general"
     ftp_file = f"ftp://{server}/{remote_folder}/{file}"
     local_file = folder / file
     urllib.request.urlretrieve(ftp_file, local_file)
