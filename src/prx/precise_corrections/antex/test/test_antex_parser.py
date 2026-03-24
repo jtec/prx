@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from prx.precise_corrections.antex import antex_parser
+from prx.precise_corrections.antex import antex_processing
 
 
 @pytest.fixture
