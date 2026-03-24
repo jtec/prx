@@ -159,10 +159,10 @@ RINEX file with us.
 
 When processing your own GNSS data, your receiver may provide you both the RINEX OBS and NAV files. If you want to
 specifically use your own RINEX NAV file, it shall be in the same folder as your OBS file and follow the RINEX 3 file
-naming convention. This can be achieved by passing your RINEX NAV file in `gfzrnx`:
+naming convention. This can be achieved by processing your RINEX NAV file with `gfzrnx`:
 
-`.\src\prx\tools\gfzrnx\gfzrnx_217_win64.exe -finp <RINEX_OBS_filepath> -fout ::RX3::` (on Windows, or use the adequate
-`gfzrnx`binary)
+`gfzrnx_217.exe -finp <RINEX_NAV_filepath> -fout ::RX3::` (on Windows, use the adequate
+`gfzrnx` binary for your platform)
 
 ## Acronyms
 
