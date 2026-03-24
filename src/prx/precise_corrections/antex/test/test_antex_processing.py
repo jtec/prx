@@ -101,7 +101,7 @@ def test_pco_sat():
     pco_corr_list.append(pco_ecef.dot(rx_pos_ecef) / np.linalg.norm(rx_pos_ecef))
 
     # pco correction computation with function
-    pco_corr_function, _ = antex_parser.compute_pco_sat(
+    pco_corr_function, _ = antex_processing.compute_pco_sat(
         np.array(["G01"] * 2),
         np.array([sat_pos_ecef] * 2),
         np.array([rx_pos_ecef] * 2),
