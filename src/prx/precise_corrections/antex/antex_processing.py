@@ -144,7 +144,7 @@ def parse_atx(filepath: Path):
 
 
 def compute_pco_sat(
-    sat_id: np.array, sat_pos: np.array, rx_pos: np.array, epochs: np.array, atx_df
+    sat_id: np.array, sat_pos: np.array, epochs: np.array, atx_df
 ) -> np.array:
     """
     Compute the satellite Phase Center Offset
@@ -208,7 +208,7 @@ def compute_pco_sat(
 
     _, rot_mat_ecef2sat = ecef_2_satellite(sat_pos, sat_pos, epochs)
 
-    pco_effect_list = []
+    pco_ecef_list = []
     for freq in freq_list:
         pco_ecef = np.array(
             [
@@ -226,14 +226,18 @@ def compute_pco_sat(
                 for idx, sat in enumerate(sat_id)
             ]
         ).reshape(len(sat_id), 3)
-
-        pco_effect_list.append(
-            np.vecdot(
+        pco_ecef_list.append(
+            pd.DataFrame(
                 pco_ecef,
-                (sat_pos - rx_pos)
-                / np.linalg.norm(sat_pos - rx_pos, axis=1).reshape(-1, 1),
+                columns=["pco_sat_x_m", "pco_sat_y_m", "pco_sat_z_m"],
             )
+            .assign(
+                freq_id=freq,
+                epoch=epochs,
+                sat_id=sat_id,
+            )
+            .dropna()
         )
 
-    pco_effect = np.stack(pco_effect_list, axis=1)
-    return pco_effect, freq_list
+    pco_sat_df = pd.concat(pco_ecef_list)
+    return pco_sat_df

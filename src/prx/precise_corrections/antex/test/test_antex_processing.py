@@ -71,9 +71,8 @@ def test_pco_sat():
 
     rot_sat2mat = np.stack([e_x, e_y, e_z]).T
     assert (rot_sat2mat == np.array([[0, 0, -1], [1, 0, 0], [0, -1, 0]])).all()
-    pco_ecef = (rot_sat2mat @ pco_sat).reshape(3)
-    assert (pco_ecef == np.array([-1, 1, 0])).all()
-    pco_corr_list.append(pco_ecef.dot(rx_pos_ecef) / np.linalg.norm(rx_pos_ecef))
+    pco_ecef_1 = (rot_sat2mat @ pco_sat).reshape(3)
+    assert (pco_ecef_1 == np.array([-1, 1, 0])).all()
 
     # Second scenario:                                         (earth)  (sat)
     #   - sat, sun, geocenter at z_ecef = 0
@@ -96,25 +95,16 @@ def test_pco_sat():
 
     rot_sat2mat = np.stack([e_x, e_y, e_z]).T
     assert (rot_sat2mat == np.array([[0, 0, -1], [-1, 0, 0], [0, 1, 0]])).all()
-    pco_ecef = (rot_sat2mat @ pco_sat).reshape(3)
-    assert (pco_ecef == np.array([-1, -1, 0])).all()
-    pco_corr_list.append(pco_ecef.dot(rx_pos_ecef) / np.linalg.norm(rx_pos_ecef))
+    pco_ecef_2 = (rot_sat2mat @ pco_sat).reshape(3)
+    assert (pco_ecef_2 == np.array([-1, -1, 0])).all()
 
     # pco correction computation with function
-    pco_corr_function, _ = antex_processing.compute_pco_sat(
+    timestamp1 = pd.Timestamp("2026-03-20 06:00:00")  # sun "close" to [0,1,0]
+    timestamp2 = pd.Timestamp("2026-03-20 18:00:00")  # sun "close" to [0,-1,0]
+    pco_corr_function = antex_processing.compute_pco_sat(
         np.array(["G01"] * 2),
         np.array([sat_pos_ecef] * 2),
-        np.array([rx_pos_ecef] * 2),
-        np.array(
-            [
-                pd.Timestamp(
-                    year=2020, month=6, day=20, hour=6, minute=6
-                ),  # approx time when the sun is "close" to [0,1,0]
-                pd.Timestamp(
-                    year=2020, month=6, day=20, hour=18, minute=6
-                ),  # approx time when the sun is "close" to [0,-1,0]
-            ]
-        ),
+        np.array([timestamp1, timestamp2]),
         pd.DataFrame(
             data={
                 "satellite_or_serial_no": ["G01"] * 5,
@@ -128,4 +118,14 @@ def test_pco_sat():
             },
         ),
     )
-    assert pco_corr_list == pytest.approx(pco_corr_function[:, 0])
+
+    # tolerance on pco computation, mainly due to imprecise date leading to slightly different sun position
+    tol = 1e-2
+    assert pco_corr_function.loc[
+        pco_corr_function.epoch == timestamp1,
+        ["pco_sat_x_m", "pco_sat_y_m", "pco_sat_z_m"],
+    ].to_numpy() == pytest.approx(np.stack([pco_ecef_1] * 5), abs=tol)
+    assert pco_corr_function.loc[
+        pco_corr_function.epoch == timestamp2,
+        ["pco_sat_x_m", "pco_sat_y_m", "pco_sat_z_m"],
+    ].to_numpy() == pytest.approx(np.stack([pco_ecef_2] * 5), abs=tol)
