@@ -49,9 +49,9 @@ def parse_sp3_file(file_path: Path):
         # Give some columns more pithy names
         df.rename(
             columns={
-                "position_x": "sat_pos_x_m",
-                "position_y": "sat_pos_y_m",
-                "position_z": "sat_pos_z_m",
+                "position_x": "sat_pos_com_x_m",
+                "position_y": "sat_pos_com_y_m",
+                "position_z": "sat_pos_com_z_m",
             },
             inplace=True,
         )
@@ -103,9 +103,9 @@ def interpolate(df, query_time_gpst_s, plot_interpolation=False):
         f"We need at least {n_samples_each_side} after the sample closest to the query time to interpolate"
     )
     columns_to_interpolate = [
-        "sat_pos_x_m",
-        "sat_pos_y_m",
-        "sat_pos_z_m",
+        "sat_pos_com_x_m",
+        "sat_pos_com_y_m",
+        "sat_pos_com_z_m",
         "sat_clock_offset_m",
     ]
     interpolated = df[closest_sample_index : closest_sample_index + 1]
@@ -133,11 +133,11 @@ def interpolate(df, query_time_gpst_s, plot_interpolation=False):
             query_time_gpst_s - times[0]
         )
         match col:
-            case "sat_pos_x_m":
+            case "sat_pos_com_x_m":
                 interpolated["sat_vel_x_mps"] = first_derivative
-            case "sat_pos_y_m":
+            case "sat_pos_com_y_m":
                 interpolated["sat_vel_y_mps"] = first_derivative
-            case "sat_pos_z_m":
+            case "sat_pos_com_z_m":
                 interpolated["sat_vel_z_mps"] = first_derivative
             case "sat_clock_offset_m":
                 interpolated["sat_clock_drift_mps"] = first_derivative
@@ -164,9 +164,9 @@ def compute(sp3_file_path, query):
             sat_pv = pd.DataFrame()
             sat_pv["gpst_s"] = [row.query_time_isagpst]
             sat_pv["sv"] = [row.sv]
-            sat_pv["sat_pos_x_m"] = [np.nan]
-            sat_pv["sat_pos_y_m"] = [np.nan]
-            sat_pv["sat_pos_z_m"] = [np.nan]
+            sat_pv["sat_pos_com_x_m"] = [np.nan]
+            sat_pv["sat_pos_com_y_m"] = [np.nan]
+            sat_pv["sat_pos_com_z_m"] = [np.nan]
             sat_pv["sat_clock_offset_m"] = [np.nan]
             sat_pv["sat_vel_x_mps"] = [np.nan]
             sat_pv["sat_vel_y_mps"] = [np.nan]

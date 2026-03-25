@@ -122,10 +122,10 @@ def test_pco_sat():
     # tolerance on pco computation, mainly due to imprecise date leading to slightly different sun position
     tol = 1e-2
     assert pco_corr_function.loc[
-        pco_corr_function.epoch == timestamp1,
+        pco_corr_function.query_time_isagpst == timestamp1,
         ["pco_sat_x_m", "pco_sat_y_m", "pco_sat_z_m"],
     ].to_numpy() == pytest.approx(np.stack([pco_ecef_1] * 5), abs=tol)
     assert pco_corr_function.loc[
-        pco_corr_function.epoch == timestamp2,
+        pco_corr_function.query_time_isagpst == timestamp2,
         ["pco_sat_x_m", "pco_sat_y_m", "pco_sat_z_m"],
     ].to_numpy() == pytest.approx(np.stack([pco_ecef_2] * 5), abs=tol)

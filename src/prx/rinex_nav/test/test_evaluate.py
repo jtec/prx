@@ -9,6 +9,7 @@ from prx.rinex_nav.evaluate import (
 )
 from prx.rinex_obs.parser import parse_rinex_obs_file
 from prx.precise_corrections.sp3 import evaluate as sp3_evaluate
+from prx.precise_corrections.antex import antex_processing as atx_processing
 from prx.rinex_nav import evaluate as rinex_nav_evaluate
 from prx import constants, converters, util
 from prx.util import week_and_seconds_2_timedelta
@@ -44,6 +45,7 @@ def input_for_test(tmp_path_factory):
         / "TLSE00FRA_R_20220010000_01D_30S_MO.rnx_slice_0.24h.rnx",
         "rinex_nav_file": test_directory / "BRDC00IGS_R_20220010000_01D_MN.zip",
         "sp3_file": test_directory / "WUM0MGXULT_20220010000_01D_05M_ORB.SP3",
+        "atx_file": test_directory / "igs20_2408_reduced_size.atx",
     }
     for key, test_file_path in test_files.items():
         shutil.copy(
@@ -62,6 +64,7 @@ def input_for_test_2(tmp_path_factory):
         "rinex_obs_file": test_directory / "TLSE00FRA_R_20230010100_10S_01S_MO.crx.gz",
         "rinex_nav_file": test_directory / "BRDC00IGS_R_20230010000_01D_MN.rnx.gz",
         "sp3_file": test_directory / "WUM0MGXULT_20220010000_01D_05M_ORB.SP3",
+        "atx_file": test_directory / "igs20_2408_reduced_size.atx",
     }
     for key, test_file_path in test_files.items():
         shutil.copy(
@@ -221,15 +224,14 @@ def test_compare_to_sp3(input_for_test):
     query = generate_sat_query(pd.Timestamp("2022-01-01T01:10:00.000000000"))
     # We have no SP3 reference solutions for SBAS satellites, so remove them from the query
     query = query[~query.sv.str.startswith("S")]
+    query_col = ["sv", "signal", "query_time_isagpst"]
     rinex_sat_states = rinex_nav_evaluate.compute_parallel(rinex_nav_file, query.copy())
     rinex_sat_states = (
-        rinex_sat_states.sort_values(by=["sv", "query_time_isagpst"])
+        rinex_sat_states.sort_values(by=query_col)
         .sort_index(axis=1)
-        .reset_index()
+        .reset_index(drop=True)
         .drop(
             columns=[
-                "index",
-                "signal",
                 "sat_code_bias_m",
                 "frequency_slot",
                 "ephemeris_hash",
@@ -241,11 +243,46 @@ def test_compare_to_sp3(input_for_test):
     sp3_sat_states = sp3_evaluate.compute(
         input_for_test["sp3_file"], query.copy().drop(columns=["signal"])
     )
+    pco = atx_processing.compute_pco_sat(
+        sat_id=query["sv"].to_numpy(),
+        sat_pos=sp3_sat_states[
+            ["sat_pos_com_x_m", "sat_pos_com_y_m", "sat_pos_com_z_m"]
+        ].to_numpy(),
+        epochs=query["query_time_isagpst"],
+        atx_df=atx_processing.parse_atx(input_for_test["atx_file"]),
+    )
+
+    # merge sp3 states and pco
+    sp3_sat_states = pco.merge(
+        sp3_sat_states,
+        left_on=["query_time_isagpst", "sv"],
+        right_on=["query_time_isagpst", "sv"],
+        how="left",
+    )
+
+    # re-introduce 'signal' column from query, using freq_id
     sp3_sat_states = (
-        sp3_sat_states.sort_values(by=["sv", "query_time_isagpst"])
+        query.assign(freq_id=query.signal.str[1].astype(int))
+        .merge(
+            sp3_sat_states,
+            left_on=["query_time_isagpst", "sv", "freq_id"],
+            right_on=["query_time_isagpst", "sv", "freq_id"],
+            how="left",
+        )
+        .drop(columns=["freq_id"])
+    )
+
+    # compute satellite antenna position
+    sp3_sat_states = sp3_sat_states.assign(
+        sat_pos_x_m=sp3_sat_states["sat_pos_com_x_m"] + sp3_sat_states["pco_sat_x_m"],
+        sat_pos_y_m=sp3_sat_states["sat_pos_com_y_m"] + sp3_sat_states["pco_sat_y_m"],
+        sat_pos_z_m=sp3_sat_states["sat_pos_com_z_m"] + sp3_sat_states["pco_sat_z_m"],
+    )
+
+    sp3_sat_states = (
+        sp3_sat_states.sort_values(by=query_col)
         .sort_index(axis=1)
-        .reset_index()
-        .drop(columns=["index"])
+        .reset_index(drop=True)
     )
 
     # Verify that the SP3 states are ordered the same as the RINEX states
@@ -256,16 +293,16 @@ def test_compare_to_sp3(input_for_test):
     assert sp3_sat_states["query_time_isagpst"].equals(
         rinex_sat_states["query_time_isagpst"]
     )
-    # Verify that sorting columns worked as expected
-    assert sp3_sat_states.columns.equals(rinex_sat_states.columns)
-    diff = rinex_sat_states.drop(columns=["sv"]) - sp3_sat_states.drop(columns="sv")
-    diff = pd.concat((rinex_sat_states["sv"], diff), axis=1)
-    diff["diff_xyz_l2_m"] = np.linalg.norm(
-        diff[["sat_pos_x_m", "sat_pos_y_m", "sat_pos_z_m"]].to_numpy(), axis=1
+    assert sp3_sat_states["signal"].equals(sp3_sat_states["signal"])
+    sat_pos_col = ["sat_pos_x_m", "sat_pos_y_m", "sat_pos_z_m"]
+    sat_vel_col = ["sat_vel_x_mps", "sat_vel_y_mps", "sat_vel_z_mps"]
+    sat_clk_col = ["sat_clock_offset_m", "sat_clock_drift_mps"]
+    diff = (
+        rinex_sat_states.set_index(query_col)[sat_pos_col + sat_vel_col + sat_clk_col]
+        - sp3_sat_states.set_index(query_col)[sat_pos_col + sat_vel_col + sat_clk_col]
     )
-    diff["diff_dxyz_l2_mps"] = np.linalg.norm(
-        diff[["sat_vel_x_mps", "sat_vel_y_mps", "sat_vel_z_mps"]].to_numpy(), axis=1
-    )
+    diff["diff_xyz_l2_m"] = np.linalg.norm(diff[sat_pos_col], axis=1)
+    diff["diff_dxyz_l2_mps"] = np.linalg.norm(diff[sat_vel_col], axis=1)
 
     print("\n" + diff.to_string())
     for (
@@ -376,7 +413,7 @@ def test_2023_beidou_c27(set_up_test_2023):
         .drop(columns=["signal"])
         .sort_index(axis="columns")
     )
-    assert sp3_sat_states.columns.equals(rinex_sat_states.columns)
+    # TODO add pco computation
     diff = rinex_sat_states.drop(columns="sv") - sp3_sat_states.drop(columns="sv")
     diff = pd.concat((rinex_sat_states["sv"], diff), axis=1)
     diff["diff_xyz_l2_m"] = np.linalg.norm(

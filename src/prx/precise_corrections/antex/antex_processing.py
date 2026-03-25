@@ -233,11 +233,15 @@ def compute_pco_sat(
             )
             .assign(
                 freq_id=freq,
-                epoch=epochs,
-                sat_id=sat_id,
+                query_time_isagpst=epochs,
+                sv=sat_id,
             )
             .dropna()
         )
 
     pco_sat_df = pd.concat(pco_ecef_list)
+    # force dtype to 'float', because nan values changed it to 'object'
+    pco_sat_df[["pco_sat_x_m", "pco_sat_y_m", "pco_sat_z_m"]] = pco_sat_df[
+        ["pco_sat_x_m", "pco_sat_y_m", "pco_sat_z_m"]
+    ].astype(float)
     return pco_sat_df
