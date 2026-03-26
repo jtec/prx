@@ -49,7 +49,7 @@ def input_for_test():
 
 def test_pco_sat():
     # sat frame: z pointing to the geocenter, y perpendicular to the plane (geocenter,sun,sat), x = cross(e_y,e_z)
-    pco_corr_list = []
+
     # First scenario:                                           (sun)
     #   - sat, sun, geocenter at z_ecef = 0
     #   - sun at [0, y_ecef = 1 AU, 0]                                         ↑ y_ecef
@@ -98,13 +98,18 @@ def test_pco_sat():
     pco_ecef_2 = (rot_sat2mat @ pco_sat).reshape(3)
     assert (pco_ecef_2 == np.array([-1, -1, 0])).all()
 
-    # pco correction computation with function
+    # pco computation with function
     timestamp1 = pd.Timestamp("2026-03-20 06:00:00")  # sun "close" to [0,1,0]
     timestamp2 = pd.Timestamp("2026-03-20 18:00:00")  # sun "close" to [0,-1,0]
-    pco_corr_function = antex_processing.compute_pco_sat(
-        np.array(["G01"] * 2),
+    query = pd.DataFrame(
+        {
+            "sv": np.array(["G01"] * 2),
+            "query_time_isagpst": np.array([timestamp1, timestamp2]),
+        }
+    )
+    pco_function = antex_processing.compute_pco_sat(
+        query,
         np.array([sat_pos_ecef] * 2),
-        np.array([timestamp1, timestamp2]),
         pd.DataFrame(
             data={
                 "satellite_or_serial_no": ["G01"] * 5,
@@ -121,11 +126,11 @@ def test_pco_sat():
 
     # tolerance on pco computation, mainly due to imprecise date leading to slightly different sun position
     tol = 1e-2
-    assert pco_corr_function.loc[
-        pco_corr_function.query_time_isagpst == timestamp1,
+    assert pco_function.loc[
+        pco_function.query_time_isagpst == timestamp1,
         ["pco_sat_x_m", "pco_sat_y_m", "pco_sat_z_m"],
     ].to_numpy() == pytest.approx(np.stack([pco_ecef_1] * 5), abs=tol)
-    assert pco_corr_function.loc[
-        pco_corr_function.query_time_isagpst == timestamp2,
+    assert pco_function.loc[
+        pco_function.query_time_isagpst == timestamp2,
         ["pco_sat_x_m", "pco_sat_y_m", "pco_sat_z_m"],
     ].to_numpy() == pytest.approx(np.stack([pco_ecef_2] * 5), abs=tol)

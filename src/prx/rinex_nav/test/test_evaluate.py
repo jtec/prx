@@ -244,11 +244,10 @@ def test_compare_to_sp3(input_for_test):
         input_for_test["sp3_file"], query.copy().drop(columns=["signal"])
     )
     pco = atx_processing.compute_pco_sat(
-        sat_id=query["sv"].to_numpy(),
+        query=query,
         sat_pos=sp3_sat_states[
             ["sat_pos_com_x_m", "sat_pos_com_y_m", "sat_pos_com_z_m"]
         ].to_numpy(),
-        epochs=query["query_time_isagpst"],
         atx_df=atx_processing.parse_atx(input_for_test["atx_file"]),
     )
 
@@ -297,6 +296,7 @@ def test_compare_to_sp3(input_for_test):
     sat_pos_col = ["sat_pos_x_m", "sat_pos_y_m", "sat_pos_z_m"]
     sat_vel_col = ["sat_vel_x_mps", "sat_vel_y_mps", "sat_vel_z_mps"]
     sat_clk_col = ["sat_clock_offset_m", "sat_clock_drift_mps"]
+    # TODO add relativistic clock offset to rinex clock
     diff = (
         rinex_sat_states.set_index(query_col)[sat_pos_col + sat_vel_col + sat_clk_col]
         - sp3_sat_states.set_index(query_col)[sat_pos_col + sat_vel_col + sat_clk_col]

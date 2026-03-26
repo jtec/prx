@@ -143,21 +143,21 @@ def parse_atx(filepath: Path):
     return atx_df
 
 
-def compute_pco_sat(
-    sat_id: np.array, sat_pos: np.array, epochs: np.array, atx_df
-) -> np.array:
+def compute_pco_sat(query: pd.DataFrame, sat_pos: np.array, atx_df) -> np.array:
     """
     Compute the satellite Phase Center Offset
 
     Reference: RTKLIB manual v2.4.2, p 173
-    """
-    query = pd.DataFrame(
-        {
-            "satellite": sat_id,
-            "epoch": epochs,
-        }
-    )
 
+    Inputs:
+    - query: a pd.DataFrame with columns ["sv", "query_time_isagpst"]
+    - sat_pos: an np.array with the 3D sat pos corresponding to the query
+    - atx_df: output of parse_atx
+
+    Outputs:
+    - pd.DataFrame with columns ["sv", "freq_id", "query_time_isagpst", "sat_pco_{x/y/z}_m"]
+
+    """
     pco_sat = pd.DataFrame(
         columns=[
             "satellite_or_serial_no",
@@ -167,9 +167,9 @@ def compute_pco_sat(
             "pco_up_m",
         ]
     )
-    for sat, group in query.groupby("satellite"):
-        epoch_min = group.epoch.min()
-        epoch_max = group.epoch.max()
+    for sat, group in query.groupby("sv"):
+        epoch_min = group.query_time_isagpst.min()
+        epoch_max = group.query_time_isagpst.max()
         to_be_apended = atx_df.loc[
             (atx_df.satellite_or_serial_no == sat)
             & (atx_df.valid_from < epoch_min)
@@ -206,7 +206,7 @@ def compute_pco_sat(
     ]
     pco_sat = pco_sat.reindex(sorted(pco_sat.columns), axis=1)
 
-    _, rot_mat_ecef2sat = ecef_2_satellite(sat_pos, sat_pos, epochs)
+    _, rot_mat_ecef2sat = ecef_2_satellite(sat_pos, sat_pos, query.query_time_isagpst)
 
     pco_ecef_list = []
     for freq in freq_list:
@@ -223,9 +223,9 @@ def compute_pco_sat(
                 ]
                 .to_numpy()
                 .reshape(-1, 1)
-                for idx, sat in enumerate(sat_id)
+                for idx, sat in enumerate(query.sv)
             ]
-        ).reshape(len(sat_id), 3)
+        ).reshape(len(query.sv), 3)
         pco_ecef_list.append(
             pd.DataFrame(
                 pco_ecef,
@@ -233,8 +233,8 @@ def compute_pco_sat(
             )
             .assign(
                 freq_id=freq,
-                query_time_isagpst=epochs,
-                sv=sat_id,
+                query_time_isagpst=query.query_time_isagpst,
+                sv=query.sv,
             )
             .dropna()
         )
