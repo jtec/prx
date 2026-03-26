@@ -17,13 +17,13 @@ import pandas as pd
 import xarray
 from imohash import imohash
 from astropy.utils import iers
-iers.conf.auto_download = False
 from astropy import time as astrotime
 from astropy.coordinates import get_sun, ITRS
 import astropy.units
 
 from prx import constants
 
+iers.conf.auto_download = False
 logger = logging.getLogger(__name__)
 
 
