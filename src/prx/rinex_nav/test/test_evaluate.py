@@ -9,15 +9,12 @@ from prx.rinex_nav.evaluate import (
 )
 from prx.rinex_obs.parser import parse_rinex_obs_file
 from prx.precise_corrections.sp3 import evaluate as sp3_evaluate
-from prx.precise_corrections.antex import antex_processing as atx_processing
 from prx.rinex_nav import evaluate as rinex_nav_evaluate
-from prx import constants, converters, util
+from prx import constants, converters
 from prx.util import week_and_seconds_2_timedelta
 import shutil
 import pytest
-import os
 import itertools
-from dotmap import DotMap
 
 # The following thresholds are the achieved maximum difference between broadcast and
 # MGEX precise orbit and clock solutions seen in this test.
@@ -30,10 +27,10 @@ from dotmap import DotMap
 #   system time and GPST. The offset is typically tens of nanoseconds though, so this should not account
 #   for more than millimeter-level, much smaller than the ephemeris error.
 expected_max_differences_broadcast_vs_precise = {
-    "diff_xyz_l2_m": 11.9,
-    "diff_dxyz_l2_mps": 2.1e-3,
-    "sat_clock_offset_m": 26,  # TODO Broadcast clock error should be much smaller than this.
-    "sat_clock_drift_mps": 3.4e-4,
+    "diff_xyz_l2_m": 12,
+    "diff_dxyz_l2_mps": 2e-3,
+    "sat_clock_offset_corr_m": 28,  # TODO Broadcast clock error should be much smaller than this.
+    "sat_clock_drift_mps": 2e-4,
 }
 
 
@@ -64,6 +61,24 @@ def input_for_test_2(tmp_path_factory):
         "rinex_obs_file": test_directory / "TLSE00FRA_R_20230010100_10S_01S_MO.crx.gz",
         "rinex_nav_file": test_directory / "BRDC00IGS_R_20230010000_01D_MN.rnx.gz",
         "sp3_file": test_directory / "WUM0MGXULT_20220010000_01D_05M_ORB.SP3",
+        "atx_file": test_directory / "igs20_2408_reduced_size.atx",
+    }
+    for key, test_file_path in test_files.items():
+        shutil.copy(
+            Path(__file__).parent.joinpath("datasets", test_file_path.name),
+            test_file_path,
+        )
+        assert test_file_path.exists()
+    yield test_files
+    shutil.rmtree(test_directory)
+
+
+@pytest.fixture
+def input_for_test_2023(tmp_path_factory):
+    test_directory = tmp_path_factory.mktemp("test_inputs")
+    test_files = {
+        "rinex_nav_file": test_directory / "BRDC00IGS_R_20230010000_01D_MN.rnx.gz",
+        "sp3_file": test_directory / "GFZ0MGXRAP_20230010000_01D_05M_ORB.SP3",
         "atx_file": test_directory / "igs20_2408_reduced_size.atx",
     }
     for key, test_file_path in test_files.items():
@@ -235,53 +250,32 @@ def test_compare_to_sp3(input_for_test):
                 "sat_code_bias_m",
                 "frequency_slot",
                 "ephemeris_hash",
-                "relativistic_clock_effect_m",
             ]
         )
     )
 
+    # correct with relativistic clock effect
+    rinex_sat_states["sat_clock_offset_corr_m"] = (
+        rinex_sat_states["sat_clock_offset_m"]
+        + rinex_sat_states["relativistic_clock_effect_m"]
+    )
+
     sp3_sat_states = sp3_evaluate.compute(
-        input_for_test["sp3_file"], query.copy().drop(columns=["signal"])
-    )
-    pco = atx_processing.compute_pco_sat(
-        query=query,
-        sat_pos=sp3_sat_states[
-            ["sat_pos_com_x_m", "sat_pos_com_y_m", "sat_pos_com_z_m"]
-        ].to_numpy(),
-        atx_df=atx_processing.parse_atx(input_for_test["atx_file"]),
-    )
-
-    # merge sp3 states and pco
-    sp3_sat_states = pco.merge(
-        sp3_sat_states,
-        left_on=["query_time_isagpst", "sv"],
-        right_on=["query_time_isagpst", "sv"],
-        how="left",
-    )
-
-    # re-introduce 'signal' column from query, using freq_id
-    sp3_sat_states = (
-        query.assign(freq_id=query.signal.str[1].astype(int))
-        .merge(
-            sp3_sat_states,
-            left_on=["query_time_isagpst", "sv", "freq_id"],
-            right_on=["query_time_isagpst", "sv", "freq_id"],
-            how="left",
-        )
-        .drop(columns=["freq_id"])
-    )
-
-    # compute satellite antenna position
-    sp3_sat_states = sp3_sat_states.assign(
-        sat_pos_x_m=sp3_sat_states["sat_pos_com_x_m"] + sp3_sat_states["pco_sat_x_m"],
-        sat_pos_y_m=sp3_sat_states["sat_pos_com_y_m"] + sp3_sat_states["pco_sat_y_m"],
-        sat_pos_z_m=sp3_sat_states["sat_pos_com_z_m"] + sp3_sat_states["pco_sat_z_m"],
+        input_for_test["sp3_file"],
+        query.copy(),
+        input_for_test["atx_file"],
     )
 
     sp3_sat_states = (
         sp3_sat_states.sort_values(by=query_col)
         .sort_index(axis=1)
         .reset_index(drop=True)
+    )
+
+    # correct with relativistic clock effect
+    sp3_sat_states["sat_clock_offset_corr_m"] = (
+        sp3_sat_states["sat_clock_offset_m"]
+        + sp3_sat_states["relativistic_clock_effect_m"]
     )
 
     # Verify that the SP3 states are ordered the same as the RINEX states
@@ -295,8 +289,7 @@ def test_compare_to_sp3(input_for_test):
     assert sp3_sat_states["signal"].equals(sp3_sat_states["signal"])
     sat_pos_col = ["sat_pos_x_m", "sat_pos_y_m", "sat_pos_z_m"]
     sat_vel_col = ["sat_vel_x_mps", "sat_vel_y_mps", "sat_vel_z_mps"]
-    sat_clk_col = ["sat_clock_offset_m", "sat_clock_drift_mps"]
-    # TODO add relativistic clock offset to rinex clock
+    sat_clk_col = ["sat_clock_offset_corr_m", "sat_clock_drift_mps"]
     diff = (
         rinex_sat_states.set_index(query_col)[sat_pos_col + sat_vel_col + sat_clk_col]
         - sp3_sat_states.set_index(query_col)[sat_pos_col + sat_vel_col + sat_clk_col]
@@ -350,36 +343,10 @@ def test_sbas(input_for_test):
     ).abs().max() < 2e3
 
 
-@pytest.fixture
-def set_up_test_2023():
-    test_directory = Path(f"./tmp_test_directory_{__name__}").resolve()
-    if test_directory.exists():
-        # Make sure the expected files has not been generated before and is still on disk due to e.g. a previous
-        # test run having crashed:
-        shutil.rmtree(test_directory)
-    os.makedirs(test_directory)
-    test_files = DotMap()
-    test_files.nav_file = test_directory.joinpath(
-        "BRDC00IGS_R_20230010000_01D_MN.rnx.gz"
+def test_2023_beidou_c27(input_for_test_2023):
+    rinex_nav_file = converters.compressed_to_uncompressed(
+        input_for_test_2023["rinex_nav_file"]
     )
-    test_files.sp3_file = test_directory.joinpath(
-        "GFZ0MGXRAP_20230010000_01D_05M_ORB.SP3"
-    )
-
-    for key, test_file in test_files.items():
-        shutil.copy(
-            util.prx_repository_root()
-            / f"src/prx/test/datasets/TLSE_2023001/{test_file.name}",
-            test_file,
-        )
-        assert test_file.exists()
-
-    yield dict(test_files)
-    shutil.rmtree(test_directory)
-
-
-def test_2023_beidou_c27(set_up_test_2023):
-    rinex_nav_file = converters.compressed_to_uncompressed(set_up_test_2023["nav_file"])
     query = pd.DataFrame(
         [
             {
@@ -395,33 +362,48 @@ def test_2023_beidou_c27(set_up_test_2023):
         "Was expecting only one row, make sure to sort before comparing to sp3 with more than one row"
     )
     rinex_sat_states = (
-        rinex_sat_states.reset_index()
+        rinex_sat_states.reset_index(drop=True)
         .drop(
             columns=[
-                "index",
-                "signal",
                 "sat_code_bias_m",
                 "frequency_slot",
                 "ephemeris_hash",
-                "relativistic_clock_effect_m",
             ]
         )
         .sort_index(axis="columns")
     )
-    sp3_sat_states = (
-        sp3_evaluate.compute(set_up_test_2023["sp3_file"], query.copy())
-        .drop(columns=["signal"])
-        .sort_index(axis="columns")
+    # correct with relativistic clock effect
+    rinex_sat_states["sat_clock_offset_corr_m"] = (
+        rinex_sat_states["sat_clock_offset_m"]
+        + rinex_sat_states["relativistic_clock_effect_m"]
     )
-    # TODO add pco computation
-    diff = rinex_sat_states.drop(columns="sv") - sp3_sat_states.drop(columns="sv")
-    diff = pd.concat((rinex_sat_states["sv"], diff), axis=1)
+    sp3_sat_states = sp3_evaluate.compute(
+        input_for_test_2023["sp3_file"],
+        query.copy(),
+        input_for_test_2023["atx_file"],
+    ).sort_index(axis="columns")
+    # correct with relativistic clock effect
+    sp3_sat_states["sat_clock_offset_corr_m"] = (
+        sp3_sat_states["sat_clock_offset_m"]
+        + sp3_sat_states["relativistic_clock_effect_m"]
+    )
+
+    query_col = ["sv", "signal", "query_time_isagpst"]
+    sat_pos_col = ["sat_pos_x_m", "sat_pos_y_m", "sat_pos_z_m"]
+    sat_vel_col = ["sat_vel_x_mps", "sat_vel_y_mps", "sat_vel_z_mps"]
+    sat_clk_col = ["sat_clock_offset_corr_m", "sat_clock_drift_mps"]
+    diff = (
+        rinex_sat_states.set_index(query_col)[sat_pos_col + sat_vel_col + sat_clk_col]
+        - sp3_sat_states.set_index(query_col)[sat_pos_col + sat_vel_col + sat_clk_col]
+    )
     diff["diff_xyz_l2_m"] = np.linalg.norm(
         diff[["sat_pos_x_m", "sat_pos_y_m", "sat_pos_z_m"]].to_numpy(), axis=1
     )
     diff["diff_dxyz_l2_mps"] = np.linalg.norm(
         diff[["sat_vel_x_mps", "sat_vel_y_mps", "sat_vel_z_mps"]].to_numpy(), axis=1
     )
+    print("\n" + diff.to_string())
+
     for (
         column,
         expected_max_difference,

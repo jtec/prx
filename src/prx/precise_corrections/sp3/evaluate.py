@@ -7,6 +7,7 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 
 from prx import constants, util
+from prx.precise_corrections.antex import antex_processing as atx_processing
 
 log = util.get_logger(__name__)
 
@@ -146,7 +147,13 @@ def interpolate(df, query_time_gpst_s, plot_interpolation=False):
     return interpolated
 
 
-def compute(sp3_file_path, query):
+def compute(sp3_file_path, query, atx_file_path):
+    """
+    Inputs:
+    - sp3_file_path: path to the SP3 file
+    - query: a pd.DataFrame with columns ["sv", "query_time_isagpst"]
+    - atx_file_path: path to the atx file
+    """
     df = parse_sp3_file(sp3_file_path)
     df = df[df["sv"].isin(query["sv"])]
 
@@ -168,6 +175,7 @@ def compute(sp3_file_path, query):
             sat_pv["sat_pos_com_y_m"] = [np.nan]
             sat_pv["sat_pos_com_z_m"] = [np.nan]
             sat_pv["sat_clock_offset_m"] = [np.nan]
+            sat_pv["relativistic_clock_correction_m"] = [0]
             sat_pv["sat_vel_x_mps"] = [np.nan]
             sat_pv["sat_vel_y_mps"] = [np.nan]
             sat_pv["sat_vel_z_mps"] = [np.nan]
@@ -175,8 +183,44 @@ def compute(sp3_file_path, query):
             sat_pv["health_flag"] = [1]
         return pd.concat((row.drop("sv"), sat_pv.squeeze()))
 
-    query = query.apply(interpolate_sat_states, axis=1).reset_index()
-    return query.drop(columns=["gpst_s", "index", "t0"])
+    # interpolate sat states at query time
+    query = (
+        query.apply(interpolate_sat_states, axis=1)
+        .reset_index(drop=True)
+        .drop(columns=["gpst_s", "t0"])
+    )
+
+    # add phase center offset
+    pco = atx_processing.compute_pco_sat(
+        query=query,
+        sat_pos=query[
+            ["sat_pos_com_x_m", "sat_pos_com_y_m", "sat_pos_com_z_m"]
+        ].to_numpy(),
+        atx_df=atx_processing.parse_atx(atx_file_path),
+    )
+
+    # merge pco into query, special care due to using 'freq_id'
+    query = (
+        query.assign(freq_id=query.signal.str[1].astype(int))
+        .merge(
+            pco,
+            left_on=["query_time_isagpst", "sv", "freq_id"],
+            right_on=["query_time_isagpst", "sv", "freq_id"],
+            how="left",
+        )
+        .drop(columns=["freq_id"])
+    )
+
+    # compute satellite antenna position
+    query = query.assign(
+        sat_pos_x_m=query["sat_pos_com_x_m"] + query["pco_sat_x_m"],
+        sat_pos_y_m=query["sat_pos_com_y_m"] + query["pco_sat_y_m"],
+        sat_pos_z_m=query["sat_pos_com_z_m"] + query["pco_sat_z_m"],
+        # sp3 clocks are already corrected by relativistic effect
+        relativistic_clock_effect_m=0,
+    )
+
+    return query
 
 
 if __name__ == "main":
