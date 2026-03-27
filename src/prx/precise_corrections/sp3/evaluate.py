@@ -151,7 +151,7 @@ def compute(sp3_file_path, query, atx_file_path):
     """
     Inputs:
     - sp3_file_path: path to the SP3 file
-    - query: a pd.DataFrame with columns ["sv", "query_time_isagpst"]
+    - query: a pd.DataFrame with columns ["sv", "signal", "query_time_isagpst"]
     - atx_file_path: path to the atx file
     """
     df = parse_sp3_file(sp3_file_path)
