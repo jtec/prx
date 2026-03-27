@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 from pathlib import Path
+
 from prx.precise_corrections.sp3.evaluate import compute
 import shutil
 import pytest
@@ -33,12 +34,19 @@ def input_for_test():
         test_sp3_file_with_one_sample_removed,
     )
 
+    test_atx_file = test_directory.joinpath("igs20_2408_reduced_size.atx")
+    shutil.copy(
+        Path(__file__).parent.joinpath("datasets", test_atx_file.name), test_atx_file
+    )
+
     assert test_sp3_file.exists()
     assert test_sp3_file_with_one_sample_removed.exists()
+    assert test_atx_file.exists()
 
     yield {
         "test_file": test_sp3_file,
         "test_file_one_sample_removed": test_sp3_file_with_one_sample_removed,
+        "atx_file": test_atx_file,
     }
     shutil.rmtree(test_directory)
 
@@ -51,15 +59,16 @@ def test_at_sample(input_for_test):
             {
                 "query_time_isagpst": pd.Timestamp("2021-12-31T00:20:00.00000000"),
                 "sv": "G01",
+                "signal": "C1C",
             }
         ]
     )
-    sat_states = compute(sp3_file, query)
+    sat_states = compute(sp3_file, query, input_for_test["atx_file"])
     # We then expect the satellite state to be close to the sample
     # PG01  13744.907145 -20823.122313   8309.113118    469.979467
     assert np.allclose(
         sat_states[sat_states["sv"] == "G01"][
-            ["sat_pos_x_m", "sat_pos_y_m", "sat_pos_z_m"]
+            ["sat_pos_com_x_m", "sat_pos_com_y_m", "sat_pos_com_z_m"]
         ].to_numpy(),
         1e3 * np.array([13744.907145, -20823.122313, 8309.113118]),
         rtol=1e-5,
@@ -86,14 +95,15 @@ def test_between_samples(input_for_test):
             {
                 "query_time_isagpst": pd.Timestamp("2021-12-31T00:30:00.00000000"),
                 "sv": "G01",
+                "signal": "C1C",
             }
         ]
     )
-    sat_states = compute(sp3_file, query)
+    sat_states = compute(sp3_file, query, input_for_test["atx_file"])
     # We then expect the interpolated satellite state to be close to the removed sample
     # PG01  13624.009028 -20092.399598  10082.111937    469.973744
     assert sat_states[sat_states["sv"] == "G01"][
-        ["sat_pos_x_m", "sat_pos_y_m", "sat_pos_z_m"]
+        ["sat_pos_com_x_m", "sat_pos_com_y_m", "sat_pos_com_z_m"]
     ].to_numpy()[0] == pytest.approx(
         1e3 * np.array([13624.009028, -20092.399598, 10082.111937]), abs=1e-3
     )
