@@ -94,14 +94,14 @@ def parse_sp3_file(file_path: Path):
 from scipy.interpolate import KroghInterpolator
 
 
-def interpolate_krogh(t_sp3: np.array, x_sp3: np.array, t_query: np.array):
+def interpolate_krogh(t_sp3: np.array, x_sp3: np.array, t_query: np.array, order=9):
     """
-    9-point Hermite/Krogh polynomial interpolation.
     Similar to Lagrange interpolation, but allows to easily compute derivative.
 
     t_sp3   : array of SP3 epoch times
     x_sp3   : array of SP3 states
     t_query : array of times at 1-second step
+    order   : nb of SP3 points used for interpolation
     """
 
     x_out = np.zeros_like(t_query, dtype=float)
@@ -112,9 +112,9 @@ def interpolate_krogh(t_sp3: np.array, x_sp3: np.array, t_query: np.array):
         idx = np.searchsorted(t_sp3, tq)
 
         # Choose 9 points centered around idx
-        i0 = max(0, idx - 4)
-        i1 = min(len(t_sp3), i0 + 9)
-        i0 = i1 - 9  # adjust start properly
+        i0 = max(0, idx - int((order - 1) / 2))
+        i1 = min(len(t_sp3), i0 + order)
+        i0 = i1 - order  # adjust start properly
 
         t9 = t_sp3[i0:i1]
         x9 = x_sp3[i0:i1]
@@ -239,10 +239,9 @@ def compute(sp3_file_path, query, atx_file_path):
         t0 = t_query
         for _ in range(2):
             C, _ = interpolate_krogh(
-                sp3.gpst_s.to_numpy(), sp3.sat_clock_offset_m.to_numpy(), t0
+                sp3.gpst_s.to_numpy(), sp3.sat_clock_offset_m.to_numpy(), t0, 3
             )
             t0 = t_query - C / constants.cGpsSpeedOfLight_mps
-            print(C[0])
         t_query = t_query - C / constants.cGpsSpeedOfLight_mps
         X, dX = interpolate_krogh(
             sp3.gpst_s.to_numpy(), sp3.sat_pos_com_x_m.to_numpy(), t_query
@@ -254,7 +253,7 @@ def compute(sp3_file_path, query, atx_file_path):
             sp3.gpst_s.to_numpy(), sp3.sat_pos_com_z_m.to_numpy(), t_query
         )
         C, dC = interpolate_krogh(
-            sp3.gpst_s.to_numpy(), sp3.sat_clock_offset_m.to_numpy(), t_query
+            sp3.gpst_s.to_numpy(), sp3.sat_clock_offset_m.to_numpy(), t_query, 3
         )
 
         # Assign results back to the `query` dataframe
@@ -267,6 +266,12 @@ def compute(sp3_file_path, query, atx_file_path):
         query.loc[group.index, "sat_vel_z_mps"] = dZ
         query.loc[group.index, "sat_clock_drift_mps"] = dC
         query.loc[group.index, "health_flag"] = 0
+        query.loc[group.index, "relativistic_clock_effect_m"] = np.array(
+            [
+                -2 * np.dot(p, v) / constants.cGpsSpeedOfLight_mps
+                for p, v in zip(np.stack([X, Y, Z]).T, np.stack([dX, dY, dZ]).T)
+            ]
+        )
 
     # # interpolate sat states at query time
     # query = (
@@ -298,8 +303,6 @@ def compute(sp3_file_path, query, atx_file_path):
         sat_pos_x_m=query["sat_pos_com_x_m"] + query["pco_sat_x_m"],
         sat_pos_y_m=query["sat_pos_com_y_m"] + query["pco_sat_y_m"],
         sat_pos_z_m=query["sat_pos_com_z_m"] + query["pco_sat_z_m"],
-        # sp3 clocks are already corrected by relativistic effect
-        relativistic_clock_effect_m=0,
     )
 
     return query

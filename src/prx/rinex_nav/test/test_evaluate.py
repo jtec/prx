@@ -29,7 +29,7 @@ import itertools
 expected_max_differences_broadcast_vs_precise = {
     "diff_xyz_l2_m": 12,
     "diff_dxyz_l2_mps": 2e-3,
-    "sat_clock_offset_corr_m": 65,  # TODO Broadcast clock error should be much smaller than this.
+    "sat_clock_offset_corr_m": 26,  # TODO Broadcast clock error should be much smaller than this.
     "sat_clock_drift_mps": 2e-4,
 }
 
