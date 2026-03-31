@@ -143,15 +143,14 @@ def parse_atx(filepath: Path):
     return atx_df
 
 
-def compute_pco_sat(query: pd.DataFrame, sat_pos: np.array, atx_df) -> np.array:
+def compute_pco_sat(query: pd.DataFrame, atx_df) -> np.array:
     """
     Compute the satellite Phase Center Offset
 
     Reference: RTKLIB manual v2.4.2, p 173
 
     Inputs:
-    - query: a pd.DataFrame with columns ["sv", "query_time_isagpst"]
-    - sat_pos: an np.array with the 3D sat pos corresponding to the query
+    - query: a pd.DataFrame with columns ["sv", "query_time_isagpst", "sat_pos_com_{x,y,z}_m"]
     - atx_df: output of parse_atx
 
     Outputs:
@@ -167,6 +166,10 @@ def compute_pco_sat(query: pd.DataFrame, sat_pos: np.array, atx_df) -> np.array:
             "pco_up_m",
         ]
     )
+    # remove satellites from query and sat_pos that not present in atx file
+    query = query.loc[
+        query.sv.isin(set(atx_df.satellite_or_serial_no).difference({""}))
+    ]
     for sat, group in query.groupby("sv"):
         epoch_min = group.query_time_isagpst.min()
         epoch_max = group.query_time_isagpst.max()
@@ -206,7 +209,11 @@ def compute_pco_sat(query: pd.DataFrame, sat_pos: np.array, atx_df) -> np.array:
     ]
     pco_sat = pco_sat.reindex(sorted(pco_sat.columns), axis=1)
 
-    _, rot_mat_ecef2sat = ecef_2_satellite(sat_pos, sat_pos, query.query_time_isagpst)
+    _, rot_mat_ecef2sat = ecef_2_satellite(
+        query[["sat_pos_com_x_m", "sat_pos_com_y_m", "sat_pos_com_z_m"]].to_numpy(),
+        query[["sat_pos_com_x_m", "sat_pos_com_y_m", "sat_pos_com_z_m"]].to_numpy(),
+        query.query_time_isagpst,
+    )
 
     pco_ecef_list = []
     for freq in freq_list:

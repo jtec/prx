@@ -193,9 +193,6 @@ def compute(sp3_file_path, query, atx_file_path):
     # add phase center offset
     pco = atx_processing.compute_pco_sat(
         query=query,
-        sat_pos=query[
-            ["sat_pos_com_x_m", "sat_pos_com_y_m", "sat_pos_com_z_m"]
-        ].to_numpy(),
         atx_df=atx_processing.parse_atx(atx_file_path),
     )
 

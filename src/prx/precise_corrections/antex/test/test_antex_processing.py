@@ -107,9 +107,11 @@ def test_pco_sat():
             "query_time_isagpst": np.array([timestamp1, timestamp2]),
         }
     )
+    query[["sat_pos_com_x_m", "sat_pos_com_y_m", "sat_pos_com_z_m"]] = np.array(
+        [sat_pos_ecef] * 2
+    )
     pco_function = antex_processing.compute_pco_sat(
         query,
-        np.array([sat_pos_ecef] * 2),
         pd.DataFrame(
             data={
                 "satellite_or_serial_no": ["G01"] * 5,
