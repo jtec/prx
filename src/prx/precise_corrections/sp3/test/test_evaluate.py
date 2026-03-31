@@ -99,7 +99,7 @@ def test_between_samples(input_for_test):
             }
         ]
     )
-    sat_states = compute(sp3_file, query, input_for_test["atx_file"])
+    sat_states = compute(sp3_file, query, input_for_test["atx_file"], True)
     # We then expect the interpolated satellite state to be close to the removed sample
     # PG01  13624.009028 -20092.399598  10082.111937    469.973744
     assert sat_states[sat_states["sv"] == "G01"][

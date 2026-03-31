@@ -1,11 +1,8 @@
-import pandas as pd
 import numpy as np
-from scipy.interpolate import lagrange
-from numpy.polynomial.polynomial import Polynomial
 import georinex
 from pathlib import Path
-import matplotlib.pyplot as plt
 
+from scipy.interpolate import KroghInterpolator
 from prx import constants, util
 from prx.precise_corrections.antex import antex_processing as atx_processing
 
@@ -89,9 +86,6 @@ def parse_sp3_file(file_path: Path):
 #     plt.legend()
 #     plt.grid()
 #     plt.show()
-
-
-from scipy.interpolate import KroghInterpolator
 
 
 def interpolate_krogh(t_sp3: np.array, x_sp3: np.array, t_query: np.array, order=9):
@@ -187,7 +181,9 @@ def interpolate_krogh(t_sp3: np.array, x_sp3: np.array, t_query: np.array, order
 #     return interpolated
 
 
-def compute(sp3_file_path, query, atx_file_path):
+def compute(
+    sp3_file_path, query, atx_file_path, is_query_corrected_by_sat_clock_offset=False
+):
     """
     Inputs:
     - sp3_file_path: path to the SP3 file
@@ -235,14 +231,16 @@ def compute(sp3_file_path, query, atx_file_path):
             ]
         )
 
-        # correct query time by satellite clock offset
-        t0 = t_query
-        for _ in range(2):
-            C, _ = interpolate_krogh(
-                sp3.gpst_s.to_numpy(), sp3.sat_clock_offset_m.to_numpy(), t0, 3
-            )
-            t0 = t_query - C / constants.cGpsSpeedOfLight_mps
-        t_query = t_query - C / constants.cGpsSpeedOfLight_mps
+        if not is_query_corrected_by_sat_clock_offset:
+            # correct query time by satellite clock offset
+            t0 = t_query
+            for _ in range(2):
+                C, _ = interpolate_krogh(
+                    sp3.gpst_s.to_numpy(), sp3.sat_clock_offset_m.to_numpy(), t0, 2
+                )
+                t0 = t_query - C / constants.cGpsSpeedOfLight_mps
+            t_query = t_query - C / constants.cGpsSpeedOfLight_mps
+
         X, dX = interpolate_krogh(
             sp3.gpst_s.to_numpy(), sp3.sat_pos_com_x_m.to_numpy(), t_query
         )
@@ -253,7 +251,7 @@ def compute(sp3_file_path, query, atx_file_path):
             sp3.gpst_s.to_numpy(), sp3.sat_pos_com_z_m.to_numpy(), t_query
         )
         C, dC = interpolate_krogh(
-            sp3.gpst_s.to_numpy(), sp3.sat_clock_offset_m.to_numpy(), t_query, 3
+            sp3.gpst_s.to_numpy(), sp3.sat_clock_offset_m.to_numpy(), t_query, 2
         )
 
         # Assign results back to the `query` dataframe
