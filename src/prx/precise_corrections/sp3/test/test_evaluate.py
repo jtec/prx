@@ -4,6 +4,7 @@ from pathlib import Path
 
 from prx.precise_corrections.sp3.evaluate import compute
 from prx.rinex_obs.parser import parse_rinex_obs_file
+from prx.converters import anything_to_rinex_3
 import shutil
 import pytest
 import os
@@ -56,7 +57,7 @@ def input_for_test():
 def input_for_test_rtklib(tmp_path_factory):
     test_directory = tmp_path_factory.mktemp("test_inputs")
     test_files = {
-        "obs": test_directory / "NIST00USA_R_20230010000_01D_30S_MO.rnx",
+        "obs": test_directory / "NIST00USA_R_20230010000_01D_30S_MO.crx.gz",
         "nav": test_directory / "BRDC00IGS_R_20230010000_01D_MN.rnx.gz",
         "sp3": test_directory / "GFZ0MGXRAP_20230010000_01D_05M_ORB.SP3",
         "atx": test_directory / "igs20_2408_reduced_size.atx",
@@ -149,7 +150,7 @@ def test_between_samples(input_for_test):
 
 
 def test_compare_matrtklib_without_galileo(input_for_test_rtklib):
-    flat_obs = parse_rinex_obs_file(input_for_test_rtklib["obs"])
+    flat_obs = parse_rinex_obs_file(anything_to_rinex_3(input_for_test_rtklib["obs"]))
     flat_obs.time = pd.to_datetime(flat_obs.time, format="%Y-%m-%dT%H:%M:%S")
     flat_obs.obs_value = flat_obs.obs_value.astype(float)
     flat_obs[["sv", "obs_type"]] = flat_obs[["sv", "obs_type"]].astype(str)
