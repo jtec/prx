@@ -150,7 +150,7 @@ def compute_pco_sat(query: pd.DataFrame, atx_df) -> np.array:
     Reference: RTKLIB manual v2.4.2, p 173
 
     Inputs:
-    - query: a pd.DataFrame with columns ["sv", "query_time_isagpst", "sat_pos_com_{x,y,z}_m"]
+    - query: a pd.DataFrame with columns ["sv", "query_time_isagpst", "signal" "sat_pos_com_{x,y,z}_m"]
     - atx_df: output of parse_atx
 
     Outputs:
@@ -199,8 +199,6 @@ def compute_pco_sat(query: pd.DataFrame, atx_df) -> np.array:
         }
     )
 
-    freq_list = pco_sat.carrier_freq_id.unique()
-
     # unstack carrier_freq_id
     pco_sat = pco_sat.set_index(["satellite", "carrier_freq_id"]).unstack(1)
     # rename columns
@@ -216,32 +214,31 @@ def compute_pco_sat(query: pd.DataFrame, atx_df) -> np.array:
     )
 
     pco_ecef_list = []
-    for freq in freq_list:
-        pco_ecef = np.array(
-            [
-                rot_mat_ecef2sat[idx, :, :].T
-                @ pco_sat.loc[
-                    sat,
-                    [
-                        "pco_" + str(freq) + "_x_m",
-                        "pco_" + str(freq) + "_y_m",
-                        "pco_" + str(freq) + "_z_m",
-                    ],
-                ]
-                .to_numpy()
-                .reshape(-1, 1)
-                for idx, sat in enumerate(query.sv)
+    for idx, row in enumerate(query.itertuples()):
+        freq = int(row.signal[1])
+        sat = row.sv
+        pco_ecef = (
+            rot_mat_ecef2sat[idx, :, :].T
+            @ pco_sat.loc[
+                sat,
+                [
+                    "pco_" + str(freq) + "_x_m",
+                    "pco_" + str(freq) + "_y_m",
+                    "pco_" + str(freq) + "_z_m",
+                ],
             ]
-        ).reshape(len(query.sv), 3)
+            .to_numpy()
+            .reshape(-1, 1)
+        ).reshape(1, 3)
         pco_ecef_list.append(
             pd.DataFrame(
                 pco_ecef,
                 columns=["pco_sat_x_m", "pco_sat_y_m", "pco_sat_z_m"],
             )
             .assign(
-                freq_id=freq,
-                query_time_isagpst=query.query_time_isagpst,
-                sv=query.sv,
+                signal=row.signal,
+                query_time_isagpst=row.query_time_isagpst,
+                sv=sat,
             )
             .dropna()
         )

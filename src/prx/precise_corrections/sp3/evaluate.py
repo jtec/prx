@@ -190,11 +190,14 @@ def compute(
     - query: a pd.DataFrame with columns ["sv", "signal", "query_time_isagpst"]
     - atx_file_path: path to the atx file
     """
-    df = parse_sp3_file(sp3_file_path)
-    df = df[df["sv"].isin(query["sv"])]
+    df_sp3 = parse_sp3_file(sp3_file_path)
+
+    # filter query and sp3 data that have common sv
+    df_sp3 = df_sp3[df_sp3["sv"].isin(query["sv"].unique())]
+    query = query[query["sv"].isin(df_sp3["sv"].unique())]
 
     # def interpolate_sat_states(row):
-    #     samples = df[df["sv"] == row["sv"]]
+    #     samples = df_sp3[df_sp3["sv"] == row["sv"]]
     #     if len(samples.index) > 0:
     #         sat_pv = interpolate(
     #             samples,
@@ -221,7 +224,7 @@ def compute(
 
     for sv, group in query.groupby("sv"):
         # Select SP3 rows for this satellite
-        sp3 = df.loc[df["sv"] == sv]
+        sp3 = df_sp3.loc[df_sp3["sv"] == sv]
 
         # Convert query times to GPST seconds
         t_query = np.array(
@@ -285,15 +288,11 @@ def compute(
     )
 
     # merge pco into query, special care due to using 'freq_id'
-    query = (
-        query.assign(freq_id=query.signal.str[1].astype(int))
-        .merge(
-            pco,
-            left_on=["query_time_isagpst", "sv", "freq_id"],
-            right_on=["query_time_isagpst", "sv", "freq_id"],
-            how="left",
-        )
-        .drop(columns=["freq_id"])
+    query = query.merge(
+        pco,
+        left_on=["query_time_isagpst", "sv", "signal"],
+        right_on=["query_time_isagpst", "sv", "signal"],
+        how="left",
     )
 
     # compute satellite antenna position

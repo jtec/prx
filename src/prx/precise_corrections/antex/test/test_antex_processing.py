@@ -105,6 +105,7 @@ def test_pco_sat():
         {
             "sv": np.array(["G01"] * 2),
             "query_time_isagpst": np.array([timestamp1, timestamp2]),
+            "signal": "C1C",
         }
     )
     query[["sat_pos_com_x_m", "sat_pos_com_y_m", "sat_pos_com_z_m"]] = np.array(
@@ -131,8 +132,8 @@ def test_pco_sat():
     assert pco_function.loc[
         pco_function.query_time_isagpst == timestamp1,
         ["pco_sat_x_m", "pco_sat_y_m", "pco_sat_z_m"],
-    ].to_numpy() == pytest.approx(np.stack([pco_ecef_1] * 5), abs=tol)
+    ].to_numpy() == pytest.approx(np.array([pco_ecef_1]), abs=tol)
     assert pco_function.loc[
         pco_function.query_time_isagpst == timestamp2,
         ["pco_sat_x_m", "pco_sat_y_m", "pco_sat_z_m"],
-    ].to_numpy() == pytest.approx(np.stack([pco_ecef_2] * 5), abs=tol)
+    ].to_numpy() == pytest.approx(np.array([pco_ecef_2]), abs=tol)
