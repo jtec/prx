@@ -180,7 +180,7 @@ def compute(
         atx_df=atx_processing.parse_atx(atx_file_path),
     )
 
-    # merge pco into query, special care due to using 'freq_id'
+    # merge pco into query
     query = query.merge(
         pco,
         left_on=["query_time_isagpst", "sv", "signal"],
