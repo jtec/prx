@@ -38,7 +38,8 @@ def input_for_test():
 
     test_atx_file = test_directory.joinpath("igs20_2408_reduced_size.atx")
     shutil.copy(
-        Path(__file__).parent.joinpath("datasets", test_atx_file.name), test_atx_file
+        Path(__file__).parents[3].joinpath("test", "datasets", test_atx_file.name),
+        test_atx_file,
     )
 
     assert test_sp3_file.exists()
