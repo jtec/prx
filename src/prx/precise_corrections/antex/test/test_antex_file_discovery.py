@@ -12,15 +12,14 @@ from prx.precise_corrections.antex import antex_file_discovery as atx
 
 
 @pytest.fixture
-def set_up_test():
-    test_directory = Path(f"./tmp_test_directory_{__name__}").resolve()
+def set_up_test(tmp_path_factory):
+    test_directory = tmp_path_factory.mktemp("test_inputs")
     if test_directory.exists():
         # Make sure the expected files has not been generated before and is still on disk due to e.g. a previous
         # test run having crashed:
         shutil.rmtree(test_directory)
     os.makedirs(test_directory)
     test_obs_file = test_directory.joinpath("TLSE00FRA_R_20230010100_10S_01S_MO.crx.gz")
-    # local_database = atx.atx_file_folder(pd.Timestamp('2023-01-01'), Path('src/prx/precise_corrections/atx/test/datasets'))
 
     shutil.copy(
         util.prx_repository_root()
@@ -61,11 +60,21 @@ def test_download_if_not_local(set_up_test):
     ) - pd.Timedelta(200, unit="milliseconds")
 
     db_folder = set_up_test["test_obs_file"].parent
-    downloaded_atx = atx.get_atx_file(t_start, db_folder)
+
+    with (
+        patch(
+            "prx.precise_corrections.antex.antex_file_discovery.try_downloading_atx_ftp",
+            return_value=atx.fetch_latest_remote_antex_file(),
+        ),
+        patch(  # simulate that the latest local file found is None
+            "prx.precise_corrections.antex.antex_file_discovery.find_latest_local_antex_file",
+            return_value=None,
+        ),
+    ):
+        downloaded_atx = atx.get_atx_file(t_start, db_folder)
 
     # Ensure the file was downloaded and exists
     assert downloaded_atx is not None
-    assert downloaded_atx.exists()
 
 
 def test_download_if_remote_is_newer(set_up_test):

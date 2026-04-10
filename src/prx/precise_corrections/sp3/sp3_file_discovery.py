@@ -9,7 +9,6 @@ import logging
 import ftplib
 import os
 from pathlib import Path
-from typing import List, Tuple
 
 import georinex
 import pandas as pd
