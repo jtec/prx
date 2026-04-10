@@ -35,9 +35,9 @@ def set_up_test():
 
 def test_extract_gps_week():
     filenames = [
-        "igs20_2134.atx",
-        "igs_10.atx",
-        "igs14_abc.atx",
+        Path("igs20_2134.atx"),
+        Path("igs_10.atx"),
+        Path("igs14_abc.atx"),
     ]
     expected_returns = [2134, -1, -1]
     gps_week = [atx.extract_gps_week(f) for f in filenames]
@@ -78,8 +78,8 @@ def test_download_if_remote_is_newer(set_up_test):
     - remote file = igs20_2375.atx
     -> The function should download igs20_2375.atx
     """
-    latest_local = "igs20_2370.atx"
-    latest_remote = "igs20_2375.atx"
+    latest_local = Path("igs20_2370.atx")
+    latest_remote = Path("igs20_2375.atx")
     date = pd.Timestamp("2025-01-01 12:00:00")
     db_folder = set_up_test["test_obs_file"].parent
 
@@ -99,7 +99,7 @@ def test_download_if_remote_is_newer(set_up_test):
     ):
         result = atx.get_atx_file(date, db_folder)
         assert result is not None
-        assert result.name == latest_remote
+        assert result.name == latest_remote.name
 
 
 def test_skip_download_if_same_week(set_up_test):
@@ -112,8 +112,8 @@ def test_skip_download_if_same_week(set_up_test):
     - remote file = igs20_2375.atx
     → The function should skip download and return the local file
     """
-    latest_local = "igs20_2375.atx"
-    latest_remote = "igs20_2375.atx"
+    latest_local = Path("igs20_2375.atx")
+    latest_remote = Path("igs20_2375.atx")
     date = pd.Timestamp("2025-01-01 12:00:00")
     db_folder = set_up_test["test_obs_file"].parent
 
@@ -136,4 +136,4 @@ def test_skip_download_if_same_week(set_up_test):
         # Ensure that the download function was not called
         mock_download.assert_not_called()
         # Ensure the returned file is the local one
-        assert result == latest_local
+        assert result.name == latest_local.name

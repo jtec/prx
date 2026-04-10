@@ -113,10 +113,10 @@ def test_get_sp3_files(set_up_test):
             return_value=None,
         ),
     ):
-        sp3_files = sp3.get_sp3_files(t_start, t_end, local_db)
+        sp3_orb_files, sp3_clk_files = sp3.get_sp3_files(t_start, t_end, local_db)
 
-    file_orb = sp3_files[0][0].name
-    file_clk = sp3_files[0][1].name
+    file_orb = sp3_orb_files[0].name
+    file_clk = sp3_clk_files[0].name
     assert file_orb is not None
     assert file_clk is not None
     assert sp3.get_index_of_priority_from_filename(
@@ -179,10 +179,10 @@ def test_download_FIN_when_local_RAP_is_available(set_up_test):
             new=prx.precise_corrections.sp3.sp3_file_discovery.check_online_availability,
         ),
     ):
-        sp3_files = sp3.get_sp3_files(t_start, t_end, local_db)
+        sp3_orb_files, sp3_clk_files = sp3.get_sp3_files(t_start, t_end, local_db)
 
-    file_orb = sp3_files[0][0].name
-    file_clk = sp3_files[0][1].name
+    file_orb = sp3_orb_files[0].name
+    file_clk = sp3_clk_files[0].name
     assert "FIN" in file_orb
     assert "FIN" in file_clk
     assert sp3.get_index_of_priority_from_filename(
@@ -221,22 +221,24 @@ def test_match_CLK_and_ORB(set_up_test):
             new=prx.precise_corrections.sp3.sp3_file_discovery.check_online_availability,
         ),
     ):
-        sp3_files = sp3.get_sp3_files(t_start, t_end, local_db)
+        sp3_orb_files, sp3_clk_files = sp3.get_sp3_files(t_start, t_end, local_db)
 
-    file_orb = sp3_files[0][0].name
-    file_clk = sp3_files[0][1].name
+    file_orb = sp3_orb_files[0].name
+    file_clk = sp3_clk_files[0].name
     assert sp3.get_index_of_priority_from_filename(
         file_orb
     ) == sp3.get_index_of_priority_from_filename(file_clk)
 
 
 def test_main_sp3_file_discovery_function(set_up_test):
-    sp3_files = sp3.discover_or_download_sp3_file(set_up_test["test_obs_file"])
+    sp3_orb_files, sp3_clk_files = sp3.discover_or_download_sp3_file(
+        set_up_test["test_obs_file"]
+    )
 
-    assert len(sp3_files) != 0
-    assert len(sp3_files[0]) == 2
-    file_orb = sp3_files[0][0].name
-    file_clk = sp3_files[0][1].name
+    assert len(sp3_orb_files) == 1
+    assert len(sp3_clk_files) == 1
+    file_orb = sp3_orb_files[0].name
+    file_clk = sp3_clk_files[0].name
     assert sp3.get_index_of_priority_from_filename(
         file_orb
     ) == sp3.get_index_of_priority_from_filename(file_clk)
