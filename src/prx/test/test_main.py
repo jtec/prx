@@ -9,6 +9,8 @@ import pytest
 
 from prx import util
 from prx import main
+from prx.precise_corrections.antex.antex_file_discovery import atx_file_database_folder
+from prx.precise_corrections.sp3.sp3_file_discovery import sp3_file_database_folder
 from prx.user import (
     parse_prx_csv_file_metadata,
     parse_prx_csv_file,
@@ -37,21 +39,38 @@ def input_for_test_tlse(tmp_path_factory):
     os.makedirs(test_directory)
     datasets_directory = Path(__file__).parent / "datasets"
     # Also provide ephemerides on disk so the test does not have to download them:
-    compressed_compact_rinex_file = (
-        datasets_directory
-        / "TLSE_2023001"
-        / "TLSE00FRA_R_20230010100_10S_01S_MO.crx.gz"
+    compressed_crx = (
+        datasets_directory / "TLSE_2023001/TLSE00FRA_R_20230010100_10S_01S_MO.crx.gz"
     )
-    ephemerides_file = (
-        datasets_directory / "TLSE_2023001/BRDC00IGS_R_20230010000_01D_MN.rnx.gz"
-    )
-    for file in [compressed_compact_rinex_file, ephemerides_file]:
+    rnx_nav = datasets_directory / "TLSE_2023001/BRDC00IGS_R_20230010000_01D_MN.rnx.gz"
+    for file in [compressed_crx, rnx_nav]:
         shutil.copy(
             file,
             test_directory / file.name,
         )
 
-    yield test_directory / compressed_compact_rinex_file.name
+    # copy and uncompress precise correction files to local database
+    sp3_orb = (
+        datasets_directory / "TLSE_2023001/COD0MGXFIN_20230010000_01D_05M_ORB.SP3.gz"
+    )
+    sp3_orb_local = shutil.copy(
+        sp3_orb, sp3_file_database_folder() / "2023/001" / sp3_orb.name
+    )
+    assert sp3_orb_local.exists()
+
+    sp3_clk = (
+        datasets_directory / "TLSE_2023001/COD0MGXFIN_20230010000_01D_30S_CLK.CLK.gz"
+    )
+    sp3_clk_local = shutil.copy(
+        sp3_clk, sp3_file_database_folder() / "2023/001" / sp3_clk.name
+    )
+    assert sp3_clk_local.exists()
+
+    atx = datasets_directory / "igs20_2408_reduced_size.atx"
+    atx_local = shutil.copy(atx, atx_file_database_folder() / atx.name)
+    assert atx_local.exists()
+
+    yield test_directory / compressed_crx.name
     shutil.rmtree(test_directory)
 
 
@@ -473,7 +492,6 @@ def test_prx_level_2(input_for_test_tlse):
         "sat_vel_z_mps",
         "sat_clock_offset_m",
         "sat_clock_drift_mps",
-        "sat_code_bias_m",
         "relativistic_clock_effect_m",
         "sagnac_effect_m",
         "tropo_delay_m",
@@ -491,12 +509,57 @@ def test_prx_level_2(input_for_test_tlse):
 
 
 def test_prx_level_3(input_for_test_tlse):
-    """
-    Test is currently inactive. To be changed once PRX level 3 works.
-    """
-    # check that calling main.process with "prx_level=3" will raise an AssertionError
-    with pytest.raises(AssertionError):
-        main.process(observation_file_path=input_for_test_tlse, prx_level=3)
+    main.process(observation_file_path=input_for_test_tlse, prx_level=3)
+    expected_prx_file = Path(str(input_for_test_tlse).replace("crx.gz", "csv"))
+    assert expected_prx_file.exists()
+
+    # Read first line of file, containing meta-data
+    metadata = parse_prx_csv_file_metadata(expected_prx_file)
+    assert metadata["prx_level"] == 3
+
+    # Read the CSV file
+    df = pd.read_csv(expected_prx_file, comment="#")
+
+    # Expected CSV column names
+    expected_column_names = {
+        "time_of_reception_in_receiver_time",
+        "C_obs_m",
+        "D_obs_hz",
+        "L_obs_cycles",
+        "S_obs_dBHz",
+        "rnx_obs_identifier",
+        "constellation",
+        "prn",
+        "carrier_frequency_hz",
+        "frequency_slot",
+        "health_flag",
+        "LLI",
+        "sat_pos_x_m",
+        "sat_pos_y_m",
+        "sat_pos_z_m",
+        "sat_pos_com_x_m",
+        "sat_pos_com_y_m",
+        "sat_pos_com_z_m",
+        "pco_sat_x_m",
+        "pco_sat_y_m",
+        "pco_sat_z_m",
+        "sat_vel_x_mps",
+        "sat_vel_y_mps",
+        "sat_vel_z_mps",
+        "sat_clock_offset_m",
+        "sat_clock_drift_mps",
+        "relativistic_clock_effect_m",
+        "sagnac_effect_m",
+        "tropo_delay_m",
+        "iono_delay_m",
+        "sat_elevation_deg",
+        "sat_azimuth_deg",
+    }
+
+    # Checking if all renamed parameters exist in the dataframe columns
+    assert set(df.columns) == expected_column_names, (
+        f"Additional columns in computed prx file: {set(df.columns).difference(expected_column_names)}"
+    )
 
 
 def test_function_call_with_alternative_tropo(input_for_test_tlse):

@@ -16,6 +16,9 @@ from prx.rinex_nav import nav_file_discovery
 from prx import constants, converters, user
 from prx.rinex_nav import evaluate as rinex_evaluate
 from prx.rinex_nav.evaluate import parse_rinex_nav_file
+from prx.precise_corrections.sp3 import evaluate as sp3_evaluate
+from prx.precise_corrections.sp3 import sp3_file_discovery
+from prx.precise_corrections.antex import antex_file_discovery
 
 log = util.get_logger(__name__)
 
@@ -383,6 +386,204 @@ def build_records_levels_12(
     return flat_obs
 
 
+def build_records_level_3(
+    rinex_3_obs_file,
+    sp3_orbit_files,
+    atx_file,
+    approximate_receiver_ecef_position_m,
+    model_tropo,
+):
+    """
+    Creates a flat_obs dataframe including columns for prx processing level 3.
+    See ./documents/dev_status.md for details on the columns.
+    """
+    approximate_receiver_ecef_position_m = np.array(
+        approximate_receiver_ecef_position_m
+    )
+    check_assumptions(rinex_3_obs_file)
+    flat_obs = parse_rinex_obs_file(rinex_3_obs_file)
+
+    flat_obs.time = pd.to_datetime(flat_obs.time, format="%Y-%m-%dT%H:%M:%S")
+    flat_obs.obs_value = flat_obs.obs_value.astype(float)
+    flat_obs[["sv", "obs_type"]] = flat_obs[["sv", "obs_type"]].astype(str)
+
+    flat_obs = flat_obs.rename(
+        columns={
+            "time": "time_of_reception_in_receiver_time",
+            "sv": "satellite",
+            "obs_value": "observation_value",
+            "obs_type": "observation_type",
+        },
+    )
+
+    log.info("Computing times of emission in satellite time")
+    per_sat = flat_obs.pivot(
+        index=["time_of_reception_in_receiver_time", "satellite"],
+        columns=["observation_type"],
+        values="observation_value",
+    ).reset_index()
+    per_sat["time_scale"] = (
+        per_sat["satellite"].str[0].map(constants.constellation_2_system_time_scale)
+    )
+    per_sat["system_time_scale_epoch"] = per_sat["time_scale"].map(
+        constants.system_time_scale_rinex_utc_epoch
+    )
+    # When calling georinex.load() with useindicators=True, there are additional ssi columns such as C1Cssi.
+    # To exclude them, we check the length of the column name
+    code_phase_columns = [c for c in per_sat.columns if c[0] == "C" and len(c) == 3]
+    # TODO Find a more self-explanatory name for the following variable
+    #
+    #  The following term contains, for each satellite
+    #  - time-of-flight: around 70 ms for MEO orbits. This includes small
+    #  terms (up to tens of meters in units of distance, ten meters correspond to 34 nanoseconds)
+    #  such as satellite code bias and atmospheric delays
+    #  - satellite clock offset w.r.t. its constellation time
+    #  - the receiver clock offset w.r.t. the satellite's constellation time (GPST, GST, BDT etc.) modulo 1 second
+    # The integer seconds of the receiver clock offset w.r.t. the satellite's constellation time (GPST, GST, BDT etc.)
+    # are likely removed by the receiver to align all pseudoranges to the same order of magnitude.
+    # By subtracting the term from the receiver time of reception, we get the time of emission in
+    # the satellite's constellation time frame (integer-second aligned to the receiver time frame), plus the
+    # satellite clock offset plus those small terms of a few tens of nanoseconds
+    tof_dtrx = pd.to_timedelta(
+        per_sat[code_phase_columns]
+        .mean(axis=1, skipna=True)
+        .divide(constants.cGpsSpeedOfLight_mps),
+        unit="s",
+    )
+    # As error terms are tens of nanoseconds here, and the receiver clock is integer-second aligned to GPST, we
+    # already have times-of-emission that are integer-second aligned GPST here.
+    per_sat["time_of_emission_isagpst"] = (
+        per_sat["time_of_reception_in_receiver_time"] - tof_dtrx
+    )
+
+    flat_obs = flat_obs.merge(
+        per_sat[
+            [
+                "time_of_reception_in_receiver_time",
+                "satellite",
+                "time_of_emission_isagpst",
+            ]
+        ],
+        on=["time_of_reception_in_receiver_time", "satellite"],
+    )
+
+    # Build the query DataFrame we need to evaluate ephemerides
+    query = flat_obs.loc[
+        flat_obs["observation_type"].str.startswith("C"),
+        ["satellite", "observation_type", "time_of_emission_isagpst"],
+    ]
+    query = query.rename(
+        columns={
+            "observation_type": "signal",
+            "satellite": "sv",
+            "time_of_emission_isagpst": "query_time_isagpst",
+        },
+    )
+
+    # Compute broadcast position, velocity, clock offset, clock offset rate and TGDs
+    sat_states_per_day = []
+    for file in sp3_orbit_files:
+        # get year and doy from sp3 orb filename
+        year = int(file.name[11:15])
+        doy = int(file.name[15:18])
+        day_query = query.loc[
+            (
+                query.query_time_isagpst
+                >= pd.Timestamp(year=year, month=1, day=1) + pd.Timedelta(days=doy - 1)
+            )
+            & (
+                query.query_time_isagpst
+                < pd.Timestamp(year=year, month=1, day=1) + pd.Timedelta(days=doy)
+            )
+        ]
+        if day_query.empty:
+            continue
+
+        log.info(f"Computing satellite states for {year}-{doy:03d}")
+        sat_states_per_day.append(
+            sp3_evaluate.compute(
+                file,
+                day_query,
+                atx_file,
+            )
+        )
+
+        # TODO: add hw satellite biases
+
+    sat_states = pd.concat(sat_states_per_day)
+    sat_states = sat_states.rename(
+        columns={
+            "sv": "satellite",
+            "signal": "observation_type",
+            "query_time_isagpst": "time_of_emission_isagpst",
+        },
+    )
+    (
+        sat_states["elevation_rad"],
+        sat_states["azimuth_rad"],
+    ) = util.compute_satellite_elevation_and_azimuth(
+        sat_states[["sat_pos_x_m", "sat_pos_y_m", "sat_pos_z_m"]].to_numpy(),
+        approximate_receiver_ecef_position_m,
+    )
+
+    # Compute anything else that is satellite-specific
+    sat_states["sagnac_effect_m"] = util.compute_sagnac_effect(
+        sat_states[["sat_pos_x_m", "sat_pos_y_m", "sat_pos_z_m"]].to_numpy(),
+        approximate_receiver_ecef_position_m,
+    )
+
+    # TODO: change to TROPEX when implemented
+    sat_states["tropo_delay_m"] = atmo.compute_tropo_delay(
+        sat_states, flat_obs, approximate_receiver_ecef_position_m, model_tropo
+    )
+
+    # Merge sat states into observation dataframe. Due to Galileo's FNAV/INAV ephemerides
+    # being signal-specific, we merge on the code identifier here and not only the satellite
+    sat_states["code_id"] = sat_states["observation_type"].str[1:3]
+    flat_obs["code_id"] = flat_obs["observation_type"].str[1:3]
+    flat_obs = flat_obs.merge(
+        sat_states.drop(columns=["observation_type"]),
+        on=["satellite", "code_id", "time_of_emission_isagpst"],
+        how="left",
+    ).drop(columns=["code_id"])
+
+    # GLONASS satellites with both FDMA and CDMA signals have a frequency slot for FDMA signals,
+    # for CDMA signals we use the common carrier frequency of those signals.
+    glo_cdma = flat_obs[
+        (flat_obs.satellite.str[0] == "R")
+        & (flat_obs["observation_type"].str[1].astype(int) > 2)
+    ]
+    flat_obs.loc[glo_cdma.index, "frequency_slot"] = int(1)
+
+    def assign_carrier_frequencies(flat_obs):
+        freq_dict = pd.json_normalize(carrier_frequencies_hz(), sep="_").to_dict(
+            orient="records"
+        )[0]
+        assignable = flat_obs.frequency_slot.notna()
+        keys = (
+            flat_obs.satellite[assignable].str[0]
+            + "_L"
+            + flat_obs["observation_type"][assignable].str[1]
+            + "_"
+            + flat_obs.frequency_slot[assignable].astype(int).astype(str)
+        )
+        flat_obs.loc[:, "carrier_frequency_hz"] = keys.map(freq_dict)
+        return flat_obs
+
+    flat_obs = assign_carrier_frequencies(flat_obs)
+
+    # TODO: change to IONEX when implemented
+    rnx3_nav_files = nav_file_discovery.discover_or_download_auxiliary_files(
+        rinex_3_obs_file
+    )["broadcast_ephemerides"]
+    iono_idx, iono_delay = atmo.add_iono_column(
+        flat_obs, rnx3_nav_files, approximate_receiver_ecef_position_m
+    )
+    flat_obs.loc[iono_idx, "iono_delay_m"] = iono_delay
+
+    return flat_obs
+
+
 @util.timeit
 def process(observation_file_path: Path, prx_level=2, model_tropo="saastamoinen"):
     t0 = pd.Timestamp.now()
@@ -415,9 +616,29 @@ def process(observation_file_path: Path, prx_level=2, model_tropo="saastamoinen"
                 model_tropo,
             )
         case 3:
-            assert False, (
-                "prx level 3 (precise corrections for ppp) not implemented yet..."
+            aux_files = {}
+            # define auxiliary files
+            aux_files["sp3_orb"], aux_files["sp3_clk"] = (
+                sp3_file_discovery.discover_or_download_sp3_file(rinex_3_obs_file)
             )
+            aux_files["atx"] = antex_file_discovery.discover_or_download_atx_file(
+                rinex_3_obs_file
+            )
+
+            # define metadata
+            metadata = build_metadata({"obs_file": rinex_3_obs_file, "nav_file": []})
+            metadata["prx_level"] = 3
+            metadata["processing_start_time"] = t0
+
+            # build record
+            records = build_records_level_3(
+                rinex_3_obs_file,
+                aux_files["sp3_orb"],
+                aux_files["atx"],
+                metadata["approximate_receiver_ecef_position_m"],
+                model_tropo,
+            )
+
     return write_prx_file(
         metadata,
         records,
