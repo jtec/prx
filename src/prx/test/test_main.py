@@ -50,6 +50,7 @@ def input_for_test_tlse(tmp_path_factory):
         )
 
     # copy and uncompress precise correction files to local database
+    os.makedirs(sp3_file_database_folder() / "2023/001/", exist_ok=True)
     sp3_orb = (
         datasets_directory / "TLSE_2023001/COD0MGXFIN_20230010000_01D_05M_ORB.SP3.gz"
     )
@@ -66,6 +67,7 @@ def input_for_test_tlse(tmp_path_factory):
     )
     assert sp3_clk_local.exists()
 
+    os.makedirs(atx_file_database_folder(), exist_ok=True)
     atx = datasets_directory / "igs20_2408_reduced_size.atx"
     atx_local = shutil.copy(atx, atx_file_database_folder() / atx.name)
     assert atx_local.exists()
