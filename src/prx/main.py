@@ -10,7 +10,7 @@ import git
 import prx.util as util
 from prx import atmospheric_corrections as atmo
 from prx.constants import carrier_frequencies_hz
-from prx.rinex_obs.parser import parse_rinex_obs_file
+from prx.rinex_obs.parser import parse_rinex_obs_file, get_glonass_slot
 from prx.util import is_rinex_3_obs_file, is_rinex_3_nav_file
 from prx.rinex_nav import nav_file_discovery
 from prx import constants, converters, user
@@ -505,10 +505,11 @@ def build_records_level_3(
                 file,
                 day_query,
                 atx_file,
+            ).assign(  # TODO: add hw satellite biases
+                sat_code_bias_m=np.nan,
+                sat_carrier_bias_m=np.nan,
             )
         )
-
-        # TODO: add hw satellite biases
 
     sat_states = pd.concat(sat_states_per_day)
     sat_states = sat_states.rename(
@@ -547,6 +548,14 @@ def build_records_level_3(
         how="left",
     ).drop(columns=["code_id"])
 
+    # set frequency slot for GLONASS satellites
+    glonass_slot_dict = get_glonass_slot(rinex_3_obs_file)
+    flat_obs.loc[flat_obs.satellite.str[0] == "R", "frequency_slot"] = (
+        flat_obs.assign(prn=flat_obs.satellite.str[1:].astype(int))
+        .loc[flat_obs.satellite.str[0] == "R", "prn"]
+        .map(glonass_slot_dict)
+    )
+
     # GLONASS satellites with both FDMA and CDMA signals have a frequency slot for FDMA signals,
     # for CDMA signals we use the common carrier frequency of those signals.
     glo_cdma = flat_obs[
@@ -554,6 +563,9 @@ def build_records_level_3(
         & (flat_obs["observation_type"].str[1].astype(int) > 2)
     ]
     flat_obs.loc[glo_cdma.index, "frequency_slot"] = int(1)
+
+    # set frequency slot to 1 for non-GLONASS satellites
+    flat_obs.loc[flat_obs.satellite.str[0] != "R", "frequency_slot"] = int(1)
 
     def assign_carrier_frequencies(flat_obs):
         freq_dict = pd.json_normalize(carrier_frequencies_hz(), sep="_").to_dict(
@@ -570,7 +582,7 @@ def build_records_level_3(
         flat_obs.loc[:, "carrier_frequency_hz"] = keys.map(freq_dict)
         return flat_obs
 
-    flat_obs = assign_carrier_frequencies(flat_obs)
+    flat_obs = assign_carrier_frequencies(flat_obs).drop(columns="frequency_slot")
 
     # TODO: change to IONEX when implemented
     rnx3_nav_files = nav_file_discovery.discover_or_download_auxiliary_files(
