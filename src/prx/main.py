@@ -374,7 +374,7 @@ def build_records_levels_12(
         flat_obs.loc[:, "carrier_frequency_hz"] = keys.map(freq_dict)
         return flat_obs
 
-    flat_obs = assign_carrier_frequencies(flat_obs)
+    flat_obs = assign_carrier_frequencies(flat_obs).drop(columns=["frequency_slot"])
 
     if prx_level == 2:
         # add iono correction
@@ -582,7 +582,7 @@ def build_records_level_3(
         flat_obs.loc[:, "carrier_frequency_hz"] = keys.map(freq_dict)
         return flat_obs
 
-    flat_obs = assign_carrier_frequencies(flat_obs).drop(columns="frequency_slot")
+    flat_obs = assign_carrier_frequencies(flat_obs).drop(columns=["frequency_slot"])
 
     # TODO: change to IONEX when implemented
     rnx3_nav_files = nav_file_discovery.discover_or_download_auxiliary_files(
