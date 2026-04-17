@@ -2,145 +2,119 @@ from pathlib import Path
 import pandas as pd
 import numpy as np
 
-from prx.util import ecef_2_satellite
-
-# def parquet_loading(func):
-#     """
-#     This is a decorator to check if a .parquet file exists and loads it,
-#     rather than parsing the original file.
-
-#     NOTE: the parquet files must be manually erased when a modification
-#     is introduced in the parser.
-
-#     To use it, use the @parquet_loading decorator before the parsing
-#     function definition.
-
-#     Example:
-#         @parquet_loading
-#         def prx_to_pandas(path_csv: Path, observation_filter: dict = {}):
-#         ...
-#     """
-
-#     def wrapper(path, **kwargs):
-#         if path.with_suffix(".parquet").exists():
-#             print(f"Reading '{path.with_suffix('.parquet')}'")
-#             df = pd.read_parquet(path.with_suffix(".parquet"))
-#         else:
-#             print(f"Reading '{path.resolve()}' file and saving it as .parquet")
-#             df = func(path, **kwargs)
-#             df.to_parquet(path.with_suffix(".parquet"))
-#         return df
-
-#     return wrapper
+from prx.util import ecef_2_satellite, disk_cache, hash_of_file_content
 
 
-# @parquet_loading
-def parse_atx(filepath: Path):
-    """
-    ANTEX file format description is available at https://files.igs.org/pub/data/format/antex14.txt
-    """
+def parse_atx(filepath_atx: Path):
+    @disk_cache.cache(ignore=["filepath"])
+    def parse_atx_cached(filepath: Path, file_hash: str):
+        """
+        ANTEX file format description is available at https://files.igs.org/pub/data/format/antex14.txt
+        """
 
-    def read_antenna(file):
-        atx_df = pd.DataFrame(
-            columns=[
-                "antenna_type",
-                "satellite_or_serial_no",
-                "valid_from",
-                "valid_until",
-                "constellation",
-                "carrier_freq_id",
-                "pco_north_m",
-                "pco_east_m",
-                "pco_up_m",
-            ]
-        )
-        # line with TYPE / SERIAL NO
-        line = file.readline()
-        antenna_type = line[0:20].strip()
-        satellite = line[20:40].strip()
-
-        # line with # of FREQUENCIES
-        for _ in range(4):
-            line = file.readline()
-        nb_freq = int(line[0:6])
-
-        # line with VALID FROM
-        line = file.readline()
-        if "VALID FROM" in line:
-            valid_from = pd.Timestamp(
-                year=int(line[0:6]),
-                month=int(line[6:12]),
-                day=int(line[12:18]),
-                hour=int(line[18:24]),
-                minute=int(line[24:30]),
-                second=int(line[30:35]),
-                microsecond=int(np.floor(float(line[36:42]))),
+        def read_antenna(file):
+            atx_df = pd.DataFrame(
+                columns=[
+                    "antenna_type",
+                    "satellite_or_serial_no",
+                    "valid_from",
+                    "valid_until",
+                    "constellation",
+                    "carrier_freq_id",
+                    "pco_north_m",
+                    "pco_east_m",
+                    "pco_up_m",
+                ]
             )
+            # line with TYPE / SERIAL NO
             line = file.readline()
-        else:
-            valid_from = pd.NaT
+            antenna_type = line[0:20].strip()
+            satellite = line[20:40].strip()
 
-        # line with VALID UNTIL
-        if "VALID UNTIL" in line:
-            valid_until = pd.Timestamp(
-                year=int(line[0:6]),
-                month=int(line[6:12]),
-                day=int(line[12:18]),
-                hour=int(line[18:24]),
-                minute=int(line[24:30]),
-                second=int(line[30:35]),
-                microsecond=int(np.floor(float(line[36:42]))),
-            )
-        else:
-            valid_until = pd.NaT
-
-        # skip line with SINEX CODE or COMMENT
-        while "START OF FREQUENCY" not in line:
-            line = file.readline()
-
-        for index in range(nb_freq):
-            # line with START OF FREQUENCY
-            constellation = line[3]
-            carrier_freq_id = int(line[4:6])
-
-            # line with NORTH / EAST / UP
-            line = file.readline()
-            north = float(line[0:10]) * 1e-3
-            east = float(line[10:20]) * 1e-3
-            up = float(line[20:30]) * 1e-3
-
-            atx_df.loc[index] = pd.Series(
-                {
-                    "antenna_type": antenna_type,
-                    "satellite_or_serial_no": satellite,
-                    "valid_from": valid_from,
-                    "valid_until": valid_until,
-                    "constellation": constellation,
-                    "carrier_freq_id": carrier_freq_id,
-                    "pco_north_m": north,
-                    "pco_east_m": east,
-                    "pco_up_m": up,
-                }
-            )
-
-            # skip lines until line with END OF FREQUENCY
-            while "END OF FREQUENCY" not in line:
+            # line with # of FREQUENCIES
+            for _ in range(4):
                 line = file.readline()
+            nb_freq = int(line[0:6])
+
+            # line with VALID FROM
             line = file.readline()
+            if "VALID FROM" in line:
+                valid_from = pd.Timestamp(
+                    year=int(line[0:6]),
+                    month=int(line[6:12]),
+                    day=int(line[12:18]),
+                    hour=int(line[18:24]),
+                    minute=int(line[24:30]),
+                    second=int(line[30:35]),
+                    microsecond=int(np.floor(float(line[36:42]))),
+                )
+                line = file.readline()
+            else:
+                valid_from = pd.NaT
 
-        return file, atx_df
+            # line with VALID UNTIL
+            if "VALID UNTIL" in line:
+                valid_until = pd.Timestamp(
+                    year=int(line[0:6]),
+                    month=int(line[6:12]),
+                    day=int(line[12:18]),
+                    hour=int(line[18:24]),
+                    minute=int(line[24:30]),
+                    second=int(line[30:35]),
+                    microsecond=int(np.floor(float(line[36:42]))),
+                )
+            else:
+                valid_until = pd.NaT
 
-    with open(filepath) as file:
-        atx_df = pd.DataFrame()
-        while True:
-            line = file.readline()
-            if not line:  # check if the end of file has been reached
-                break
-            if "START OF ANTENNA" in line:
-                file, atx_df_ant = read_antenna(file)
-                atx_df = pd.concat([atx_df, atx_df_ant], ignore_index=True)
+            # skip line with SINEX CODE or COMMENT
+            while "START OF FREQUENCY" not in line:
+                line = file.readline()
 
-    return atx_df
+            for index in range(nb_freq):
+                # line with START OF FREQUENCY
+                constellation = line[3]
+                carrier_freq_id = int(line[4:6])
+
+                # line with NORTH / EAST / UP
+                line = file.readline()
+                north = float(line[0:10]) * 1e-3
+                east = float(line[10:20]) * 1e-3
+                up = float(line[20:30]) * 1e-3
+
+                atx_df.loc[index] = pd.Series(
+                    {
+                        "antenna_type": antenna_type,
+                        "satellite_or_serial_no": satellite,
+                        "valid_from": valid_from,
+                        "valid_until": valid_until,
+                        "constellation": constellation,
+                        "carrier_freq_id": carrier_freq_id,
+                        "pco_north_m": north,
+                        "pco_east_m": east,
+                        "pco_up_m": up,
+                    }
+                )
+
+                # skip lines until line with END OF FREQUENCY
+                while "END OF FREQUENCY" not in line:
+                    line = file.readline()
+                line = file.readline()
+
+            return file, atx_df
+
+        with open(filepath) as file:
+            atx_df = pd.DataFrame()
+            while True:
+                line = file.readline()
+                if not line:  # check if the end of file has been reached
+                    break
+                if "START OF ANTENNA" in line:
+                    file, atx_df_ant = read_antenna(file)
+                    atx_df = pd.concat([atx_df, atx_df_ant], ignore_index=True)
+
+        return atx_df
+
+    return parse_atx_cached(filepath_atx, hash_of_file_content(filepath_atx))
 
 
 def compute_pco_sat(query: pd.DataFrame, atx_df) -> np.array:
