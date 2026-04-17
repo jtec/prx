@@ -9,7 +9,6 @@ import logging
 import ftplib
 import os
 from pathlib import Path
-from typing import List, Tuple
 
 import georinex
 import pandas as pd
@@ -143,8 +142,9 @@ def get_sp3_files(
     mid_day_start: pd.Timestamp,
     mid_day_end: pd.Timestamp,
     db_folder=sp3_file_database_folder(),
-) -> List[Tuple[Path]]:
-    sp3_files = []
+) -> tuple[list[Path | None], list[Path | None]]:
+    sp3_orb_files = []
+    sp3_clk_files = []
     date = mid_day_start
     gps_week, _ = timestamp_to_gps_week_and_dow(date)
     while date <= mid_day_end:
@@ -161,16 +161,20 @@ def get_sp3_files(
                     gps_week, sp3_file_folder(date, db_folder), clk_filename
                 )
             if file_orb is not None and file_clk is not None:
-                sp3_files.append((file_orb, file_clk))
+                sp3_orb_files.append(file_orb)
+                sp3_clk_files.append(file_clk)
                 break
             # If we reach the end of the priority list without success
             if file_orb is None and file_clk is None and p == priority[-1]:
-                sp3_files.append((None, None))
+                sp3_orb_files.append(None)
+                sp3_clk_files.append(None)
         date += pd.Timedelta(1, unit="days")
-    return sp3_files
+    return sp3_orb_files, sp3_clk_files
 
 
-def discover_or_download_sp3_file(observation_file_path=Path) -> List[Tuple[Path]]:
+def discover_or_download_sp3_file(
+    observation_file_path=Path,
+) -> tuple[list[Path | None], list[Path | None]]:
     """
     Returns the path to a valid SP3 file (local or downloaded) corresponding to the observation file.
     Tries to respect a priority hierarchy: IGS FIN > COD FIN > GRG FIN > ... > IGS ULR.
@@ -187,5 +191,5 @@ def discover_or_download_sp3_file(observation_file_path=Path) -> List[Tuple[Path
         util.rinex_header_time_string_2_timestamp_ns(header["TIME OF LAST OBS"])
     )
 
-    sp3_files = get_sp3_files(t_start, t_end)
-    return sp3_files
+    sp3_orb_files, sp3_clk_files = get_sp3_files(t_start, t_end)
+    return sp3_orb_files, sp3_clk_files

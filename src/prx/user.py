@@ -28,6 +28,102 @@ def parse_prx_csv_file(prx_file: Path):
     return df, metadata
 
 
+def compute_iono_free_code_obs(df, obs_filter):
+    """
+    Compute a pd.DataFrame with iono-free code observations with the required columns for re-using spp_pt_lsq.
+
+    The observation combined shall be the ones used by IGS analysis center, so that the satellite code bias is 0 (
+    included in sp3 satellite clock).
+
+    """
+
+    def iono_free_combo(d: pd.DataFrame, c: str, freqs: list[str], col: list[str]):
+        """
+        Input:
+        - d: a reshaped df with 2-level column index (col, rnx_obs_id) and
+             3-level row index ("time_of_reception_in_receiver_time", "prn", "constellation").
+        - const: constellation letter
+        - freqs: list of rinex freq_id (middle char of rnx_obs_id). Ex: ["1", "2"] for ["C1C", "C2X"]
+        - col: list of column names
+
+        Output:
+        - dataframe with the iono-free combination of the columns col
+        """
+        assert d.index.get_level_values("constellation").nunique() == 1, (
+            "Function iono_free_combo works on single constellation dataframe."
+        )
+        assert d.columns.get_level_values(0).value_counts().eq(2).all(), (
+            "Function iono_free_combo needs only 2 obs per satellite."
+        )
+        assert "carrier_frequency_hz" in d.columns.get_level_values(0), (
+            "Function iono_free_combo needs the column 'carrier_frequency_hz'."
+        )
+
+        #  reshape to (n_row,1), to broadcast values in future operations
+        f1 = d.loc[:, pd.IndexSlice["carrier_frequency_hz", freqs[0]]].to_numpy()[
+            :, np.newaxis
+        ]
+        f2 = d.loc[:, pd.IndexSlice["carrier_frequency_hz", freqs[1]]].to_numpy()[
+            :, np.newaxis
+        ]
+        return pd.DataFrame(
+            data=(
+                d.loc[:, pd.IndexSlice[col, freqs[0]]].to_numpy() * f1**2
+                - d.loc[:, pd.IndexSlice[col, freqs[1]]].to_numpy() * f2**2
+            )
+            / (f1**2 - f2**2),
+            index=d.index,
+            columns=col,
+        ).drop(columns=["carrier_frequency_hz"])
+
+    col_index = ["time_of_reception_in_receiver_time", "prn", "constellation"]
+    col_freq_dependent = [
+        "C_obs_m",
+        "sat_pos_x_m",
+        "sat_pos_y_m",
+        "sat_pos_z_m",
+        "carrier_frequency_hz",
+    ]
+    col_constant = [
+        "tropo_delay_m",
+        "sagnac_effect_m",
+        "sat_clock_offset_m",
+        "relativistic_clock_effect_m",
+    ]
+
+    df_list = []
+    for const, obs_list in obs_filter.items():  # loop on constellation
+        # Keep single constellation data
+        df_const = df.loc[df.constellation == const]
+
+        # compute iono-free combinations of frequency-dependent parameters
+        pd_ionofree = (
+            df_const.assign(rnx_freq_id=df_const.rnx_obs_identifier.str[0])
+            .pivot(index=col_index, columns="rnx_freq_id", values=col_freq_dependent)
+            .pipe(
+                lambda x: iono_free_combo(
+                    x, const, [rnx_id[0] for rnx_id in obs_list], col_freq_dependent
+                )
+            )
+        )
+
+        # keep value for parameters not depending on frequency
+        pd_constant = df_const.loc[
+            df_const.rnx_obs_identifier == obs_list[0]
+        ].set_index(col_index)[col_constant]
+
+        df_list.append(
+            pd.concat([pd_ionofree, pd_constant], axis=1)
+            .assign(
+                iono_delay_m=0, sat_code_bias_m=0
+            )  # set iono and sat code bias to 0
+            .reset_index()
+            .dropna()
+        )
+
+    return pd.concat(df_list)
+
+
 def spp_vt_lsq(df, p_ecef_m):
     df["D_obs_mps"] = -df.D_obs_hz * cGpsSpeedOfLight_mps / df.carrier_frequency_hz
     # Remove satellite velocity projected onto line of sight

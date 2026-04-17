@@ -9,13 +9,9 @@ import pytest
 
 from prx import util
 from prx import main
-from prx.user import (
-    parse_prx_csv_file_metadata,
-    parse_prx_csv_file,
-    spp_pt_lsq,
-    spp_vt_lsq,
-    bootstrap_coarse_receiver_position,
-)
+from prx import user
+from prx.precise_corrections.antex.antex_file_discovery import atx_file_database_folder
+from prx.precise_corrections.sp3.sp3_file_discovery import sp3_file_database_folder
 from prx.rinex_nav import nav_file_discovery
 
 log = util.get_logger(__name__)
@@ -37,21 +33,40 @@ def input_for_test_tlse(tmp_path_factory):
     os.makedirs(test_directory)
     datasets_directory = Path(__file__).parent / "datasets"
     # Also provide ephemerides on disk so the test does not have to download them:
-    compressed_compact_rinex_file = (
-        datasets_directory
-        / "TLSE_2023001"
-        / "TLSE00FRA_R_20230010100_10S_01S_MO.crx.gz"
+    compressed_crx = (
+        datasets_directory / "TLSE_2023001/TLSE00FRA_R_20230010100_10S_01S_MO.crx.gz"
     )
-    ephemerides_file = (
-        datasets_directory / "TLSE_2023001/BRDC00IGS_R_20230010000_01D_MN.rnx.gz"
-    )
-    for file in [compressed_compact_rinex_file, ephemerides_file]:
+    rnx_nav = datasets_directory / "TLSE_2023001/BRDC00IGS_R_20230010000_01D_MN.rnx.gz"
+    for file in [compressed_crx, rnx_nav]:
         shutil.copy(
             file,
             test_directory / file.name,
         )
 
-    yield test_directory / compressed_compact_rinex_file.name
+    # copy and uncompress precise correction files to local database
+    os.makedirs(sp3_file_database_folder() / "2023/001/", exist_ok=True)
+    sp3_orb = (
+        datasets_directory / "TLSE_2023001/COD0MGXFIN_20230010000_01D_05M_ORB.SP3.gz"
+    )
+    sp3_orb_local = shutil.copy(
+        sp3_orb, sp3_file_database_folder() / "2023/001" / sp3_orb.name
+    )
+    assert sp3_orb_local.exists()
+
+    sp3_clk = (
+        datasets_directory / "TLSE_2023001/COD0MGXFIN_20230010000_01D_30S_CLK.CLK.gz"
+    )
+    sp3_clk_local = shutil.copy(
+        sp3_clk, sp3_file_database_folder() / "2023/001" / sp3_clk.name
+    )
+    assert sp3_clk_local.exists()
+
+    os.makedirs(atx_file_database_folder(), exist_ok=True)
+    atx = datasets_directory / "igs20_2408_reduced_size.atx"
+    atx_local = shutil.copy(atx, atx_file_database_folder() / atx.name)
+    assert atx_local.exists()
+
+    yield test_directory / compressed_crx.name
     shutil.rmtree(test_directory)
 
 
@@ -235,7 +250,7 @@ def run_rinex_through_prx(rinex_obs_file: Path, prx_level: int = 2):
     main.process(observation_file_path=rinex_obs_file, prx_level=prx_level)
     expected_prx_file = Path(str(rinex_obs_file).replace("crx.gz", "csv"))
     assert expected_prx_file.exists()
-    records, metadata = parse_prx_csv_file(expected_prx_file)
+    records, metadata = user.parse_prx_csv_file(expected_prx_file)
     records = pd.read_csv(expected_prx_file, comment="#")
     assert not records.empty
     assert metadata
@@ -266,7 +281,7 @@ def test_spp_lsq_nist(input_for_test_nist):
         ("R",),
     ]:
         obs = df_first_epoch[df.constellation.isin(constellations_to_use)]
-        pt_lsq = spp_pt_lsq(obs)
+        pt_lsq = user.spp_pt_lsq(obs)
         position_offset = pt_lsq[0:3, :] - np.array(
             metadata["approximate_receiver_ecef_position_m"]
         ).reshape(-1, 1)
@@ -302,8 +317,8 @@ def test_spp_lsq_tlse(input_for_test_tlse):
         ("R",),
     ]:
         obs = df_first_epoch[df.constellation.isin(constellations_to_use)]
-        pt_lsq = spp_pt_lsq(obs)
-        vt_lsq = spp_vt_lsq(obs, p_ecef_m=pt_lsq[0:3, :])
+        pt_lsq = user.spp_pt_lsq(obs)
+        vt_lsq = user.spp_vt_lsq(obs, p_ecef_m=pt_lsq[0:3, :])
         position_offset = pt_lsq[0:3, :] - np.array(
             metadata["approximate_receiver_ecef_position_m"]
         ).reshape(-1, 1)
@@ -316,6 +331,111 @@ def test_spp_lsq_tlse(input_for_test_tlse):
         log.info(f"Velocity offset: {velocity_offset}")
         assert np.max(np.abs(position_offset)) < 1e1
         assert np.max(np.abs(velocity_offset)) < 1e-1
+
+
+def test_spp_lsq_tlse_single_freq(input_for_test_tlse):
+    obs_filter = {"G": ["1C"], "E": ["1X"], "C": ["2I"], "R": ["1C"]}
+    df, metadata = run_rinex_through_prx(input_for_test_tlse, prx_level=2)
+    df["sv"] = df["constellation"].astype(str) + df["prn"].astype(str)
+    df_first_epoch = df[
+        (
+            df.time_of_reception_in_receiver_time
+            == df.time_of_reception_in_receiver_time.min()
+        )
+        & (df.sat_elevation_deg > 10)
+    ]
+    for constellations_to_use in [
+        ("G",),
+        ("E",),
+        ("C",),
+        ("R",),
+        ("G", "E", "C", "R"),
+    ]:
+        query_filter = " or ".join(
+            [
+                f"((constellation == '{const}') and (rnx_obs_identifier in {signal}))"
+                for const, signal in obs_filter.items()
+                if const in constellations_to_use
+            ]
+        )
+        obs = df_first_epoch.query(query_filter)
+        pt_lsq = user.spp_pt_lsq(obs)
+        vt_lsq = user.spp_vt_lsq(obs, p_ecef_m=pt_lsq[0:3, :])
+        position_offset = pt_lsq[0:3, :] - np.array(
+            metadata["approximate_receiver_ecef_position_m"]
+        ).reshape(-1, 1)
+        # Static receiver, so:
+        velocity_offset = vt_lsq[0:3, :]
+        log.info(
+            f"Using constellations: {constellations_to_use}, {len(obs.sv.unique())} SVs"
+        )
+        log.info(f"Position offset: {np.squeeze(position_offset)}")
+        log.info(f"Velocity offset: {np.squeeze(velocity_offset)}")
+        assert np.max(np.abs(position_offset)) < 3
+        assert np.max(np.abs(velocity_offset)) < 3e-2
+
+
+def test_spp_lsq_tlse_with_precise_corrections(input_for_test_tlse):
+    """
+    Use iono-free combinations considered by IGS conventions (CODE Analysis Center):
+    | Constellation | Frequency pair             |
+    | --------------|----------------------------|
+    | GPS           | L1, L2                     |
+    | GLONASS       | L1, L2 (slot‑dependent)    |
+    | Galileo       | E1, E5a                    |
+    | BeiDou        | B1I, B2I                   |
+    | QZSS          [ L1, L2                     |
+    | IRNSS         | Not standardized           |
+
+    Ref:
+    - https://www.bernese.unibe.ch/publist/2015/pres/EO_BSW2015_MGEX_clock_determination_at_CODE.pdf (slide 3)
+    - https://www.mdpi.com/2072-4292/12/9/1415 (table 2)
+    """
+    obs_filter = {
+        "G": ["1C", "2X"],
+        "E": ["1X", "5X"],
+        "C": ["2I", "7I", "7D"],  # some BDS3 sats use 7D instead of 7I
+        "R": ["1C", "2C"],
+    }
+    df, metadata = run_rinex_through_prx(input_for_test_tlse, prx_level=3)
+    df_first_epoch = df[
+        (
+            df.time_of_reception_in_receiver_time
+            == df.time_of_reception_in_receiver_time.min()
+        )
+        & (df.sat_elevation_deg > 10)
+    ]
+    for constellations_to_use in [
+        ("G",),
+        ("E",),
+        ("C",),
+        ("R",),
+        ("G", "E", "C", "R"),
+    ]:
+        current_obs_filter = {
+            const: signal
+            for const, signal in obs_filter.items()
+            if const in constellations_to_use
+        }
+        query_filter = " or ".join(
+            [
+                f"((constellation == '{const}') and (rnx_obs_identifier in {signal}))"
+                for const, signal in current_obs_filter.items()
+            ]
+        )
+        obs = user.compute_iono_free_code_obs(
+            df_first_epoch.query(query_filter), current_obs_filter
+        )
+        pt_lsq = user.spp_pt_lsq(obs)
+        position_offset = pt_lsq[0:3, :] - np.array(
+            metadata["approximate_receiver_ecef_position_m"]
+        ).reshape(-1, 1)
+
+        log.info(
+            f"Using constellations: {constellations_to_use}, {obs.pipe(lambda d: obs.constellation + obs.prn.astype(str)).nunique()} SVs"
+        )
+        log.info(f"Position offset: {np.squeeze(position_offset)}")
+        assert np.max(np.abs(position_offset)) < 1e1
 
 
 def test_spp_lsq_tlse_2024(input_for_test_tlse_2024):
@@ -338,7 +458,7 @@ def test_spp_lsq_tlse_2024(input_for_test_tlse_2024):
 
     # observation with every sat
     obs = df_first_epoch[df.constellation.isin(constellation_to_use)]
-    pt_lsq = spp_pt_lsq(obs)
+    pt_lsq = user.spp_pt_lsq(obs)
     position_offset = pt_lsq[0:3, :] - np.array(
         metadata["approximate_receiver_ecef_position_m"]
     ).reshape(-1, 1)
@@ -350,7 +470,7 @@ def test_spp_lsq_tlse_2024(input_for_test_tlse_2024):
 
     # observation without G27, using health_flag
     obs_without_G27 = obs.loc[obs.health_flag == 0]  # keep only healthy satellites
-    pt_lsq_without_G27 = spp_pt_lsq(obs_without_G27)
+    pt_lsq_without_G27 = user.spp_pt_lsq(obs_without_G27)
     position_offset_without_G27 = pt_lsq_without_G27[0:3, :] - np.array(
         metadata["approximate_receiver_ecef_position_m"]
     ).reshape(-1, 1)
@@ -380,8 +500,8 @@ def test_spp_lsq_for_obs_file_across_two_days(
         ("G",),
     ]:
         obs = df_first_epoch[df.constellation.isin(constellations_to_use)]
-        pt_lsq = spp_pt_lsq(obs)
-        vt_lsq = spp_vt_lsq(obs, p_ecef_m=pt_lsq[0:3, :])
+        pt_lsq = user.spp_pt_lsq(obs)
+        vt_lsq = user.spp_vt_lsq(obs, p_ecef_m=pt_lsq[0:3, :])
         position_offset = pt_lsq[0:3, :] - np.array(
             metadata["approximate_receiver_ecef_position_m"]
         ).reshape(-1, 1)
@@ -399,7 +519,7 @@ def test_prx_level_1(input_for_test_tlse):
     assert expected_prx_file.exists()
 
     # Read first line of file, containing meta-data
-    metadata = parse_prx_csv_file_metadata(expected_prx_file)
+    metadata = user.parse_prx_csv_file_metadata(expected_prx_file)
     assert metadata["prx_level"] == 1
 
     # Read the CSV file
@@ -416,7 +536,6 @@ def test_prx_level_1(input_for_test_tlse):
         "constellation",
         "prn",
         "carrier_frequency_hz",
-        "frequency_slot",
         "health_flag",
         "LLI",
         "sat_pos_x_m",
@@ -445,7 +564,7 @@ def test_prx_level_2(input_for_test_tlse):
     assert expected_prx_file.exists()
 
     # Read first line of file, containing meta-data
-    metadata = parse_prx_csv_file_metadata(expected_prx_file)
+    metadata = user.parse_prx_csv_file_metadata(expected_prx_file)
     assert metadata["prx_level"] == 2
 
     # Read the CSV file
@@ -462,7 +581,6 @@ def test_prx_level_2(input_for_test_tlse):
         "constellation",
         "prn",
         "carrier_frequency_hz",
-        "frequency_slot",
         "health_flag",
         "LLI",
         "sat_pos_x_m",
@@ -473,7 +591,6 @@ def test_prx_level_2(input_for_test_tlse):
         "sat_vel_z_mps",
         "sat_clock_offset_m",
         "sat_clock_drift_mps",
-        "sat_code_bias_m",
         "relativistic_clock_effect_m",
         "sagnac_effect_m",
         "tropo_delay_m",
@@ -491,12 +608,58 @@ def test_prx_level_2(input_for_test_tlse):
 
 
 def test_prx_level_3(input_for_test_tlse):
-    """
-    Test is currently inactive. To be changed once PRX level 3 works.
-    """
-    # check that calling main.process with "prx_level=3" will raise an AssertionError
-    with pytest.raises(AssertionError):
-        main.process(observation_file_path=input_for_test_tlse, prx_level=3)
+    main.process(observation_file_path=input_for_test_tlse, prx_level=3)
+    expected_prx_file = Path(str(input_for_test_tlse).replace("crx.gz", "csv"))
+    assert expected_prx_file.exists()
+
+    # Read first line of file, containing meta-data
+    metadata = user.parse_prx_csv_file_metadata(expected_prx_file)
+    assert metadata["prx_level"] == 3
+
+    # Read the CSV file
+    df = pd.read_csv(expected_prx_file, comment="#")
+
+    # Expected CSV column names
+    expected_column_names = {
+        "time_of_reception_in_receiver_time",
+        "C_obs_m",
+        "D_obs_hz",
+        "L_obs_cycles",
+        "S_obs_dBHz",
+        "rnx_obs_identifier",
+        "constellation",
+        "prn",
+        "carrier_frequency_hz",
+        "health_flag",
+        "LLI",
+        "sat_pos_x_m",
+        "sat_pos_y_m",
+        "sat_pos_z_m",
+        "sat_pos_com_x_m",
+        "sat_pos_com_y_m",
+        "sat_pos_com_z_m",
+        "pco_sat_x_m",
+        "pco_sat_y_m",
+        "pco_sat_z_m",
+        "sat_vel_x_mps",
+        "sat_vel_y_mps",
+        "sat_vel_z_mps",
+        "sat_clock_offset_m",
+        "sat_clock_drift_mps",
+        "relativistic_clock_effect_m",
+        "sagnac_effect_m",
+        "tropo_delay_m",
+        "iono_delay_m",
+        "sat_elevation_deg",
+        "sat_azimuth_deg",
+        "sat_code_bias_m",
+        "sat_carrier_bias_m",
+    }
+
+    # Checking if all renamed parameters exist in the dataframe columns
+    assert set(df.columns) == expected_column_names, (
+        f"Additional columns in computed prx file: {set(df.columns).difference(expected_column_names)}"
+    )
 
 
 def test_function_call_with_alternative_tropo(input_for_test_tlse):
@@ -540,7 +703,7 @@ def test_bootstrap_coarse_receiver_position(input_for_test_tlse):
     )
 
     # Compute solution from first epoch with more than 4 GPS L1C/A observations, without minimum corrections
-    solution = bootstrap_coarse_receiver_position(
+    solution = user.bootstrap_coarse_receiver_position(
         input_for_test_tlse, aux_files["broadcast_ephemerides"]
     )
 

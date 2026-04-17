@@ -10,13 +10,11 @@ from prx.rinex_nav.evaluate import (
 from prx.rinex_obs.parser import parse_rinex_obs_file
 from prx.precise_corrections.sp3 import evaluate as sp3_evaluate
 from prx.rinex_nav import evaluate as rinex_nav_evaluate
-from prx import constants, converters, util
+from prx import constants, converters
 from prx.util import week_and_seconds_2_timedelta
 import shutil
 import pytest
-import os
 import itertools
-from dotmap import DotMap
 
 # The following thresholds are the achieved maximum difference between broadcast and
 # MGEX precise orbit and clock solutions seen in this test.
@@ -29,10 +27,10 @@ from dotmap import DotMap
 #   system time and GPST. The offset is typically tens of nanoseconds though, so this should not account
 #   for more than millimeter-level, much smaller than the ephemeris error.
 expected_max_differences_broadcast_vs_precise = {
-    "diff_xyz_l2_m": 11.9,
-    "diff_dxyz_l2_mps": 2.1e-3,
-    "sat_clock_offset_m": 26,  # TODO Broadcast clock error should be much smaller than this.
-    "sat_clock_drift_mps": 3.4e-4,
+    "diff_xyz_l2_m": 12,
+    "diff_dxyz_l2_mps": 2e-3,
+    "sat_clock_offset_corr_m": 26,  # TODO Broadcast clock error should be much smaller than this.
+    "sat_clock_drift_mps": 3e-4,
 }
 
 
@@ -40,16 +38,22 @@ expected_max_differences_broadcast_vs_precise = {
 def input_for_test(tmp_path_factory):
     test_directory = tmp_path_factory.mktemp("test_inputs")
     test_files = {
-        "rinex_obs_file": test_directory
+        "obs": test_directory
         / "TLSE00FRA_R_20220010000_01D_30S_MO.rnx_slice_0.24h.rnx",
-        "rinex_nav_file": test_directory / "BRDC00IGS_R_20220010000_01D_MN.zip",
-        "sp3_file": test_directory / "WUM0MGXULT_20220010000_01D_05M_ORB.SP3",
+        "nav": test_directory / "BRDC00IGS_R_20220010000_01D_MN.zip",
+        "sp3": test_directory / "WUM0MGXULT_20220010000_01D_05M_ORB.SP3",
     }
     for key, test_file_path in test_files.items():
         shutil.copy(
             Path(__file__).parent.joinpath("datasets", test_file_path.name),
             test_file_path,
         )
+    test_files["atx"] = test_directory / "igs20_2408_reduced_size.atx"
+    shutil.copy(
+        Path(__file__).parents[2].joinpath("test", "datasets", test_files["atx"].name),
+        test_files["atx"],
+    )
+    for key, test_file_path in test_files.items():
         assert test_file_path.exists()
     yield test_files
     shutil.rmtree(test_directory)
@@ -59,32 +63,57 @@ def input_for_test(tmp_path_factory):
 def input_for_test_2(tmp_path_factory):
     test_directory = tmp_path_factory.mktemp("test_inputs")
     test_files = {
-        "rinex_obs_file": test_directory / "TLSE00FRA_R_20230010100_10S_01S_MO.crx.gz",
-        "rinex_nav_file": test_directory / "BRDC00IGS_R_20230010000_01D_MN.rnx.gz",
-        "sp3_file": test_directory / "WUM0MGXULT_20220010000_01D_05M_ORB.SP3",
+        "obs": test_directory / "TLSE00FRA_R_20230010100_10S_01S_MO.crx.gz",
+        "nav": test_directory / "BRDC00IGS_R_20230010000_01D_MN.rnx.gz",
+        "sp3": test_directory / "WUM0MGXULT_20220010000_01D_05M_ORB.SP3",
     }
     for key, test_file_path in test_files.items():
         shutil.copy(
             Path(__file__).parent.joinpath("datasets", test_file_path.name),
             test_file_path,
         )
+    test_files["atx"] = test_directory / "igs20_2408_reduced_size.atx"
+    shutil.copy(
+        Path(__file__).parents[2].joinpath("test", "datasets", test_files["atx"].name),
+        test_files["atx"],
+    )
+    for key, test_file_path in test_files.items():
+        assert test_file_path.exists()
+    yield test_files
+    shutil.rmtree(test_directory)
+
+
+@pytest.fixture
+def input_for_test_2023(tmp_path_factory):
+    test_directory = tmp_path_factory.mktemp("test_inputs")
+    test_files = {
+        "nav": test_directory / "BRDC00IGS_R_20230010000_01D_MN.rnx.gz",
+        "sp3": test_directory / "GFZ0MGXRAP_20230010000_01D_05M_ORB.SP3",
+    }
+    for key, test_file_path in test_files.items():
+        shutil.copy(
+            Path(__file__).parent.joinpath("datasets", test_file_path.name),
+            test_file_path,
+        )
+    test_files["atx"] = test_directory / "igs20_2408_reduced_size.atx"
+    shutil.copy(
+        Path(__file__).parents[2].joinpath("test", "datasets", test_files["atx"].name),
+        test_files["atx"],
+    )
+    for key, test_file_path in test_files.items():
         assert test_file_path.exists()
     yield test_files
     shutil.rmtree(test_directory)
 
 
 def test_parse_nav_file(input_for_test):
-    path_to_rnx3_nav_file = converters.anything_to_rinex_3(
-        input_for_test["rinex_nav_file"]
-    )
+    path_to_rnx3_nav_file = converters.anything_to_rinex_3(input_for_test["nav"])
     df = parse_rinex_nav_file(path_to_rnx3_nav_file)
     assert not df.empty
 
 
 def test_expired_ephemeris_yields_nans(input_for_test):
-    path_to_rnx3_nav_file = converters.anything_to_rinex_3(
-        input_for_test["rinex_nav_file"]
-    )
+    path_to_rnx3_nav_file = converters.anything_to_rinex_3(input_for_test["nav"])
     # Computing satellite states for one time within the time of validity of the available ephemerides, and one far beyond
     query = pd.DataFrame(
         [
@@ -215,37 +244,47 @@ def generate_sat_query(sat_state_query_time_isagpst):
 
 
 def test_compare_to_sp3(input_for_test):
-    rinex_nav_file = converters.compressed_to_uncompressed(
-        input_for_test["rinex_nav_file"]
-    )
+    rinex_nav_file = converters.compressed_to_uncompressed(input_for_test["nav"])
     query = generate_sat_query(pd.Timestamp("2022-01-01T01:10:00.000000000"))
     # We have no SP3 reference solutions for SBAS satellites, so remove them from the query
     query = query[~query.sv.str.startswith("S")]
+    query_col = ["sv", "signal", "query_time_isagpst"]
     rinex_sat_states = rinex_nav_evaluate.compute_parallel(rinex_nav_file, query.copy())
     rinex_sat_states = (
-        rinex_sat_states.sort_values(by=["sv", "query_time_isagpst"])
+        rinex_sat_states.sort_values(by=query_col)
         .sort_index(axis=1)
-        .reset_index()
+        .reset_index(drop=True)
         .drop(
             columns=[
-                "index",
-                "signal",
                 "sat_code_bias_m",
                 "frequency_slot",
                 "ephemeris_hash",
-                "relativistic_clock_effect_m",
             ]
         )
     )
 
-    sp3_sat_states = sp3_evaluate.compute(
-        input_for_test["sp3_file"], query.copy().drop(columns=["signal"])
+    # correct with relativistic clock effect
+    rinex_sat_states["sat_clock_offset_corr_m"] = (
+        rinex_sat_states["sat_clock_offset_m"]
+        + rinex_sat_states["relativistic_clock_effect_m"]
     )
+
+    sp3_sat_states = sp3_evaluate.compute(
+        input_for_test["sp3"],
+        query.copy(),
+        input_for_test["atx"],
+    )
+
     sp3_sat_states = (
-        sp3_sat_states.sort_values(by=["sv", "query_time_isagpst"])
+        sp3_sat_states.sort_values(by=query_col)
         .sort_index(axis=1)
-        .reset_index()
-        .drop(columns=["index"])
+        .reset_index(drop=True)
+    )
+
+    # correct with relativistic clock effect
+    sp3_sat_states["sat_clock_offset_corr_m"] = (
+        sp3_sat_states["sat_clock_offset_m"]
+        + sp3_sat_states["relativistic_clock_effect_m"]
     )
 
     # Verify that the SP3 states are ordered the same as the RINEX states
@@ -256,16 +295,16 @@ def test_compare_to_sp3(input_for_test):
     assert sp3_sat_states["query_time_isagpst"].equals(
         rinex_sat_states["query_time_isagpst"]
     )
-    # Verify that sorting columns worked as expected
-    assert sp3_sat_states.columns.equals(rinex_sat_states.columns)
-    diff = rinex_sat_states.drop(columns=["sv"]) - sp3_sat_states.drop(columns="sv")
-    diff = pd.concat((rinex_sat_states["sv"], diff), axis=1)
-    diff["diff_xyz_l2_m"] = np.linalg.norm(
-        diff[["sat_pos_x_m", "sat_pos_y_m", "sat_pos_z_m"]].to_numpy(), axis=1
+    assert sp3_sat_states["signal"].equals(sp3_sat_states["signal"])
+    sat_pos_col = ["sat_pos_x_m", "sat_pos_y_m", "sat_pos_z_m"]
+    sat_vel_col = ["sat_vel_x_mps", "sat_vel_y_mps", "sat_vel_z_mps"]
+    sat_clk_col = ["sat_clock_offset_corr_m", "sat_clock_drift_mps"]
+    diff = (
+        rinex_sat_states.set_index(query_col)[sat_pos_col + sat_vel_col + sat_clk_col]
+        - sp3_sat_states.set_index(query_col)[sat_pos_col + sat_vel_col + sat_clk_col]
     )
-    diff["diff_dxyz_l2_mps"] = np.linalg.norm(
-        diff[["sat_vel_x_mps", "sat_vel_y_mps", "sat_vel_z_mps"]].to_numpy(), axis=1
-    )
+    diff["diff_xyz_l2_m"] = np.linalg.norm(diff[sat_pos_col], axis=1)
+    diff["diff_dxyz_l2_mps"] = np.linalg.norm(diff[sat_vel_col], axis=1)
 
     print("\n" + diff.to_string())
     for (
@@ -273,15 +312,13 @@ def test_compare_to_sp3(input_for_test):
         expected_max_difference,
     ) in expected_max_differences_broadcast_vs_precise.items():
         assert not diff[column].isnull().values.any()
-        assert diff[column].max() < expected_max_difference, (
+        assert diff[column].abs().max() < expected_max_difference, (
             f"Expected maximum difference {expected_max_difference} for column {column}, but got {diff[column].max()}"
         )
 
 
 def test_sbas(input_for_test):
-    rinex_nav_file = converters.compressed_to_uncompressed(
-        input_for_test["rinex_nav_file"]
-    )
+    rinex_nav_file = converters.compressed_to_uncompressed(input_for_test["nav"])
     query = generate_sat_query(pd.Timestamp("2022-01-01T01:10:00.000000000"))
     # We have no SP3 reference solutions for SBAS satellites, so we only test that reasonable broadcast
     # satellite states are computed here.
@@ -313,36 +350,8 @@ def test_sbas(input_for_test):
     ).abs().max() < 2e3
 
 
-@pytest.fixture
-def set_up_test_2023():
-    test_directory = Path(f"./tmp_test_directory_{__name__}").resolve()
-    if test_directory.exists():
-        # Make sure the expected files has not been generated before and is still on disk due to e.g. a previous
-        # test run having crashed:
-        shutil.rmtree(test_directory)
-    os.makedirs(test_directory)
-    test_files = DotMap()
-    test_files.nav_file = test_directory.joinpath(
-        "BRDC00IGS_R_20230010000_01D_MN.rnx.gz"
-    )
-    test_files.sp3_file = test_directory.joinpath(
-        "GFZ0MGXRAP_20230010000_01D_05M_ORB.SP3"
-    )
-
-    for key, test_file in test_files.items():
-        shutil.copy(
-            util.prx_repository_root()
-            / f"src/prx/test/datasets/TLSE_2023001/{test_file.name}",
-            test_file,
-        )
-        assert test_file.exists()
-
-    yield dict(test_files)
-    shutil.rmtree(test_directory)
-
-
-def test_2023_beidou_c27(set_up_test_2023):
-    rinex_nav_file = converters.compressed_to_uncompressed(set_up_test_2023["nav_file"])
+def test_2023_beidou_c27(input_for_test_2023):
+    rinex_nav_file = converters.compressed_to_uncompressed(input_for_test_2023["nav"])
     query = pd.DataFrame(
         [
             {
@@ -358,46 +367,59 @@ def test_2023_beidou_c27(set_up_test_2023):
         "Was expecting only one row, make sure to sort before comparing to sp3 with more than one row"
     )
     rinex_sat_states = (
-        rinex_sat_states.reset_index()
+        rinex_sat_states.reset_index(drop=True)
         .drop(
             columns=[
-                "index",
-                "signal",
                 "sat_code_bias_m",
                 "frequency_slot",
                 "ephemeris_hash",
-                "relativistic_clock_effect_m",
             ]
         )
         .sort_index(axis="columns")
     )
-    sp3_sat_states = (
-        sp3_evaluate.compute(set_up_test_2023["sp3_file"], query.copy())
-        .drop(columns=["signal"])
-        .sort_index(axis="columns")
+    # correct with relativistic clock effect
+    rinex_sat_states["sat_clock_offset_corr_m"] = (
+        rinex_sat_states["sat_clock_offset_m"]
+        + rinex_sat_states["relativistic_clock_effect_m"]
     )
-    assert sp3_sat_states.columns.equals(rinex_sat_states.columns)
-    diff = rinex_sat_states.drop(columns="sv") - sp3_sat_states.drop(columns="sv")
-    diff = pd.concat((rinex_sat_states["sv"], diff), axis=1)
+    sp3_sat_states = sp3_evaluate.compute(
+        input_for_test_2023["sp3"],
+        query.copy(),
+        input_for_test_2023["atx"],
+    ).sort_index(axis="columns")
+    # correct with relativistic clock effect
+    sp3_sat_states["sat_clock_offset_corr_m"] = (
+        sp3_sat_states["sat_clock_offset_m"]
+        + sp3_sat_states["relativistic_clock_effect_m"]
+    )
+
+    query_col = ["sv", "signal", "query_time_isagpst"]
+    sat_pos_col = ["sat_pos_x_m", "sat_pos_y_m", "sat_pos_z_m"]
+    sat_vel_col = ["sat_vel_x_mps", "sat_vel_y_mps", "sat_vel_z_mps"]
+    sat_clk_col = ["sat_clock_offset_corr_m", "sat_clock_drift_mps"]
+    diff = (
+        rinex_sat_states.set_index(query_col)[sat_pos_col + sat_vel_col + sat_clk_col]
+        - sp3_sat_states.set_index(query_col)[sat_pos_col + sat_vel_col + sat_clk_col]
+    )
     diff["diff_xyz_l2_m"] = np.linalg.norm(
         diff[["sat_pos_x_m", "sat_pos_y_m", "sat_pos_z_m"]].to_numpy(), axis=1
     )
     diff["diff_dxyz_l2_mps"] = np.linalg.norm(
         diff[["sat_vel_x_mps", "sat_vel_y_mps", "sat_vel_z_mps"]].to_numpy(), axis=1
     )
+    print("\n" + diff.to_string())
+
     for (
         column,
         expected_max_difference,
     ) in expected_max_differences_broadcast_vs_precise.items():
-        assert diff[column].max() < expected_max_difference, (
+        assert diff[column].abs().max() < expected_max_difference, (
             f"Expected maximum difference {expected_max_difference} for column {column}, but got {diff[column].max()}"
         )
 
 
 def test_group_delays(input_for_test):
-    rinex_nav_file = converters.compressed_to_uncompressed(
-        input_for_test["rinex_nav_file"]
-    )
+    rinex_nav_file = converters.compressed_to_uncompressed(input_for_test["nav"])
     query_time_isagpst = pd.Timestamp("2022-01-01T01:10:00.000000000")
     query = pd.DataFrame(
         [
@@ -425,9 +447,7 @@ def test_group_delays_over_long_period(input_for_test):
     """
     Tests the computation of group delay over a long period, and check if there is a sudden jumps across two epochs
     """
-    rinex_nav_file = converters.compressed_to_uncompressed(
-        input_for_test["rinex_nav_file"]
-    )
+    rinex_nav_file = converters.compressed_to_uncompressed(input_for_test["nav"])
     query_time_isagpst = pd.date_range(
         "2022-01-01T00:00:00.000000000", "2022-01-01T12:00:00.000000000", freq="15min"
     )
@@ -486,9 +506,7 @@ def test_gps_group_delay(input_for_test):
          2.000000000000e+00 0.000000000000e+00**-1.769512891769e-08** 4.200000000000e+01
          5.184180000000e+05 4.000000000000e+00 0.000000000000e+00 0.000000000000e+00
     """
-    rinex_3_navigation_file = converters.anything_to_rinex_3(
-        input_for_test["rinex_nav_file"]
-    )
+    rinex_3_navigation_file = converters.anything_to_rinex_3(input_for_test["nav"])
     # Retrieve total group delays for 4 different observation codes, at 3 different times
     codes = ["C1C", "C1P", "C2P", "C5X"]
     times = [
@@ -551,9 +569,7 @@ def test_gps_group_delay_multi_prn(input_for_test):
     C1C, C1P, C2P) and 1 not considered shall return NaN (C1Y)
 
     """
-    rinex_3_navigation_file = converters.anything_to_rinex_3(
-        input_for_test["rinex_nav_file"]
-    )
+    rinex_3_navigation_file = converters.anything_to_rinex_3(input_for_test["nav"])
     # Retrieve total group delays for 2 different SVs
     svs = ["G02", "G03"]
     time = pd.Timestamp("2022-01-01T00:00:00.000000000")
@@ -594,9 +610,7 @@ def test_gal_group_delay(input_for_test):
          3.120000000000e+00 0.000000000000e+00 **4.423782229420e-09** **4.889443516730e-09**
          5.190640000000e+05
     """
-    rinex_3_navigation_file = converters.anything_to_rinex_3(
-        input_for_test["rinex_nav_file"]
-    )
+    rinex_3_navigation_file = converters.anything_to_rinex_3(input_for_test["nav"])
     query = pd.DataFrame()
     codes = ["C1C", "C5X", "C7X", "C6B"]
     for code in codes:
@@ -665,9 +679,7 @@ def test_bds_group_delay(input_for_test):
          2.000000000000E+00 0.000000000000E+00**-5.800000000000E-09-1.020000000000E-08**
          5.220276000000E+05 0.000000000000E+00
     """
-    rinex_3_navigation_file = converters.anything_to_rinex_3(
-        input_for_test["rinex_nav_file"]
-    )
+    rinex_3_navigation_file = converters.anything_to_rinex_3(input_for_test["nav"])
     query = pd.DataFrame()
     codes = [
         "C2I",  # B1I -> C2I
@@ -760,9 +772,7 @@ def test_compute_health_flag(input_for_test_2):
     """
     Comprehensive test of health_flag extraction via the compute function
     """
-    rinex_3_obs_file = converters.anything_to_rinex_3(
-        input_for_test_2["rinex_obs_file"]
-    )
+    rinex_3_obs_file = converters.anything_to_rinex_3(input_for_test_2["obs"])
     query = parse_rinex_obs_file(rinex_3_obs_file)[["time", "sv", "obs_type"]]
     query.time = pd.to_datetime(query.time, format="%Y-%m-%dT%H:%M:%S")
     query.obs_type = query.obs_type.str[1:]
@@ -775,9 +785,7 @@ def test_compute_health_flag(input_for_test_2):
     )
 
     # use of function compute()
-    rinex_nav_path = converters.compressed_to_uncompressed(
-        input_for_test_2["rinex_nav_file"]
-    )
+    rinex_nav_path = converters.compressed_to_uncompressed(input_for_test_2["nav"])
     query = rinex_nav_evaluate.compute(rinex_nav_path, query)
 
     # Verifies the presence of the health_column

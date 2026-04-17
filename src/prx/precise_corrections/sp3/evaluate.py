@@ -1,12 +1,10 @@
-import pandas as pd
 import numpy as np
-from scipy.interpolate import lagrange
-from numpy.polynomial.polynomial import Polynomial
 import georinex
 from pathlib import Path
-import matplotlib.pyplot as plt
 
+from scipy.interpolate import KroghInterpolator
 from prx import constants, util
+from prx.precise_corrections.antex import antex_processing as atx_processing
 
 log = util.get_logger(__name__)
 
@@ -49,9 +47,9 @@ def parse_sp3_file(file_path: Path):
         # Give some columns more pithy names
         df.rename(
             columns={
-                "position_x": "sat_pos_x_m",
-                "position_y": "sat_pos_y_m",
-                "position_z": "sat_pos_z_m",
+                "position_x": "sat_pos_com_x_m",
+                "position_y": "sat_pos_com_y_m",
+                "position_z": "sat_pos_com_z_m",
             },
             inplace=True,
         )
@@ -72,111 +70,132 @@ def parse_sp3_file(file_path: Path):
     return cached_load(file_path, file_content_hash)
 
 
-def plot_lagrange_interpolation(
-    polynomial, times, samples, interpolation_time, interpolated_value, label
+def interpolate_krogh(t_sp3: np.array, x_sp3: np.array, t_query: np.array, order=9):
+    """
+    Similar to Lagrange interpolation, but allows to easily compute derivative.
+
+    t_sp3   : array of SP3 epoch times
+    x_sp3   : array of SP3 states
+    t_query : array of times at 1-second step
+    order   : nb of SP3 points used for interpolation
+    """
+
+    x_out = np.zeros_like(t_query, dtype=float)
+    dx_out = np.zeros_like(t_query, dtype=float)
+
+    for k, tq in enumerate(t_query):
+        # Find nearest SP3 index
+        idx = np.searchsorted(t_sp3, tq)
+
+        # Choose 9 points centered around idx
+        i0 = max(0, idx - int((order - 1) / 2))
+        i1 = min(len(t_sp3), i0 + order)
+        i0 = i1 - order  # adjust start properly
+
+        t9 = t_sp3[i0:i1]
+        x9 = x_sp3[i0:i1]
+
+        # Build Krogh polynomials
+        k_x = KroghInterpolator(t9, x9)
+
+        # Evaluate position
+        x_out[k] = k_x(tq)
+
+        # Evaluate velocity (1st derivative)
+        dx_out[k] = k_x.derivative(tq)
+
+    return x_out, dx_out
+
+
+def compute(
+    sp3_file_path, query, atx_file_path, is_query_corrected_by_sat_clock_offset=False
 ):
-    polynomial_times = np.linspace(min(times), max(times), 10 * times.size)
-    polynomial_samples = Polynomial(polynomial.coef[::-1])(polynomial_times)
-    plt.plot(times, samples, "o", label="samples")
-    plt.plot(polynomial_times, polynomial_samples, ".", label="samples")
-    plt.plot(
-        interpolation_time,
-        Polynomial(polynomial.coef[::-1])(interpolation_time),
-        "x",
-        label=label,
-    )
-    plt.legend()
-    plt.grid()
-    plt.show()
+    """
+    Inputs:
+    - sp3_file_path: path to the SP3 file
+    - query: a pd.DataFrame with columns ["sv", "signal", "query_time_isagpst"]
+    - atx_file_path: path to the atx file
+    """
+    df_sp3 = parse_sp3_file(sp3_file_path)
 
+    # filter query and sp3 data that have common sv
+    df_sp3 = df_sp3[df_sp3["sv"].isin(query["sv"].unique())]
+    query = query[query["sv"].isin(df_sp3["sv"].unique())]
 
-def interpolate(df, query_time_gpst_s, plot_interpolation=False):
-    n_samples_each_side = 4
-    assert df["sv"].unique().size == 1, "This function expects one satellite at a time"
-    closest_sample_index = np.argmin(np.abs(df["gpst_s"] - query_time_gpst_s))
-    start_index = closest_sample_index - n_samples_each_side
-    end_index = closest_sample_index + n_samples_each_side
-    assert start_index >= 0, (
-        f"We need at least {n_samples_each_side} before the sample closest to the query time to interpolate"
-    )
-    assert end_index < len(df.index), (
-        f"We need at least {n_samples_each_side} after the sample closest to the query time to interpolate"
-    )
-    columns_to_interpolate = [
-        "sat_pos_x_m",
-        "sat_pos_y_m",
-        "sat_pos_z_m",
-        "sat_clock_offset_m",
-    ]
-    interpolated = df[closest_sample_index : closest_sample_index + 1]
-    interpolated["gpst_s"] = query_time_gpst_s
-    for col in columns_to_interpolate:
-        interpolated[col] = float("nan")
-    for col in columns_to_interpolate:
-        times = df["gpst_s"].iloc[start_index : end_index + 1].to_numpy()
-        samples = df[col].iloc[start_index : end_index + 1].to_numpy()
-        # Improve numerical conditioning by subtracting the first sample
-        poly = lagrange(times - times[0], samples - samples[0])
-        interpolated[col] = (
-            Polynomial(poly.coef[::-1])(query_time_gpst_s - times[0]) + samples[0]
+    for sv, group in query.groupby("sv"):
+        # Select SP3 rows for this satellite
+        sp3 = df_sp3.loc[df_sp3["sv"] == sv]
+
+        # Convert query times to GPST seconds
+        t_query = np.array(
+            [
+                util.timedelta_2_seconds(t - constants.cGpstUtcEpoch)
+                for t in group.query_time_isagpst
+            ]
         )
-        if plot_interpolation:
-            plot_lagrange_interpolation(
-                poly,
-                times - times[0],
-                samples - samples[0],
-                query_time_gpst_s - times[0],
-                interpolated[col] - samples[0],
-                f"{col} {df['sv'].unique()}",
-            )
-        first_derivative = Polynomial(poly.coef[::-1]).deriv(1)(
-            query_time_gpst_s - times[0]
+
+        if not is_query_corrected_by_sat_clock_offset:
+            # correct query time by satellite clock offset
+            t0 = t_query
+            for _ in range(2):
+                C, _ = interpolate_krogh(
+                    sp3.gpst_s.to_numpy(), sp3.sat_clock_offset_m.to_numpy(), t0, 2
+                )
+                t0 = t_query - C / constants.cGpsSpeedOfLight_mps
+            t_query = t_query - C / constants.cGpsSpeedOfLight_mps
+
+        X, dX = interpolate_krogh(
+            sp3.gpst_s.to_numpy(), sp3.sat_pos_com_x_m.to_numpy(), t_query
         )
-        match col:
-            case "sat_pos_x_m":
-                interpolated["sat_vel_x_mps"] = first_derivative
-            case "sat_pos_y_m":
-                interpolated["sat_vel_y_mps"] = first_derivative
-            case "sat_pos_z_m":
-                interpolated["sat_vel_z_mps"] = first_derivative
-            case "sat_clock_offset_m":
-                interpolated["sat_clock_drift_mps"] = first_derivative
-            case _:
-                log.warning(f"{col} not recognized")
-    return interpolated
+        Y, dY = interpolate_krogh(
+            sp3.gpst_s.to_numpy(), sp3.sat_pos_com_y_m.to_numpy(), t_query
+        )
+        Z, dZ = interpolate_krogh(
+            sp3.gpst_s.to_numpy(), sp3.sat_pos_com_z_m.to_numpy(), t_query
+        )
+        C, dC = interpolate_krogh(
+            sp3.gpst_s.to_numpy(), sp3.sat_clock_offset_m.to_numpy(), t_query, 2
+        )
 
+        # Assign results back to the `query` dataframe
+        query.loc[group.index, "sat_pos_com_x_m"] = X
+        query.loc[group.index, "sat_pos_com_y_m"] = Y
+        query.loc[group.index, "sat_pos_com_z_m"] = Z
+        query.loc[group.index, "sat_clock_offset_m"] = C
+        query.loc[group.index, "sat_vel_x_mps"] = dX
+        query.loc[group.index, "sat_vel_y_mps"] = dY
+        query.loc[group.index, "sat_vel_z_mps"] = dZ
+        query.loc[group.index, "sat_clock_drift_mps"] = dC
+        query.loc[group.index, "health_flag"] = 0
+        query.loc[group.index, "relativistic_clock_effect_m"] = np.array(
+            [
+                -2 * np.dot(p, v) / constants.cGpsSpeedOfLight_mps
+                for p, v in zip(np.stack([X, Y, Z]).T, np.stack([dX, dY, dZ]).T)
+            ]
+        )
 
-def compute(sp3_file_path, query):
-    df = parse_sp3_file(sp3_file_path)
-    df = df[df["sv"].isin(query["sv"])]
+    # add phase center offset
+    pco = atx_processing.compute_pco_sat(
+        query=query,
+        atx_df=atx_processing.parse_atx(atx_file_path),
+    )
 
-    def interpolate_sat_states(row):
-        samples = df[df["sv"] == row["sv"]]
-        if len(samples.index) > 0:
-            sat_pv = interpolate(
-                samples,
-                util.timedelta_2_seconds(
-                    row["query_time_isagpst"] - constants.cGpstUtcEpoch
-                ),
-            )
-            sat_pv["health_flag"] = [0]
-        else:
-            sat_pv = pd.DataFrame()
-            sat_pv["gpst_s"] = [row.query_time_isagpst]
-            sat_pv["sv"] = [row.sv]
-            sat_pv["sat_pos_x_m"] = [np.nan]
-            sat_pv["sat_pos_y_m"] = [np.nan]
-            sat_pv["sat_pos_z_m"] = [np.nan]
-            sat_pv["sat_clock_offset_m"] = [np.nan]
-            sat_pv["sat_vel_x_mps"] = [np.nan]
-            sat_pv["sat_vel_y_mps"] = [np.nan]
-            sat_pv["sat_vel_z_mps"] = [np.nan]
-            sat_pv["sat_clock_drift_mps"] = [np.nan]
-            sat_pv["health_flag"] = [1]
-        return pd.concat((row.drop("sv"), sat_pv.squeeze()))
+    # merge pco into query
+    query = query.merge(
+        pco,
+        left_on=["query_time_isagpst", "sv", "signal"],
+        right_on=["query_time_isagpst", "sv", "signal"],
+        how="left",
+    )
 
-    query = query.apply(interpolate_sat_states, axis=1).reset_index()
-    return query.drop(columns=["gpst_s", "index", "t0"])
+    # compute satellite antenna position
+    query = query.assign(
+        sat_pos_x_m=query["sat_pos_com_x_m"] + query["pco_sat_x_m"],
+        sat_pos_y_m=query["sat_pos_com_y_m"] + query["pco_sat_y_m"],
+        sat_pos_z_m=query["sat_pos_com_z_m"] + query["pco_sat_z_m"],
+    )
+
+    return query
 
 
 if __name__ == "main":
