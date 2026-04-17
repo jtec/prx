@@ -38,6 +38,18 @@ def get_obs_types(header):
     return {content["constellation"]: content for content in types}
 
 
+def get_glonass_slot(file_path):
+    df = pd.read_csv(file_path, sep="|", header=None)
+    df.columns = ["lines"]
+    i_end_of_header = df[df.lines.str.contains("END OF HEADER")].index[0]
+    header = df.iloc[:i_end_of_header]
+    marker = "GLONASS SLOT / FRQ #"
+    lines = " " + " ".join(
+        header[header.lines.str.contains(marker)].lines.to_list()
+    ).replace(marker, " ")
+    return {int(prn_slot[:2]): int(prn_slot[2:]) for prn_slot in lines.split("R")[1:]}
+
+
 def parse(file_path):
     df = pd.read_csv(file_path, sep="|", header=None)
     df.columns = ["lines"]

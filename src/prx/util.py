@@ -23,6 +23,7 @@ import astropy.units
 
 from prx import constants
 
+iers.conf.auto_download = False
 logger = logging.getLogger(__name__)
 
 
@@ -504,7 +505,7 @@ def compute_gps_utc_leap_seconds(yyyy: int, doy: int):
     timestamp = pd.Timestamp(year=yyyy, month=1, day=1) + pd.Timedelta(days=doy)
     if timestamp < constants.cGpstUtcEpoch:
         return np.nan
-    ls_table = iers.LeapSeconds().auto_open()
+    ls_table = iers.LeapSeconds.open(iers.IERS_LEAP_SECOND_FILE)
     mjd_current = astrotime.Time(timestamp).mjd
     # check the ls_table in reverse order until mjd is lower than current mjd
     ls = np.nan

@@ -20,6 +20,7 @@ dependencies = [
     "scipy<2.0.0,>=1.14.1",
     "matplotlib<4.0.0,>=3.10.0",
     "astropy<7.0.0,>=6.1.7",
+    "astropy-iers-data>=0.2026.3",
     "setuptools>=75.6.0,<81.0.0",
     "plotly>=5.24.1,<7.0.0",
     "requests<3.0.0,>=2.32.3",
