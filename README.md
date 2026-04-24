@@ -20,7 +20,6 @@ broadcast ionosphere delays etc.
 From the `prx` repository root, run
 
 ```
-uv sync
 uv run python src/prx/main.py --observation_file_path <path_to_rinex_file> 
 ```
 
