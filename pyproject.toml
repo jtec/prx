@@ -8,7 +8,7 @@ authors = [
     { name = "Paul Thevenon", email = "paul.thevenon@gmail.com" },
 ]
 license = { text = "MIT" }
-requires-python = "<3.13,>=3.10"
+requires-python = "<3.14,>=3.10"
 dependencies = [
     "pandas<3.0.0,>=2.2.3",
     "numpy<3.0,>=2.2",
@@ -27,6 +27,7 @@ dependencies = [
     "georinex",
     "polars>=1.31.0",
     "pyarrow>=20.0.0",
+    "pytest-profiling>=1.8.1",
 ]
 
 [project.scripts]
