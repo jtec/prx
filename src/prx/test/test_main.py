@@ -717,10 +717,62 @@ def test_bootstrap_coarse_receiver_position(input_for_test_tlse):
 
     # Compute position error
     position_error_ecef_m = (
-        solution[0:3] - metadata["approximate_receiver_ecef_position_m"]
+            solution[0:3] - metadata["approximate_receiver_ecef_position_m"]
     )
 
     # Verify position error magnitude
     # A tolerance of 100 m is accepted due to missing corrections (no atmospheric corrections, Sagnac effect)
     # and the use of only one constellation and signal
     assert np.linalg.norm(position_error_ecef_m) < 100
+
+
+def test_write_prx_file(tmp_path):
+    # WITH the following inputs
+    records = pd.DataFrame(
+        {
+            "time_of_reception_in_receiver_time": [
+                pd.Timestamp("2024-01-01 12:00:00"),
+                pd.Timestamp("2024-01-01 12:00:01"),
+            ],
+            "satellite": ["C05", "E18"],
+            "observation_value": [40176280.391, 103535618.345],
+            "observation_type": ["C2I", "L7X"],
+            "time_of_emission_isagpst": [
+                pd.Timestamp("2024-01-01 11:59:59.123"),
+                pd.Timestamp("2024-01-01 11:59:59.456"),
+            ],
+            "sat_code_bias_m": [0.029979245800000002, np.nan],
+            "sat_clock_offset_m": [57153.224739945, 48256.88459763844],
+            "sat_clock_drift_mps": [-0.018397070984952933, 0.013002457163453208],
+            "sat_pos_x_m": [21838606.2226298, 20842429.719858464],
+            "sat_pos_y_m": [36012172.44079473, 19737060.865072154],
+            "sat_pos_z_m": [-1479022.2315934533, 8359421.175602518],
+            "sat_vel_x_mps": [-3.1845076181793956, -1053.8801350614503],
+            "sat_vel_y_mps": [4.675863768364934, -655.7473268516026],
+            "sat_vel_z_mps": [-0.9203824206818751, 2335.755985846865],
+            "ephemeris_hash": ["9215685217227077344", "11594157980834960420"],
+            "health_flag": [0.0, 130.0],
+            "relativistic_clock_effect_m": [-0.6615992365557094, 102.61682957252606],
+            "elevation_rad": [0.22833120192866924, 0.6148656273692483],
+            "azimuth_rad": [2.012037340183851, 1.9934080781812225],
+            "sagnac_effect_m": [-39.902407410125676, -21.610940452977456],
+            "tropo_delay_m": [10.434014464845294, 4.094251182074563],
+            "carrier_frequency_hz": [1561098000.0, 1207140000.0],
+            "iono_delay_m": [15.044327634377982, np.nan],
+        }
+    )
+    header = {"processing_start_time": pd.Timestamp("2026-01-01 00:00:00")}
+    # WHEN writing them to CSV
+    generated_file = write_prx_file(prx_header=header,
+                                    prx_records=records,
+                                    file_name_without_extension=Path(tmp_path) / "test")
+    # THEN we expect the following CSV file
+    with open(generated_file, "r") as f:
+        csv_string = f.read()
+    expected_csv_string = """# {"processing_start_time": "2026-01-01 00:00:00.0000003"}
+time_of_reception_in_receiver_time,sat_code_bias_m,sat_clock_offset_m,sat_clock_drift_mps,sat_pos_x_m,sat_pos_y_m,sat_pos_z_m,sat_vel_x_mps,sat_vel_y_mps,sat_vel_z_mps,ephemeris_hash,health_flag,relativistic_clock_effect_m,sagnac_effect_m,tropo_delay_m,carrier_frequency_hz,iono_delay_m,sat_elevation_deg,sat_azimuth_deg,rnx_obs_identifier,C_obs_m,D_obs_hz,L_obs_cycles,LLI,S_obs_dBHz,constellation,prn
+2024-01-01 12:00:00.000000,0.029979,57153.224740,-0.018397,21838606.222630,36012172.440795,-1479022.231593,-3.184508,4.675864,-0.920382,9215685217227077344,0.000000,-0.661599,-39.902407,10.434014,1561098000.000000,15.044328,13.082414,115.281248,2I,40176280.391000,,,,,C,05
+"""
+    if expected_csv_string != csv_string:
+        highlight_char_diff(csv_string, expected_csv_string)
+        raise AssertionError
