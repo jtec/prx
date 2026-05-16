@@ -27,7 +27,6 @@ dependencies = [
     "georinex",
     "polars>=1.31.0",
     "pyarrow>=20.0.0",
-    "pytest-profiling>=1.8.1",
 ]
 
 [project.scripts]
@@ -56,6 +55,7 @@ dev = [
     "ruff>=0.15.4",
     "snakeviz>=2.2.2",
     "viztracer>=1.1.1",
+    "pytest-profiling>=1.8.1",
 ]
 
 [tool.hatch.build.targets.sdist]
