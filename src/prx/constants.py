@@ -1,3 +1,5 @@
+import math
+
 import numpy as np
 import pandas as pd
 from collections import defaultdict
@@ -46,6 +48,9 @@ cPrxPrecision_m = 1e-6
 cMaxOrbitalSpeedOfAnyGnssSatellite_mps = 1e4
 # SBAS URA limit: used to discard SBAS supposed to have inactive georanging capabilities
 cSbasURALimit = 14
+
+cDegPerRad = 180.0 / math.pi
+cRadPerDeg = 1.0 / cDegPerRad
 
 
 # From RINEX Version 3.05, 1 December, 2020.
