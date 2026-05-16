@@ -13,7 +13,6 @@ from prx.main import write_prx_file
 from prx.precise_corrections.antex.antex_file_discovery import atx_file_database_folder
 from prx.precise_corrections.sp3.sp3_file_discovery import sp3_file_database_folder
 from prx.rinex_nav import nav_file_discovery
-from prx.test.test_helpers import highlight_char_diff
 
 log = logging.getLogger(__name__)
 
@@ -179,7 +178,6 @@ def test_prx_command_line_call(input_for_test_tlse):
 
 def test_prx_function_call(input_for_test_tlse):
     test_file = input_for_test_tlse
-    util.disk_cache.clear()
     main.process(observation_file_path=test_file, prx_level=2)
     expected_prx_file = Path(str(test_file).replace("crx.gz", "csv"))
     assert expected_prx_file.exists()
@@ -777,6 +775,4 @@ def test_write_prx_file(tmp_path):
 time_of_reception_in_receiver_time,sat_code_bias_m,sat_clock_offset_m,sat_clock_drift_mps,sat_pos_x_m,sat_pos_y_m,sat_pos_z_m,sat_vel_x_mps,sat_vel_y_mps,sat_vel_z_mps,ephemeris_hash,health_flag,relativistic_clock_effect_m,sagnac_effect_m,tropo_delay_m,carrier_frequency_hz,iono_delay_m,sat_elevation_deg,sat_azimuth_deg,rnx_obs_identifier,C_obs_m,D_obs_hz,L_obs_cycles,LLI,S_obs_dBHz,constellation,prn
 2024-01-01 12:00:00.000000,0.029979,57153.224740,-0.018397,21838606.222630,36012172.440795,-1479022.231593,-3.184508,4.675864,-0.920382,9215685217227077344,0.000000,-0.661599,-39.902407,10.434014,1561098000.000000,15.044328,13.082414,115.281248,2I,40176280.391000,,,,,C,05
 """
-    if expected_csv_string != csv_string:
-        highlight_char_diff(expected_csv_string, csv_string)
-        raise AssertionError
+    assert expected_csv_string == csv_string

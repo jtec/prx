@@ -334,34 +334,3 @@ def test_sat_frame():
     pos_rx = np.array([0, 6_400_000, 0])  # on +y
     pos_rx_sat = np.stack([i, j, k], axis=0) @ (pos_rx - pos_sat)
     assert pos_rx_sat == pytest.approx(np.array([6_400_000, 0, 20_200_000 + 6_400_000]))
-
-
-def highlight_char_diff(str1, str2):
-    # ANSI escape codes for terminal coloring
-    RED = "\033[91m"  # Deleted/Changed from str1
-    GREEN = "\033[92m"  # Inserted/Changed into str2
-    RESET = "\033[0m"  # Reset to default text color
-
-    matcher = difflib.SequenceMatcher(None, str1, str2)
-
-    result1 = []
-    result2 = []
-
-    for opcode, i1, i2, j1, j2 in matcher.get_opcodes():
-        if opcode == "equal":
-            # Characters match perfectly
-            result1.append(str1[i1:i2])
-            result2.append(str2[j1:j2])
-        elif opcode == "replace":
-            # Characters are substituted
-            result1.append(f"{RED}{str1[i1:i2]}{RESET}")
-            result2.append(f"{GREEN}{str2[j1:j2]}{RESET}")
-        elif opcode == "delete":
-            # Characters removed from string 1
-            result1.append(f"{RED}{str1[i1:i2]}{RESET}")
-        elif opcode == "insert":
-            # Characters added to string 2
-            result2.append(f"{GREEN}{str2[j1:j2]}{RESET}")
-
-    print("Original:\n " + "".join(result1))
-    print("Modified:\n " + "".join(result2))

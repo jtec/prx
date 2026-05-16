@@ -27,7 +27,6 @@ dependencies = [
     "georinex",
     "polars>=1.31.0",
     "pyarrow>=20.0.0",
-    "pytest-profiling>=1.8.1",
 ]
 
 [project.scripts]
