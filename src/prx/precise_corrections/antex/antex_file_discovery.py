@@ -1,3 +1,4 @@
+import logging
 from ftplib import FTP
 import ftplib
 from pathlib import Path
@@ -23,7 +24,7 @@ Logic overview:
 was still used despite being older than the observation file.
 """
 
-log = util.get_logger(__name__)
+log = logging.getLogger(__name__)
 
 atx_filename = "igs20_????.atx"
 
