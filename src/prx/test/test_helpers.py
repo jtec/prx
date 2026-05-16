@@ -1,3 +1,4 @@
+import difflib
 import logging
 import numpy as np
 import pytest
@@ -347,20 +348,20 @@ def highlight_char_diff(str1, str2):
     result2 = []
 
     for opcode, i1, i2, j1, j2 in matcher.get_opcodes():
-        if opcode == 'equal':
+        if opcode == "equal":
             # Characters match perfectly
             result1.append(str1[i1:i2])
             result2.append(str2[j1:j2])
-        elif opcode == 'replace':
+        elif opcode == "replace":
             # Characters are substituted
             result1.append(f"{RED}{str1[i1:i2]}{RESET}")
             result2.append(f"{GREEN}{str2[j1:j2]}{RESET}")
-        elif opcode == 'delete':
+        elif opcode == "delete":
             # Characters removed from string 1
             result1.append(f"{RED}{str1[i1:i2]}{RESET}")
-        elif opcode == 'insert':
+        elif opcode == "insert":
             # Characters added to string 2
             result2.append(f"{GREEN}{str2[j1:j2]}{RESET}")
 
-    print("Original: " + "".join(result1))
-    print("Modified: " + "".join(result2))
+    print("Original:\n " + "".join(result1))
+    print("Modified:\n " + "".join(result2))

@@ -1,3 +1,4 @@
+import datetime
 import json
 import logging
 import math
@@ -24,7 +25,34 @@ import astropy.units
 from prx import constants
 
 iers.conf.auto_download = False
-logger = logging.getLogger(__name__)
+
+
+def prx_repository_root() -> Path:
+    return Path(__file__).parents[2]
+
+
+def get_logger(label, log_level="DEBUG"):
+    new_logger = logging.getLogger(label)
+    logging.basicConfig(level=log_level.upper())
+
+    log_directory = prx_repository_root() / "logs"
+    log_directory.mkdir(exist_ok=True, parents=True)
+
+    new_logger.setLevel(level=log_level.upper())
+    new_logger.addHandler(
+        logging.FileHandler(
+            log_directory
+            / f"prx_{pd.Timestamp.now(tz=datetime.UTC).strftime('%Y-%m-%d_%H-%M-%S')}.log"
+        )
+    )
+
+    formatter = logging.Formatter("%(asctime)s [%(levelname)s] [%(name)s]: %(message)s")
+    for handler in new_logger.handlers:
+        handler.setFormatter(formatter)
+    return new_logger
+
+
+logger = get_logger(__name__)
 
 
 def file_exists_and_can_read_first_line(file: Path):
@@ -73,7 +101,7 @@ def timeit(func):
         result = func(*args, **kwargs)
         end_time = pd.Timestamp.now()
         total_time = end_time - start_time
-        logger.info(f"Function {func.__name__} took {total_time} to run.")
+        logger.debug(f"Function {func.__name__} took {total_time} to run.")
         return result
 
     return timeit_wrapper
@@ -137,14 +165,6 @@ def parse_boolean_env_variable(env_variable_name: str, value_if_not_set: bool):
 
 
 disk_cache = joblib.Memory(Path(__file__).parent.joinpath("diskcache"), verbose=0)
-
-
-def get_logger(label):
-    return logging.getLogger(label)
-
-
-def prx_repository_root() -> Path:
-    return Path(__file__).parents[2]
 
 
 def hash_of_file_content(file: Path, use_sampling: bool = False):
