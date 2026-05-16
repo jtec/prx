@@ -45,7 +45,7 @@ def write_prx_file(
     # write records
     # Start with code observations, as they have TGDs, and merge in other observation types one by one
     prx_records = prx_records.with_columns(
-        prx_records["observation_type"].str.slice(1, 2).alias("tracking_id")
+        pl.col("observation_type").str.slice(1, 2).alias("tracking_id")
     )
     records = prx_records.filter(pl.col("observation_type").str.starts_with("C"))
     records = records.with_columns(pl.col("observation_value").alias("C_obs_m"))
@@ -315,7 +315,7 @@ def build_records_levels_12(
 
         log.info(f"Computing satellite states for {year}-{doy:03d}")
         sat_states_per_day.append(
-            rinex_evaluate.compute(
+            rinex_evaluate.compute_parallel(
                 file,
                 day_query,
             )
