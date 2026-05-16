@@ -1070,7 +1070,6 @@ dependencies = [
     { name = "plotly" },
     { name = "polars" },
     { name = "pyarrow" },
-    { name = "pytest-profiling" },
     { name = "requests" },
     { name = "scipy" },
     { name = "setuptools" },
@@ -1080,6 +1079,7 @@ dependencies = [
 dev = [
     { name = "line-profiler" },
     { name = "pytest" },
+    { name = "pytest-profiling" },
     { name = "pytest-xdist" },
     { name = "ruff" },
     { name = "snakeviz" },
@@ -1102,7 +1102,6 @@ requires-dist = [
     { name = "plotly", specifier = ">=5.24.1,<7.0.0" },
     { name = "polars", specifier = ">=1.31.0" },
     { name = "pyarrow", specifier = ">=20.0.0" },
-    { name = "pytest-profiling", specifier = ">=1.8.1" },
     { name = "requests", specifier = ">=2.32.3,<3.0.0" },
     { name = "scipy", specifier = ">=1.14.1,<2.0.0" },
     { name = "setuptools", specifier = ">=75.6.0,<81.0.0" },
@@ -1112,6 +1111,7 @@ requires-dist = [
 dev = [
     { name = "line-profiler", specifier = ">=5.0.2" },
     { name = "pytest", specifier = ">=9.0.2" },
+    { name = "pytest-profiling", specifier = ">=1.8.1" },
     { name = "pytest-xdist", specifier = ">=3.8.0" },
     { name = "ruff", specifier = ">=0.15.4" },
     { name = "snakeviz", specifier = ">=2.2.2" },
