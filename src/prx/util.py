@@ -24,12 +24,7 @@ import astropy.units
 from prx import constants
 
 iers.conf.auto_download = False
-
 logger = logging.getLogger(__name__)
-
-
-def prx_repository_root() -> Path:
-    return Path(__file__).parents[2]
 
 
 def file_exists_and_can_read_first_line(file: Path):
@@ -162,6 +157,10 @@ def configure_logging(log_level: str = "INFO"):
     formatter = logging.Formatter("%(asctime)s [%(levelname)s] [%(name)s]: %(message)s")
     for handler in root_logger.handlers:
         handler.setFormatter(formatter)
+
+
+def prx_repository_root() -> Path:
+    return Path(__file__).parents[2]
 
 
 def hash_of_file_content(file: Path, use_sampling: bool = False):
