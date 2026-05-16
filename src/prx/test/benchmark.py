@@ -1,3 +1,4 @@
+import logging
 import shutil
 
 import pandas as pd
@@ -6,6 +7,10 @@ from pathlib import Path
 from prx import converters
 from prx.main import process
 import cProfile
+
+from prx.util import configure_logging
+
+logger = logging.getLogger(__name__)
 
 
 def setup():
@@ -34,6 +39,7 @@ def benchmark(obs_file: Path):
 
 
 if __name__ == "__main__":
+    configure_logging("DEBUG")
     p = cProfile.Profile()
     obs_file = setup()
     # Warm up cached functions, parsers are benchmarked separately.
@@ -47,5 +53,5 @@ if __name__ == "__main__":
         p.getstats(),
         columns=["func", "ncalls", "ccalls", "tottime", "cumtime", "callers"],
     ).sort_values(by="tottime", ascending=False)
-    print(f"Processed {obs_file.name} in {df.iloc[0, :]['tottime']} seconds")
-    print(f"To inspect profiling results, call \n snakeviz {stats_file}")
+    logger.info(f"Processed {obs_file.name} in {df.iloc[0, :]['tottime']} seconds")
+    logger.info(f"To inspect profiling results, call \n snakeviz {stats_file}")

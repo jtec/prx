@@ -1,3 +1,5 @@
+import logging
+
 import numpy as np
 import georinex
 from pathlib import Path
@@ -6,7 +8,7 @@ from scipy.interpolate import KroghInterpolator
 from prx import constants, util
 from prx.precise_corrections.antex import antex_processing as atx_processing
 
-log = util.get_logger(__name__)
+log = logging.getLogger(__name__)
 
 
 def parse_sp3_file(file_path: Path):

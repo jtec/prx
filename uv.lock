@@ -1080,6 +1080,7 @@ dependencies = [
 dev = [
     { name = "line-profiler" },
     { name = "pytest" },
+    { name = "pytest-profiling" },
     { name = "pytest-xdist" },
     { name = "ruff" },
     { name = "snakeviz" },
@@ -1112,6 +1113,7 @@ requires-dist = [
 dev = [
     { name = "line-profiler", specifier = ">=5.0.2" },
     { name = "pytest", specifier = ">=9.0.2" },
+    { name = "pytest-profiling", specifier = ">=1.8.1" },
     { name = "pytest-xdist", specifier = ">=3.8.0" },
     { name = "ruff", specifier = ">=0.15.4" },
     { name = "snakeviz", specifier = ">=2.2.2" },

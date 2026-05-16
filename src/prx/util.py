@@ -1,4 +1,3 @@
-import datetime
 import json
 import logging
 import math
@@ -26,33 +25,11 @@ from prx import constants
 
 iers.conf.auto_download = False
 
+logger = logging.getLogger(__name__)
+
 
 def prx_repository_root() -> Path:
     return Path(__file__).parents[2]
-
-
-def get_logger(label, log_level="DEBUG"):
-    new_logger = logging.getLogger(label)
-    logging.basicConfig(level=log_level.upper())
-
-    log_directory = prx_repository_root() / "logs"
-    log_directory.mkdir(exist_ok=True, parents=True)
-
-    new_logger.setLevel(level=log_level.upper())
-    new_logger.addHandler(
-        logging.FileHandler(
-            log_directory
-            / f"prx_{pd.Timestamp.now(tz=datetime.UTC).strftime('%Y-%m-%d_%H-%M-%S')}.log"
-        )
-    )
-
-    formatter = logging.Formatter("%(asctime)s [%(levelname)s] [%(name)s]: %(message)s")
-    for handler in new_logger.handlers:
-        handler.setFormatter(formatter)
-    return new_logger
-
-
-logger = get_logger(__name__)
 
 
 def file_exists_and_can_read_first_line(file: Path):
@@ -165,6 +142,26 @@ def parse_boolean_env_variable(env_variable_name: str, value_if_not_set: bool):
 
 
 disk_cache = joblib.Memory(Path(__file__).parent.joinpath("diskcache"), verbose=0)
+
+
+def configure_logging(log_level: str = "INFO"):
+    terminal_handler = logging.StreamHandler()
+    terminal_handler.setLevel(log_level.upper())
+
+    log_directory = prx_repository_root() / "logs"
+    log_directory.mkdir(exist_ok=True, parents=True)
+    logfile_handler = logging.FileHandler(
+        log_directory
+        / f"prx_{pd.Timestamp.now(tz='utc').strftime('%Y-%m-%d_%H-%M-%S')}.log"
+    )
+
+    root_logger = logging.getLogger()
+    root_logger.handlers = [terminal_handler, logfile_handler]
+    root_logger.setLevel(log_level.upper())
+
+    formatter = logging.Formatter("%(asctime)s [%(levelname)s] [%(name)s]: %(message)s")
+    for handler in root_logger.handlers:
+        handler.setFormatter(formatter)
 
 
 def hash_of_file_content(file: Path, use_sampling: bool = False):

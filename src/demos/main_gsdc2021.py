@@ -1,3 +1,4 @@
+import logging
 from pathlib import Path
 import os
 import shutil
@@ -5,9 +6,9 @@ import gzip
 import argparse
 import sys
 from prx.util import timeit
-from prx import main, util
+from prx import main
 
-log = util.get_logger(__name__)
+log = logging.getLogger(__name__)
 
 
 @timeit
