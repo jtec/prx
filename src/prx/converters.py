@@ -1,10 +1,10 @@
+import logging
 from pathlib import Path
 import glob
 import itertools
 import subprocess
 import gzip
 import zipfile
-from prx.util import get_logger
 from prx.util import (
     is_rinex_2_obs_file,
     is_rinex_2_nav_file,
@@ -12,7 +12,7 @@ from prx.util import (
     is_rinex_3_nav_file,
 )
 
-log = get_logger(__name__)
+log = logging.getLogger(__name__)
 
 
 def compressed_to_uncompressed(file: Path):

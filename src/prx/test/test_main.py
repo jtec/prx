@@ -1,3 +1,4 @@
+import logging
 import os
 from pathlib import Path
 import shutil
@@ -14,7 +15,7 @@ from prx.precise_corrections.sp3.sp3_file_discovery import sp3_file_database_fol
 from prx.rinex_nav import nav_file_discovery
 from prx.test.test_helpers import highlight_char_diff
 
-log = util.get_logger(__name__)
+log = logging.getLogger(__name__)
 
 
 # This function sets up a temporary directory, copies a rinex observations file into that directory
