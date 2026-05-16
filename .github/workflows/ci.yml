@@ -33,8 +33,7 @@ jobs:
       - name: Run ruff
         if: ${{ matrix.os == 'ubuntu-latest' }}
         run: |
-          make type-check
-          make format-check
+          make format-lint-check
 
       - name: Test with pytest
         run: |
