@@ -11,7 +11,7 @@ import prx.util as util
 from prx import atmospheric_corrections as atmo
 from prx.constants import carrier_frequencies_hz
 from prx.rinex_obs.parser import parse_rinex_obs_file, get_glonass_slot
-from prx.util import is_rinex_3_obs_file, is_rinex_3_nav_file
+from prx.util import is_rinex_3_obs_file, is_rinex_3_nav_file, configure_logging
 from prx.rinex_nav import nav_file_discovery
 from prx import constants, converters, user
 from prx.rinex_nav import evaluate as rinex_evaluate
@@ -20,7 +20,7 @@ from prx.precise_corrections.sp3 import evaluate as sp3_evaluate
 from prx.precise_corrections.sp3 import sp3_file_discovery
 from prx.precise_corrections.antex import antex_file_discovery
 
-log = util.get_logger(__name__)
+log = logging.getLogger(__name__)
 
 
 @util.timeit
@@ -685,7 +685,16 @@ if __name__ == "__main__":
         choices=["saastamoinen", "unb3m"],
         default="saastamoinen",
     )
+    parser.add_argument(
+        "--log-level",
+        type=str,
+        help="Minimum severeness level of logged messages.",
+        choices=["debug", "info", "warning", "error", "critical"],
+        default="info",
+        required=False,
+    )
     args = parser.parse_args()
+    configure_logging(args.log_level)
     if args.observation_file_path is None:
         log.error("No observation file path provided.")
         sys.exit(1)

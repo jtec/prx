@@ -7,7 +7,7 @@ import sys
 from prx.util import timeit
 from prx import main, util
 
-log = util.get_logger(__name__)
+log = logging.getLogger(__name__)
 
 
 @timeit

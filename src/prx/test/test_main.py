@@ -14,7 +14,7 @@ from prx.precise_corrections.antex.antex_file_discovery import atx_file_database
 from prx.precise_corrections.sp3.sp3_file_discovery import sp3_file_database_folder
 from prx.rinex_nav import nav_file_discovery
 
-log = util.get_logger(__name__)
+log = logging.getLogger(__name__)
 
 
 # This function sets up a temporary directory, copies a rinex observations file into that directory

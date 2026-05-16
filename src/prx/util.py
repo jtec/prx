@@ -5,6 +5,7 @@ import os
 import re
 import shutil
 import subprocess
+from datetime import datetime
 from functools import wraps
 from pathlib import Path
 import importlib.metadata as md
@@ -73,7 +74,7 @@ def timeit(func):
         result = func(*args, **kwargs)
         end_time = pd.Timestamp.now()
         total_time = end_time - start_time
-        logger.info(f"Function {func.__name__} took {total_time} to run.")
+        logger.debug(f"Function {func.__name__} took {total_time} to run.")
         return result
 
     return timeit_wrapper
@@ -139,8 +140,24 @@ def parse_boolean_env_variable(env_variable_name: str, value_if_not_set: bool):
 disk_cache = joblib.Memory(Path(__file__).parent.joinpath("diskcache"), verbose=0)
 
 
-def get_logger(label):
-    return logging.getLogger(label)
+def configure_logging(log_level: str = "INFO"):
+    terminal_handler = logging.StreamHandler()
+    terminal_handler.setLevel(log_level.upper())
+
+    log_directory = prx_repository_root() / "logs"
+    log_directory.mkdir(exist_ok=True, parents=True)
+    logfile_handler = logging.FileHandler(
+        log_directory
+        / f"prx_{pd.Timestamp.now(tz='utc').strftime('%Y-%m-%d_%H-%M-%S')}.log"
+    )
+
+    root_logger = logging.getLogger()
+    root_logger.handlers = [terminal_handler, logfile_handler]
+    root_logger.setLevel(log_level.upper())
+
+    formatter = logging.Formatter("%(asctime)s [%(levelname)s] [%(name)s]: %(message)s")
+    for handler in root_logger.handlers:
+        handler.setFormatter(formatter)
 
 
 def prx_repository_root() -> Path:
