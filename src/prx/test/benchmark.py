@@ -7,6 +7,8 @@ from prx import converters
 from prx.main import process
 import cProfile
 
+from prx.util import configure_logging
+
 
 def setup():
     benchmark_dataset_directory = Path(__file__).parent / "benchmark"
@@ -34,6 +36,7 @@ def benchmark(obs_file: Path):
 
 
 if __name__ == "__main__":
+    configure_logging("DEBUG")
     p = cProfile.Profile()
     obs_file = setup()
     # Warm up cached functions, parsers are benchmarked separately.

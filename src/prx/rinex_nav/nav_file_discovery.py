@@ -1,4 +1,5 @@
 import argparse
+import logging
 import os
 import re
 from pathlib import Path
@@ -14,7 +15,7 @@ from prx.converters import anything_to_rinex_3
 from prx.util import timestamp_to_mid_day
 from prx.util import is_rinex_3_nav_file
 
-log = util.get_logger(__name__)
+log = logging.getLogger(__name__)
 
 IGS_FTP_SERVER = {
     "gssc.esa.int": "/gnss/data/daily/",
