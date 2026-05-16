@@ -5,11 +5,12 @@ import sys
 from pathlib import Path
 import georinex
 import pandas as pd
+import polars as pl
 import numpy as np
 import git
 import prx.util as util
 from prx import atmospheric_corrections as atmo
-from prx.constants import carrier_frequencies_hz
+from prx.constants import carrier_frequencies_hz, cDegPerRad
 from prx.rinex_obs.parser import parse_rinex_obs_file, get_glonass_slot
 from prx.util import is_rinex_3_obs_file, is_rinex_3_nav_file, configure_logging
 from prx.rinex_nav import nav_file_discovery
@@ -19,76 +20,88 @@ from prx.rinex_nav.evaluate import parse_rinex_nav_file
 from prx.precise_corrections.sp3 import evaluate as sp3_evaluate
 from prx.precise_corrections.sp3 import sp3_file_discovery
 from prx.precise_corrections.antex import antex_file_discovery
+from line_profiler import profile
 
 log = logging.getLogger(__name__)
 
 
+@profile
 @util.timeit
 def write_prx_file(
     prx_header: dict,
-    prx_records: pd.DataFrame,
+    prx_records_pd: pd.DataFrame,
     file_name_without_extension: Path,
 ):
     output_file = Path(f"{str(file_name_without_extension)}.csv")
-    prx_records["sat_elevation_deg"] = np.rad2deg(prx_records.elevation_rad.to_numpy())
-    prx_records["sat_azimuth_deg"] = np.rad2deg(prx_records.azimuth_rad.to_numpy())
-    prx_records = prx_records.drop(columns=["elevation_rad", "azimuth_rad"])
+    prx_records = pl.from_pandas(prx_records_pd)
+    prx_records = prx_records.with_columns(
+        (pl.col("elevation_rad") * cDegPerRad).alias("sat_elevation_deg"),
+        (pl.col("azimuth_rad") * cDegPerRad).alias("sat_azimuth_deg"),
+    )
+
+    prx_records = prx_records.drop(["elevation_rad", "azimuth_rad"])
     # Re-arrange records to have one line per code observation, with the associated carrier phase and
     # Doppler observation, and auxiliary information such as satellite position, velocity, clock offset, etc.
     # write records
     # Start with code observations, as they have TGDs, and merge in other observation types one by one
-    prx_records["tracking_id"] = prx_records.observation_type.str[1:3]
-    records = prx_records.loc[prx_records.observation_type.str.startswith("C")]
-    records["C_obs_m"] = records.observation_value
-    records = records.drop(columns=["observation_value", "observation_type"])
+    prx_records = prx_records.with_columns(
+        pl.col("observation_type").str.slice(1, 2).alias("tracking_id")
+    )
+    records = prx_records.filter(pl.col("observation_type").str.starts_with("C"))
+    records = records.with_columns(pl.col("observation_value").alias("C_obs_m"))
+    records = records.drop(["observation_value", "observation_type"])
     type_2_unit = {"D": "hz", "L": "cycles", "S": "dBHz", "C": "m"}
     for obs_type in ["D", "L", "S"]:
-        obs = prx_records.loc[
-            (prx_records.observation_type.str.startswith(obs_type))
-            & (prx_records.observation_type.str.len() == 3)
-        ][
+        obs = prx_records.filter(
+            pl.col("observation_type").str.starts_with(obs_type)
+            & (pl.col("observation_type").str.len_chars() == 3)
+        ).select(
             [
                 "satellite",
                 "time_of_reception_in_receiver_time",
                 "observation_value",
                 "tracking_id",
             ]
-        ]
+        )
         obs = obs.rename(
-            columns={"observation_value": f"{obs_type}_obs_{type_2_unit[obs_type]}"}
+            {"observation_value": f"{obs_type}_obs_{type_2_unit[obs_type]}"}
         )
         if obs_type == "L":
             # add LLI as new column
-            obs_lli = prx_records.loc[
-                prx_records.observation_type.str.contains("lli"),
+            obs_lli = prx_records.filter(
+                pl.col("observation_type").str.contains("lli")
+            ).select(
                 [
                     "satellite",
                     "time_of_reception_in_receiver_time",
                     "observation_value",
                     "tracking_id",
-                ],
-            ]
-            obs = obs.merge(
+                ]
+            )
+            obs = obs.join(
                 obs_lli,
                 on=["satellite", "time_of_reception_in_receiver_time", "tracking_id"],
                 how="left",
             )
-            obs = obs.rename(columns={"observation_value": "LLI"})
-        records = records.merge(
+            obs = obs.rename({"observation_value": "LLI"})
+        records = records.join(
             obs,
             on=["satellite", "time_of_reception_in_receiver_time", "tracking_id"],
             how="left",
         )
-    records["constellation"] = records.satellite.str[0]
-    records["prn"] = records.satellite.str[1:]
-    records = records.rename(columns={"tracking_id": "rnx_obs_identifier"})
+    records = records.with_columns(
+        pl.col("satellite").str.slice(0, 1).alias("constellation"),
+        pl.col("satellite").str.slice(1).alias("prn"),
+    )
+
+    records = records.rename({"tracking_id": "rnx_obs_identifier"})
     records = records.drop(
-        columns=[
+        [
             "satellite",
             "time_of_emission_isagpst",
         ]
     )
-    records = records.sort_values(
+    records = records.sort(
         by=[
             "time_of_reception_in_receiver_time",
             "constellation",
@@ -97,23 +110,25 @@ def write_prx_file(
         ]
     )
     # Keep only records with valid sat states
-    records = records[records.sat_clock_offset_m.notna()]
+    records = records.filter(pl.col("sat_clock_offset_m").is_not_nan())
     # write header
-    prx_header["processing_time"] = str(
-        pd.Timestamp.now() - prx_header["processing_start_time"]
-    )
-    prx_header["processing_start_time"] = prx_header["processing_start_time"].strftime(
-        "%Y-%m-%d %H:%M:%S.%f3"
+    prx_header["processing_start_time"] = (
+        prx_header["processing_start_time"]
+        .round(freq="ms")
+        .strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
     )
     with open(output_file, "w", encoding="utf-8") as file:
         file.write(f"# {json.dumps(prx_header)}\n")
-    records.to_csv(
-        path_or_buf=output_file,
-        index=False,
-        mode="a",
-        float_format="%.6f",
-        date_format="%Y-%m-%d %H:%M:%S.%f",
+
+    records = records.with_columns(
+        pl.col(pl.Datetime).dt.strftime("%Y-%m-%d %H:%M:%S.%6f")
     )
+    with open(output_file, "a", encoding="utf-8") as file:
+        records.write_csv(
+            file,
+            include_header=True,
+            float_precision=6,
+        )
     log.info(f"Generated CSV prx file: {file}")
     return output_file
 
@@ -650,7 +665,9 @@ def process(observation_file_path: Path, prx_level=2, model_tropo="saastamoinen"
                 metadata["approximate_receiver_ecef_position_m"],
                 model_tropo,
             )
-
+    metadata["processing_time"] = str(
+        pd.Timestamp.now() - metadata["processing_start_time"]
+    )
     return write_prx_file(
         metadata,
         records,
