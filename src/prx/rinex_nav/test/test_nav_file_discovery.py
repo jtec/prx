@@ -11,6 +11,11 @@ from prx.converters import compressed_to_uncompressed
 from prx.rinex_nav import nav_file_discovery as aux
 import georinex
 
+from prx.rinex_nav.nav_file_discovery import (
+    check_iono_corr_availability,
+    try_downloading_ephemerides,
+)
+
 
 @pytest.fixture
 def set_up_test(tmp_path_factory):
@@ -132,3 +137,21 @@ def test_use_local_nav(set_up_test):
     aux_files = aux.discover_or_download_auxiliary_files(set_up_test["test_obs_file"])
     assert isinstance(aux_files, dict)
     assert new_local_file.name == aux_files["broadcast_ephemerides"][0].name
+
+
+def test_iono_corr_availability(set_up_test):
+    assert check_iono_corr_availability(set_up_test["test_nav_file"])
+
+
+def test_choose_correct_file_if_iono_corr_not_availabile(set_up_test):
+    # For doy 069 of year 2021, the BRDC file does not contain iono corr, but BRDM does
+    # Therefore, the downloaded file shall be BRDM
+
+    # use test folder as download directory
+    local_folder = set_up_test["test_nav_file"].parent
+
+    downloaded_file = try_downloading_ephemerides(
+        pd.Timestamp("2021-03-10 12:00:00"), local_folder
+    )
+    assert downloaded_file.exists()
+    assert downloaded_file.name == "BRDM00DLR_S_20210690000_01D_MN.rnx"
