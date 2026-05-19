@@ -204,7 +204,11 @@ def discover_or_download_ephemerides(
     t_start: pd.Timestamp, t_end: pd.Timestamp, folder, constellations
 ):
     # If there are any navigation files provided by the user, use them, otherwise use IGS files.
-    candidates = [anything_to_rinex_3(file) for file in folder.rglob("*")]
+    candidates = [
+        anything_to_rinex_3(file)
+        for file in folder.rglob("*")
+        if is_rinex_3_mixed_mgex_broadcast_ephemerides_file(file)
+    ]
     candidates = [candidate for candidate in candidates if candidate is not None]
     user_provided_nav_files = [
         f
