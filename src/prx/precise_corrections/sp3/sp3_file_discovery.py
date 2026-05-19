@@ -35,6 +35,8 @@ priority = [
     ("ESA", "RAP"),
     ("WUM", "RAP"),
 ]
+
+
 # WWWW/AAA0PPPTYP_YYYYDDDHHMM_LEN_SMP_CNT.FMT.gz
 # PPP : MGX
 # CNT : ORB
@@ -74,16 +76,16 @@ def sp3_file_database_folder() -> Path:
     Returns the path to the folder where SP3 database files are stored.
     """
     db_folder = util.prx_repository_root() / "src/prx/precise_corrections/sp3/sp3_files"
-    db_folder.mkdir(exist_ok=True)
+    db_folder.mkdir(exist_ok=True, parents=True)
     return db_folder
 
 
-def sp3_file_folder(
-    date: pd.Timestamp, parent_folder: Path = sp3_file_database_folder()
-) -> Path:
+def sp3_file_folder(date: pd.Timestamp, parent_folder: Path | None = None) -> Path:
     """
     Returns the path to the folder where SP3 files for a specific day are stored.
     """
+    if parent_folder is None:
+        parent_folder = sp3_file_database_folder()
     folder = parent_folder / f"{date.year}/{date.day_of_year:03d}"
     folder.mkdir(parents=True, exist_ok=True)
     return folder
