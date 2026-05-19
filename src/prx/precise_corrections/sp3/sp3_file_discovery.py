@@ -75,7 +75,7 @@ def sp3_file_database_folder() -> Path:
     """
     Returns the path to the folder where SP3 database files are stored.
     """
-    db_folder = util.prx_repository_root() / "src/prx/precise_corrections/sp3/sp3_files"
+    db_folder = util.prx_repository_root() / "precise_corrections/sp3/sp3_files"
     db_folder.mkdir(exist_ok=True, parents=True)
     return db_folder
 

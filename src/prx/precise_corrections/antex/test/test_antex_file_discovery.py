@@ -22,8 +22,7 @@ def set_up_test(tmp_path_factory):
     test_obs_file = test_directory.joinpath("TLSE00FRA_R_20230010100_10S_01S_MO.crx.gz")
 
     shutil.copy(
-        util.prx_repository_root()
-        / f"src/prx/test/datasets/TLSE_2023001/{test_obs_file.name}",
+        util.prx_repository_root() / f"test/datasets/TLSE_2023001/{test_obs_file.name}",
         test_obs_file,
     )
     assert test_obs_file.exists()

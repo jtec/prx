@@ -160,7 +160,7 @@ def configure_logging(log_level: str = "INFO"):
 
 
 def prx_repository_root() -> Path:
-    return Path(__file__).parents[2]
+    return Path(__file__).parent
 
 
 def hash_of_file_content(file: Path, use_sampling: bool = False):
