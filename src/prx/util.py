@@ -38,13 +38,17 @@ def file_exists_and_can_read_first_line(file: Path):
 
 def is_rinex_3_obs_file(file: Path):
     if first_line := file_exists_and_can_read_first_line(file):
-        return re.search("3.0.*OBS.*RINEX VERSION.*", first_line) is not None
+        return re.fullmatch(
+            "^.{5}3\.0\d.{11}O.{19}[A-Z].{19}RINEX VERSION / TYPE\s*$", first_line
+        )
     return False
 
 
 def is_rinex_3_nav_file(file: Path):
     if first_line := file_exists_and_can_read_first_line(file):
-        return re.search("3.0.*NAV.*RINEX VERSION.*", first_line) is not None
+        return re.fullmatch(
+            "^.{5}3\.0\d.{11}N.{19}[A-Z].{19}RINEX VERSION / TYPE\s*$", first_line
+        )
     return False
 
 
