@@ -163,7 +163,7 @@ def test_satellite_elevation_and_azimuth():
 def test_sagnac_effect():
     # load validation data
     path_to_validation_file = (
-        util.prx_repository_root() / "src/prx/tools/validation_data/sagnac_effect.csv"
+        util.prx_src_directory() / "tools/validation_data/sagnac_effect.csv"
     )
 
     # satellite position (from reference CSV header)

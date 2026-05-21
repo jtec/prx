@@ -55,14 +55,14 @@ def atx_file_database_folder():
     """
     Returns the path to the folder where ATX database files are stored.
     """
-    db_folder = (
-        util.prx_repository_root() / "src/prx/precise_corrections/antex/atx_files"
-    )
-    db_folder.mkdir(exist_ok=True)
+    db_folder = util.prx_src_directory() / "precise_corrections/antex/atx_files"
+    db_folder.mkdir(exist_ok=True, parents=True)
     return db_folder
 
 
-def find_latest_local_antex_file(db_folder=atx_file_database_folder()) -> Path:
+def find_latest_local_antex_file(db_folder: Path | None = None) -> Path:
+    if db_folder is None:
+        db_folder = atx_file_database_folder()
     candidates = list(db_folder.glob(atx_filename))
     if not candidates:
         return None

@@ -29,13 +29,11 @@ def set_up_test(tmp_path_factory):
     test_nav_file = test_directory.joinpath("BRDC00IGS_R_20230010000_01D_MN.rnx.gz")
 
     shutil.copy(
-        util.prx_repository_root()
-        / f"src/prx/test/datasets/TLSE_2023001/{test_obs_file.name}",
+        util.prx_src_directory() / f"test/datasets/TLSE_2023001/{test_obs_file.name}",
         test_obs_file,
     )
     shutil.copy(
-        util.prx_repository_root()
-        / f"src/prx/test/datasets/TLSE_2023001/{test_nav_file.name}",
+        util.prx_src_directory() / f"test/datasets/TLSE_2023001/{test_nav_file.name}",
         test_nav_file,
     )
 
@@ -79,9 +77,7 @@ def test_nav_file_http_availability_after_2022():
 
 def test_command_line_call(set_up_test):
     test_file = set_up_test["test_obs_file"]
-    aux_file_script_path = (
-        util.prx_repository_root() / "src/prx/rinex_nav/nav_file_discovery.py"
-    )
+    aux_file_script_path = util.prx_src_directory() / "rinex_nav/nav_file_discovery.py"
 
     command = f"python {aux_file_script_path} --observation_file_path {test_file}"
     result = subprocess.run(

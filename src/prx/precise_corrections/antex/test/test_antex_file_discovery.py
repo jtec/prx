@@ -22,8 +22,7 @@ def set_up_test(tmp_path_factory):
     test_obs_file = test_directory.joinpath("TLSE00FRA_R_20230010100_10S_01S_MO.crx.gz")
 
     shutil.copy(
-        util.prx_repository_root()
-        / f"src/prx/test/datasets/TLSE_2023001/{test_obs_file.name}",
+        util.prx_src_directory() / f"test/datasets/TLSE_2023001/{test_obs_file.name}",
         test_obs_file,
     )
     assert test_obs_file.exists()
@@ -62,9 +61,11 @@ def test_download_if_not_local(set_up_test):
     db_folder = set_up_test["test_obs_file"].parent
 
     with (
-        patch(
+        patch(  # simulate fetching a up-to-date atx file
             "prx.precise_corrections.antex.antex_file_discovery.try_downloading_atx_ftp",
-            return_value=atx.fetch_latest_remote_antex_file(),
+            return_value=util.prx_src_directory().joinpath(
+                "prx", "precise_corrections", "antex", "atx_files", "igs20_3000.atx"
+            ),
         ),
         patch(  # simulate that the latest local file found is None
             "prx.precise_corrections.antex.antex_file_discovery.find_latest_local_antex_file",
