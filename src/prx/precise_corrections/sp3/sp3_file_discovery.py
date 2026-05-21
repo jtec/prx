@@ -92,7 +92,7 @@ def sp3_file_folder(date: pd.Timestamp, parent_folder: Path | None = None) -> Pa
 
 
 def get_local_sp3(
-        date: pd.Timestamp, file: str, db_folder=sp3_file_database_folder()
+    date: pd.Timestamp, file: str, db_folder=sp3_file_database_folder()
 ) -> Path | None:
     candidates = list(sp3_file_folder(date, db_folder).glob(file))
     if len(candidates) == 0:
@@ -141,9 +141,9 @@ def try_downloading_sp3_ftp(gps_week: int, folder: Path, file: str) -> Path | No
 
 
 def get_sp3_files(
-        mid_day_start: pd.Timestamp,
-        mid_day_end: pd.Timestamp,
-        db_folder=sp3_file_database_folder(),
+    mid_day_start: pd.Timestamp,
+    mid_day_end: pd.Timestamp,
+    db_folder=sp3_file_database_folder(),
 ) -> tuple[list[Path | None], list[Path | None]]:
     sp3_orb_files = []
     sp3_clk_files = []
@@ -175,7 +175,7 @@ def get_sp3_files(
 
 
 def discover_or_download_sp3_file(
-        observation_file_path=Path,
+    observation_file_path=Path,
 ) -> tuple[list[Path | None], list[Path | None]]:
     """
     Returns the path to a valid SP3 file (local or downloaded) corresponding to the observation file.
