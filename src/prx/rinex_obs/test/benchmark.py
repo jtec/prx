@@ -12,7 +12,7 @@ from plotly.subplots import make_subplots
 import plotly.graph_objects as go
 import georinex
 
-from prx.util import prx_repository_root
+from prx.util import prx_src_directory
 
 
 def generate_inputs(n_steps: int = 10, root: Path = None) -> list[dict]:
@@ -22,8 +22,8 @@ def generate_inputs(n_steps: int = 10, root: Path = None) -> list[dict]:
         root / "datasets" / "TLSE00FRA_R_20220010000_01D_30S_MO.rnx.gz"
     )
     base_nav_file = converters.anything_to_rinex_3(
-        prx_repository_root()
-        / "src/prx/rinex_nav/test/datasets/BRDC00IGS_R_20220010000_01D_MN.zip"
+        prx_src_directory()
+        / "rinex_nav/test/datasets/BRDC00IGS_R_20220010000_01D_MN.zip"
     )
     sweep_dir = base_obs_file.parent / "sweep"
     sweep_dir.mkdir(exist_ok=True)
