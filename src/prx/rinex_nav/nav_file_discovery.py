@@ -17,9 +17,9 @@ from prx.util import is_rinex_3_nav_file
 
 log = logging.getLogger(__name__)
 
-IGS_FTP_SERVER = {
+IGS_FTP_SERVER = {  # add other FTP server in case ESA server is down or removed
+    # ftp_server_address: root_dir_of_daily_data
     "gssc.esa.int": "/gnss/data/daily/",
-    # "igs.ign.fr": "/pub/igs/data/",
 }
 
 
@@ -131,7 +131,7 @@ def try_downloading_ephemerides_ftp(day: pd.Timestamp, local_destination_folder:
                 return local_file
             else:
                 log.warning(
-                    f"{file} does not contain on ionospheric correction parameters..."
+                    f"{file} does not contain GPS ionospheric correction parameters..."
                 )
                 os.remove(local_file)
                 continue
