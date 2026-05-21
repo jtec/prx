@@ -22,8 +22,8 @@ def set_up_test(tmp_path_factory):
 def test_compressed_crx_to_rnx(set_up_test):
     compressed_compact_rinex_file = "TLSE00FRA_R_20230010100_10S_01S_MO.crx.gz"
     shutil.copy(
-        util.prx_repository_root()
-        / f"src/prx/test/datasets/TLSE_2023001/{compressed_compact_rinex_file}",
+        util.prx_src_directory()
+        / f"test/datasets/TLSE_2023001/{compressed_compact_rinex_file}",
         set_up_test["test_directory"].joinpath(compressed_compact_rinex_file),
     )
     rinex_3_file = converters.anything_to_rinex_3(
@@ -41,12 +41,12 @@ def test_converting_file_that_cannot_be_converted(set_up_test):
     # When trying to convert a file that cannot be converted into RINEX 3, expect the converter to return None
     does_not_contain_rinex_3 = "igs21906.sp3"
     assert (
-        util.prx_repository_root()
-        / f"src/prx/test/datasets/TLSE_2022001/{does_not_contain_rinex_3}"
+        util.prx_src_directory()
+        / f"test/datasets/TLSE_2022001/{does_not_contain_rinex_3}"
     ).exists()
     shutil.copy(
-        util.prx_repository_root()
-        / f"src/prx/test/datasets/TLSE_2022001/{does_not_contain_rinex_3}",
+        util.prx_src_directory()
+        / f"test/datasets/TLSE_2022001/{does_not_contain_rinex_3}",
         set_up_test["test_directory"].joinpath(does_not_contain_rinex_3),
     )
     assert (
