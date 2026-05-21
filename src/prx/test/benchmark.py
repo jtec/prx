@@ -89,7 +89,7 @@ def main(ram: bool):
     for row in [1, 2]:
         fig.update_xaxes(title_text="#epochs", row=row, col=1)
     fig.update_yaxes(title_text="total time [s]", row=1, col=1)
-    fig.update_yaxes(title_text="Peak RAM [Mb]", row=1, col=1)
+    fig.update_yaxes(title_text="Peak RAM [Mb]", row=2, col=1)
     fig.update_layout(hoverlabel=dict(namelength=-1))
     fig.update_layout(title=dict(text="prx benchmark"))
     fig.show("browser")
