@@ -166,7 +166,7 @@ def input_for_test_with_first_epoch_at_midnight(tmp_path_factory):
 
 def test_prx_command_line_call(input_for_test_tlse):
     test_file = input_for_test_tlse
-    prx_path = util.prx_repository_root() / "main.py"
+    prx_path = util.prx_src_directory() / "main.py"
     command = f"uv run python {prx_path} --observation_file_path {test_file}"
     result = subprocess.run(
         command, capture_output=True, shell=True, cwd=str(test_file.parent)

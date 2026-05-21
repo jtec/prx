@@ -55,7 +55,7 @@ def atx_file_database_folder():
     """
     Returns the path to the folder where ATX database files are stored.
     """
-    db_folder = util.prx_repository_root() / "precise_corrections/antex/atx_files"
+    db_folder = util.prx_src_directory() / "precise_corrections/antex/atx_files"
     db_folder.mkdir(exist_ok=True, parents=True)
     return db_folder
 

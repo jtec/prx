@@ -143,7 +143,7 @@ def configure_logging(log_level: str = "INFO"):
     terminal_handler = logging.StreamHandler()
     terminal_handler.setLevel(log_level.upper())
 
-    log_directory = prx_repository_root() / "logs"
+    log_directory = prx_src_directory() / "logs"
     log_directory.mkdir(exist_ok=True, parents=True)
     logfile_handler = logging.FileHandler(
         log_directory
@@ -159,7 +159,7 @@ def configure_logging(log_level: str = "INFO"):
         handler.setFormatter(formatter)
 
 
-def prx_repository_root() -> Path:
+def prx_src_directory() -> Path:
     return Path(__file__).parent
 
 

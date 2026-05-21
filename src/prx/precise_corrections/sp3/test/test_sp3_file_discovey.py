@@ -23,7 +23,7 @@ def set_up_test():
     test_obs_file = test_directory.joinpath("TLSE00FRA_R_20230010100_10S_01S_MO.crx.gz")
 
     shutil.copy(
-        util.prx_repository_root() / f"test/datasets/TLSE_2023001/{test_obs_file.name}",
+        util.prx_src_directory() / f"test/datasets/TLSE_2023001/{test_obs_file.name}",
         test_obs_file,
     )
     assert test_obs_file.exists()
@@ -32,7 +32,7 @@ def set_up_test():
 
     # copy all sp3 files
     for file in (
-        util.prx_repository_root()
+        util.prx_src_directory()
         / "precise_corrections"
         / "sp3"
         / "test"
@@ -42,7 +42,7 @@ def set_up_test():
     ).glob("*"):
         test_sp3_file = sp3_subfolder / file.name
         shutil.copy(
-            util.prx_repository_root()
+            util.prx_src_directory()
             / f"precise_corrections/sp3/test/datasets/2023/001/{test_sp3_file.name}",
             test_sp3_file,
         )
