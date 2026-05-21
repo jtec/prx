@@ -61,9 +61,11 @@ def test_download_if_not_local(set_up_test):
     db_folder = set_up_test["test_obs_file"].parent
 
     with (
-        patch(
+        patch(  # simulate fetching a up-to-date atx file
             "prx.precise_corrections.antex.antex_file_discovery.try_downloading_atx_ftp",
-            return_value=atx.fetch_latest_remote_antex_file(),
+            return_value=util.prx_src_directory().joinpath(
+                "prx", "precise_corrections", "antex", "atx_files", "igs20_3000.atx"
+            ),
         ),
         patch(  # simulate that the latest local file found is None
             "prx.precise_corrections.antex.antex_file_discovery.find_latest_local_antex_file",
