@@ -1,57 +1,64 @@
 import logging
-import shutil
 
 import pandas as pd
 from pathlib import Path
 
-from prx import converters
+from plotly.subplots import make_subplots
+import plotly.graph_objects as go
+
 from prx.main import process
 import cProfile
 
-from prx.util import configure_logging
+from prx.rinex_obs.test.benchmark import generate_inputs
+from prx.util import configure_logging, disk_cache
 
 logger = logging.getLogger(__name__)
 
 
-def setup():
-    benchmark_dataset_directory = Path(__file__).parent / "benchmark"
-    shutil.rmtree(benchmark_dataset_directory, ignore_errors=True)
-    benchmark_dataset_directory.mkdir(exist_ok=True, parents=True)
-    obs_file = converters.anything_to_rinex_3(
-        Path(__file__).parent
-        / "datasets"
-        / "TLSE00FRA_R_2024001"
-        / "TLSE00FRA_R_20240011200_15M_01S_MO.crx.gz"
-    )
-    nav_file = converters.anything_to_rinex_3(
-        Path(__file__).parent
-        / "datasets"
-        / "TLSE00FRA_R_2024001"
-        / "BRDC00IGS_R_20240010000_01D_MN.rnx.gz"
-    )
-    shutil.copy(obs_file, benchmark_dataset_directory)
-    shutil.copy(nav_file, benchmark_dataset_directory)
-    return benchmark_dataset_directory / obs_file.name
-
-
-def benchmark(obs_file: Path):
-    process(obs_file)
-
-
-if __name__ == "__main__":
-    configure_logging("DEBUG")
+def run_case(case: dict):
+    obs_file = Path(case["obs_file"])
+    # Purge caches, we're going for run time with a file prx has never seen before
+    disk_cache.clear()
     p = cProfile.Profile()
-    obs_file = setup()
-    # Warm up cached functions, parsers are benchmarked separately.
-    benchmark(obs_file)
     p.enable()
-    benchmark(obs_file)
+    process(obs_file)
     p.disable()
     stats_file = Path("benchmark_prx.prof").resolve()
     p.dump_stats(stats_file)
-    df = pd.DataFrame(
-        p.getstats(),
-        columns=["func", "ncalls", "ccalls", "tottime", "cumtime", "callers"],
-    ).sort_values(by="tottime", ascending=False)
+    df = (
+        pd.DataFrame(
+            p.getstats(),
+            columns=["func", "ncalls", "ccalls", "tottime", "cumtime", "callers"],
+        )
+        .sort_values(by="tottime", ascending=False)
+        .reset_index(drop=True)
+    )
     logger.info(f"Processed {obs_file.name} in {df.iloc[0, :]['tottime']} seconds")
-    logger.info(f"To inspect profiling results, call \n snakeviz {stats_file}")
+    df = df[["func", "tottime"]]
+    df["function"] = df["func"].apply(lambda x: getattr(x, "co_name", None))
+    df["file"] = df["func"].apply(lambda x: getattr(x, "co_filename", None))
+    df = df[df["function"].notnull() & df["file"].str.contains("prx/src/prx/")]
+    df = df.drop(columns=["func"])
+    df["obs_epochs"] = case["epochs"]
+    return df
+
+
+def main():
+    configure_logging("DEBUG")
+    cases = generate_inputs()
+    df = pd.concat([run_case(case) for case in cases])
+    fig = make_subplots(rows=1, cols=1)
+    for (file, function), group in df.groupby(["file", "function"]):
+        fig.add_trace(
+            go.Scatter(x=group["obs_epochs"], y=group["tottime"], name=function),
+            row=1,
+            col=1,
+        )
+    fig.update_xaxes(title_text="#epochs")
+    fig.update_yaxes(title_text="total time [s]")
+    fig.update_layout(hoverlabel=dict(namelength=-1))
+    fig.show("browser")
+
+
+if __name__ == "__main__":
+    main()
