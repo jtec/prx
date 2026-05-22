@@ -340,14 +340,14 @@ def handle_bds_geos(eph):
             ]
         )
         rotation_matrices.append(np.matmul(Rz, Rx))
-    R = scipy.linalg.block_diag(*rotation_matrices)
-    P_K = np.matmul(R, P_GK)
+    R = scipy.sparse.block_diag(rotation_matrices)
+    P_K = R @ P_GK
     P_K = np.reshape(P_K, (-1, 3))
     geos["X_k"] = P_K[:, 0]
     geos["Y_k"] = P_K[:, 1]
     geos["Z_k"] = P_K[:, 2]
     # Velocity in inertial frame that coincides with BDCS at this time, ie a "frozen" ECEF frame
-    V_K_frozen = np.matmul(R, V_GK)
+    V_K_frozen = R @ V_GK
     V_K_frozen = np.reshape(V_K_frozen, (-1, 3))
     geos["dX_k"] = V_K_frozen[:, 0]
     geos["dY_k"] = V_K_frozen[:, 1]
