@@ -10,7 +10,10 @@ import plotly.graph_objects as go
 
 from prx.main import process
 import cProfile
-import memray
+import platform
+
+if platform.system() != "Windows":
+    import memray
 from prx.rinex_obs.test.benchmark import generate_inputs
 from prx.util import configure_logging, disk_cache
 
@@ -29,7 +32,7 @@ def run_case(case: dict, ram: bool) -> pd.DataFrame:
     # RAM
     # memray adds overhead, measure peak RAM separately from run time
     peak_ram_mb = np.nan
-    if ram:
+    if ram and (platform.system() != "Windows"):
         memray_output = obs_file.parent / f"{obs_file.stem}_memray.bin"
         memray_output.unlink(missing_ok=True)
         disk_cache.clear()
@@ -58,7 +61,7 @@ def run_case(case: dict, ram: bool) -> pd.DataFrame:
     df = df[["func", "tottime"]]
     df["function"] = df["func"].apply(lambda x: getattr(x, "co_name", None))
     df["file"] = df["func"].apply(lambda x: getattr(x, "co_filename", None))
-    df = df[df["function"].notnull() & df["file"].str.contains("prx/src/prx/")]
+    df = df[df["function"].notnull() & df["file"].str.contains(r"prx[\\/]src[\\/]prx")]
     not_interesting = ["timeit_wrapper", "<genexpr>"]
     df = df[~df["function"].isin(not_interesting)]
     df = df.drop(columns=["func"])

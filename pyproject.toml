@@ -56,7 +56,7 @@ dev = [
     "snakeviz>=2.2.2",
     "viztracer>=1.1.1",
     "pytest-profiling>=1.8.1",
-    "memray>=1.19.3",
+    "memray>=1.19.3;platform_system != 'Windows'",
 ]
 
 [tool.hatch.build.targets.sdist]
