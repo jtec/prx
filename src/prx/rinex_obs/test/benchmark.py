@@ -12,35 +12,42 @@ from plotly.subplots import make_subplots
 import plotly.graph_objects as go
 import georinex
 
-from prx.util import prx_repository_root
+from prx.util import prx_src_directory
 
 
-def generate_inputs(n_steps: int = 10, root: Path = None) -> list[dict]:
+def generate_inputs(
+    n_steps: int = 10, root: Path = None, obs_file: Path = None, nav_file: Path = None
+) -> list[dict]:
     if root is None:
-        root = Path(__file__).parent
-    base_obs_file = converters.anything_to_rinex_3(
-        root / "datasets" / "TLSE00FRA_R_20220010000_01D_30S_MO.rnx.gz"
-    )
-    base_nav_file = converters.anything_to_rinex_3(
-        prx_repository_root()
-        / "src/prx/rinex_nav/test/datasets/BRDC00IGS_R_20220010000_01D_MN.zip"
-    )
-    sweep_dir = base_obs_file.parent / "sweep"
+        root = Path(__file__).parent / "benchmark_datasets"
+    root.mkdir(exist_ok=True, parents=True)
+    if obs_file is None:
+        obs_file = converters.anything_to_rinex_3(
+            root / "datasets" / "TLSE00FRA_R_20220010000_01D_30S_MO.rnx.gz"
+        )
+        nav_file = converters.anything_to_rinex_3(
+            prx_src_directory()
+            / "rinex_nav/test/datasets/BRDC00IGS_R_20220010000_01D_MN.zip"
+        )
+    else:
+        assert nav_file is not None, "Please provide both obs and nav files"
+    sweep_dir = root / "sweep"
     sweep_dir.mkdir(exist_ok=True)
-    times = georinex.obstime3(base_obs_file)
-    header = georinex.rinexheader(base_obs_file)
+    times = georinex.obstime3(obs_file)
+    header = georinex.rinexheader(obs_file)
     t_start = pd.Timestamp(np.min(times))
     t_end = pd.Timestamp(np.max(times))
     dt = (t_end - t_start) / n_steps
     cases = []
     for steps in range(1, n_steps, 1):
         duration = dt * steps
+        duration_label = f"{duration / pd.Timedelta('1h'):.2f}h"
         slice_obs_file = (
-            sweep_dir
-            / f"{base_obs_file.name}_slice_{duration / pd.Timedelta('1h'):.2f}h.rnx"
+            sweep_dir / duration_label / f"{obs_file.name}_slice_{duration_label}.rnx"
         )
+        slice_obs_file.parent.mkdir(exist_ok=True, parents=True)
         cmd = (
-            f"gfzrnx -finp {base_obs_file}"
+            f"gfzrnx -finp {obs_file}"
             f" -fout {slice_obs_file}"
             f" -epo_beg {t_start.strftime('%Y-%m-%d_%H%M%S')}"
             f" -d {int(duration / pd.Timedelta('1s'))}"
@@ -50,9 +57,9 @@ def generate_inputs(n_steps: int = 10, root: Path = None) -> list[dict]:
             assert process_output.returncode == 0
             print(f"Created {slice_obs_file}")
         print(f"Adding {slice_obs_file} to the database ...")
-        slice_nav_file = slice_obs_file.parent / base_nav_file.name
+        slice_nav_file = slice_obs_file.parent / nav_file.name
         if not slice_nav_file.exists():
-            shutil.copy(base_nav_file, slice_nav_file)
+            shutil.copy(nav_file, slice_nav_file)
         cases.append(
             {
                 "epochs": (duration / pd.Timedelta("1s")) / float(header["INTERVAL"]),
