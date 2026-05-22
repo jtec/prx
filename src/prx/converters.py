@@ -51,6 +51,10 @@ def compact_rinex_obs_file_to_rinex_obs_file(file: Path):
     assert file.exists(), "File does not exist"
     if not is_compact_rinex_obs_file(file):
         return None
+    expanded_file = Path(str(file).replace(".crx", ".rnx"))
+    # CRX2RNX generates a slightly different uncompressed file when it already exists
+    if expanded_file.exists():
+        expanded_file.unlink()
     crx2rnx_binaries = glob.glob(
         str(Path(__file__).parent / "tools/RNXCMP/**/CRX2RNX*"), recursive=True
     )
@@ -59,7 +63,6 @@ def compact_rinex_obs_file_to_rinex_obs_file(file: Path):
         command = f" {crx2rnx_binary} -f {file}"
         result = subprocess.run(command, capture_output=True, shell=True)
         if result.returncode == 0:
-            expanded_file = Path(str(file).replace(".crx", ".rnx"))
             log.info(f"Converted compact Rinex to Rinex: {expanded_file}")
             return expanded_file
     return None
