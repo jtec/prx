@@ -1,3 +1,4 @@
+import shutil
 import subprocess
 import timeit
 
@@ -11,44 +12,65 @@ from plotly.subplots import make_subplots
 import plotly.graph_objects as go
 import georinex
 
+from prx.util import prx_src_directory
 
-def generate_data():
-    base_file = converters.anything_to_rinex_3(
-        Path(__file__).parent / "datasets" / "TLSE00FRA_R_20220010000_01D_30S_MO.rnx.gz"
-    )
-    sweep_dir = base_file.parent / "sweep"
-    results_file = sweep_dir / "benchmark.csv"
+
+def generate_inputs(
+    n_steps: int = 10, root: Path = None, obs_file: Path = None, nav_file: Path = None
+) -> list[dict]:
+    if root is None:
+        root = Path(__file__).parent / "benchmark_datasets"
+    root.mkdir(exist_ok=True, parents=True)
+    if obs_file is None:
+        obs_file = converters.anything_to_rinex_3(
+            root / "datasets" / "TLSE00FRA_R_20220010000_01D_30S_MO.rnx.gz"
+        )
+        nav_file = converters.anything_to_rinex_3(
+            prx_src_directory()
+            / "rinex_nav/test/datasets/BRDC00IGS_R_20220010000_01D_MN.zip"
+        )
+    else:
+        assert nav_file is not None, "Please provide both obs and nav files"
+    sweep_dir = root / "sweep"
     sweep_dir.mkdir(exist_ok=True)
-    times = georinex.obstime3(base_file)
-    header = georinex.rinexheader(base_file)
+    times = georinex.obstime3(obs_file)
+    header = georinex.rinexheader(obs_file)
     t_start = pd.Timestamp(np.min(times))
     t_end = pd.Timestamp(np.max(times))
-    n_steps = 10
     dt = (t_end - t_start) / n_steps
     cases = []
     for steps in range(1, n_steps, 1):
         duration = dt * steps
-        slice_file = (
-            sweep_dir
-            / f"{base_file.name}_slice_{duration / pd.Timedelta('1h'):.2f}h.rnx"
+        duration_label = f"{duration / pd.Timedelta('1h'):.2f}h"
+        slice_obs_file = (
+            sweep_dir / duration_label / f"{obs_file.name}_slice_{duration_label}.rnx"
         )
+        slice_obs_file.parent.mkdir(exist_ok=True, parents=True)
         cmd = (
-            f"gfzrnx -finp {base_file}"
-            f" -fout {slice_file}"
+            f"gfzrnx -finp {obs_file}"
+            f" -fout {slice_obs_file}"
             f" -epo_beg {t_start.strftime('%Y-%m-%d_%H%M%S')}"
             f" -d {int(duration / pd.Timedelta('1s'))}"
         )
-        if not slice_file.exists():
+        if not slice_obs_file.exists():
             process_output = subprocess.run(cmd, shell=True, capture_output=True)
             assert process_output.returncode == 0
-            print(f"Created {slice_file}")
-        print(f"Adding {slice_file} to the database ...")
+            print(f"Created {slice_obs_file}")
+        print(f"Adding {slice_obs_file} to the database ...")
+        slice_nav_file = slice_obs_file.parent / nav_file.name
+        if not slice_nav_file.exists():
+            shutil.copy(nav_file, slice_nav_file)
         cases.append(
             {
                 "epochs": (duration / pd.Timedelta("1s")) / float(header["INTERVAL"]),
-                "file": slice_file,
+                "obs_file": slice_obs_file,
+                "nav_file": slice_nav_file,
             }
         )
+    return cases
+
+
+def run_parser(cases: list[dict]) -> pd.DataFrame:
     for case in cases:
         for parser in [
             ("prx", prx_obs_parse),
@@ -56,7 +78,7 @@ def generate_data():
             print(f"Processing {case}")
             util.disk_cache.clear()
             case[f"{parser[0]}_parsing_s"] = timeit.timeit(
-                lambda: parser[1](case["file"]), number=1
+                lambda: parser[1](case["obs_file"]), number=1
             )
             case[f"{parser[0]}_epochs_per_second"] = (
                 case["epochs"] / case[f"{parser[0]}_parsing_s"]
@@ -66,14 +88,14 @@ def generate_data():
                 f" ({case[f'{parser[0]}_epochs_per_second']:.2f} epochs/s)"
                 f" with {parser[0]}"
             )
-    df = pd.DataFrame(cases)
-    df.to_csv(results_file, index=False)
-    return df
+    return pd.DataFrame(cases)
 
 
 if __name__ == "__main__":
-    df = generate_data()
-    df["file_size_mbytes"] = df.file.apply(lambda x: Path(x).stat().st_size) / 1e6
+    df = run_parser(generate_inputs())
+    df["file_size_mbytes"] = (
+        df["obs_file"].apply(lambda x: Path(x).stat().st_size) / 1e6
+    )
     fig = make_subplots(rows=1, cols=1, shared_xaxes=True)
     for col in [col for col in df.columns if "_epochs_per_second" in col]:
         fig.add_trace(
