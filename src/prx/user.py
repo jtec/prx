@@ -244,7 +244,7 @@ def bootstrap_coarse_receiver_position(filepath_obs, filepath_nav):
             n_obs = len(obs.sv.values)
         else:
             n_obs = 0
-        first_epoch = first_epoch + pd.Timedelta(seconds=1)
+        first_epoch = first_epoch + pd.Timedelta(seconds=obs.interval)
 
     time_of_flight = [
         pd.Timedelta(
@@ -274,6 +274,8 @@ def bootstrap_coarse_receiver_position(filepath_obs, filepath_nav):
     sat_states = prx.rinex_nav.evaluate.compute(
         filepath_nav[current_nav_file_index], query
     )
+    # exclude unhealthy satellites
+    sat_states = sat_states.loc[sat_states.health_flag == 0]
     sat_states = sat_states.rename(
         columns={
             "signal": "observation_type",
