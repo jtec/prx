@@ -17,9 +17,9 @@ from prx.util import is_rinex_3_nav_file
 
 log = logging.getLogger(__name__)
 
-IGS_FTP_SERVER = {
+IGS_FTP_SERVER = {  # add other FTP server in case ESA server is down or removed
+    # ftp_server_address: root_dir_of_daily_data
     "gssc.esa.int": "/gnss/data/daily/",
-    "igs.ign.fr": "/pub/igs/data/",
 }
 
 
@@ -32,18 +32,22 @@ def check_online_availability_ftp(day: pd.Timestamp) -> bool:
     """
     Check availability of NAV file on FTP server without downloading it.
     """
-    file = f"BRDC00IGS_R_{day.year}{day.day_of_year:03}0000_01D_MN.rnx.gz"
+    files = [
+        f"BRDM00DLR_S_{day.year}{day.day_of_year:03}0000_01D_MN.rnx.gz",
+        f"BRDC00IGS_R_{day.year}{day.day_of_year:03}0000_01D_MN.rnx.gz",
+    ]
     for server, remote_folder in IGS_FTP_SERVER.items():
         remote_folder_for_day = remote_folder + f"{day.year}/{day.day_of_year:03}"
         ftp = ftplib.FTP(server)
         ftp.login()
         ftp.cwd(remote_folder_for_day)
-        try:
-            ftp.size(file)
-            return True
-        except ftplib.error_perm:
-            log.warning(f"{file} not available on {server}")
-            return False
+        for file in files:
+            try:
+                ftp.size(file)
+                return True
+            except ftplib.error_perm:
+                log.warning(f"{file} not available on {server}")
+    return False
 
 
 def check_online_availability_http(day: pd.Timestamp) -> bool:
@@ -75,6 +79,15 @@ def check_online_availability_http(day: pd.Timestamp) -> bool:
     return availability
 
 
+def check_iono_corr_availability(file):
+    header = georinex.rinexheader(file)
+    if "IONOSPHERIC CORR" in header:
+        if "GPSA" in header["IONOSPHERIC CORR"]:
+            return True
+    else:
+        return False
+
+
 def try_downloading_ephemerides_http(day: pd.Timestamp, local_destination_folder: Path):
     # IGS BKG Rinex 3.04 mixed file paths follow this pattern:
     # https://igs.bkg.bund.de/root_ftp/IGS/BRDC/2023/002/BRDC00IGS_R_20230020000_01D_MN.rnx.gz
@@ -97,22 +110,32 @@ def try_downloading_ephemerides_http(day: pd.Timestamp, local_destination_folder
 
 
 def try_downloading_ephemerides_ftp(day: pd.Timestamp, local_destination_folder: Path):
-    file = f"BRDC00IGS_R_{day.year}{day.day_of_year:03}0000_01D_MN.rnx.gz"
-    local_compressed_file = local_destination_folder / file
+    files = [
+        f"BRDC00IGS_R_{day.year}{day.day_of_year:03}0000_01D_MN.rnx.gz",
+        f"BRDM00DLR_S_{day.year}{day.day_of_year:03}0000_01D_MN.rnx.gz",
+    ]
     for server, remote_folder in IGS_FTP_SERVER.items():
         remote_folder_for_day = remote_folder + f"{day.year}/{day.day_of_year:03}"
-        ftp_file = f"ftp://{server}/{remote_folder_for_day}/{file}"
-        urllib.request.urlretrieve(ftp_file, local_compressed_file)
-        if not local_compressed_file.exists():
-            log.warning(f"Could not download {ftp_file}")
-            continue
-        local_file = converters.compressed_to_uncompressed(local_compressed_file)
-        os.remove(local_compressed_file)
-        log.info(f"Downloaded broadcast ephemerides file {ftp_file}")
-        prx.util.try_repair_with_gfzrnx(local_file)
-    if not local_compressed_file.exists():
-        return None
-    return local_file
+        for file in files:
+            ftp_file = f"ftp://{server}/{remote_folder_for_day}/{file}"
+            local_compressed_file = local_destination_folder / file
+            urllib.request.urlretrieve(ftp_file, local_compressed_file)
+            if not local_compressed_file.exists():
+                log.warning(f"Could not download {ftp_file}")
+                continue
+            local_file = converters.compressed_to_uncompressed(local_compressed_file)
+            os.remove(local_compressed_file)
+            log.info(f"Downloaded broadcast ephemerides file {ftp_file}")
+            prx.util.try_repair_with_gfzrnx(local_file)
+            if check_iono_corr_availability(local_file):
+                return local_file
+            else:
+                log.warning(
+                    f"{file} does not contain GPS ionospheric correction parameters..."
+                )
+                os.remove(local_file)
+                continue
+    return None
 
 
 def try_downloading_ephemerides(mid_day: pd.Timestamp, folder: Path):
@@ -181,7 +204,11 @@ def discover_or_download_ephemerides(
     t_start: pd.Timestamp, t_end: pd.Timestamp, folder, constellations
 ):
     # If there are any navigation files provided by the user, use them, otherwise use IGS files.
-    candidates = [anything_to_rinex_3(file) for file in folder.rglob("*")]
+    candidates = [
+        anything_to_rinex_3(file)
+        for file in folder.rglob("*")
+        if is_rinex_3_mixed_mgex_broadcast_ephemerides_file(file)
+    ]
     candidates = [candidate for candidate in candidates if candidate is not None]
     user_provided_nav_files = [
         f

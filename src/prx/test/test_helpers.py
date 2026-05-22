@@ -7,6 +7,8 @@ from pathlib import Path
 import shutil
 import os
 
+from prx.converters import anything_to_rinex_3
+
 log = logging.getLogger(__name__)
 
 
@@ -333,3 +335,12 @@ def test_sat_frame():
     pos_rx = np.array([0, 6_400_000, 0])  # on +y
     pos_rx_sat = np.stack([i, j, k], axis=0) @ (pos_rx - pos_sat)
     assert pos_rx_sat == pytest.approx(np.array([6_400_000, 0, 20_200_000 + 6_400_000]))
+
+
+def test_rinex_type_based_on_first_line(input_for_test):
+    obs = anything_to_rinex_3(input_for_test["obs"])
+    nav = anything_to_rinex_3(input_for_test["nav"])
+    assert util.is_rinex_3_obs_file(obs)
+    assert util.is_rinex_3_nav_file(nav)
+    assert not util.is_rinex_3_obs_file(nav)
+    assert not util.is_rinex_3_nav_file(obs)

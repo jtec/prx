@@ -20,12 +20,10 @@ from prx.rinex_nav.evaluate import parse_rinex_nav_file
 from prx.precise_corrections.sp3 import evaluate as sp3_evaluate
 from prx.precise_corrections.sp3 import sp3_file_discovery
 from prx.precise_corrections.antex import antex_file_discovery
-from line_profiler import profile
 
 log = logging.getLogger(__name__)
 
 
-@profile
 @util.timeit
 def write_prx_file(
     prx_header: dict,
