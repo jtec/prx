@@ -164,9 +164,6 @@ def compute_tropo_delay_saastamoinen(height, el, lat, humi=0.7):
     assert len(height) == len(el) == len(lat)
     assert (-100 <= height).all()
     assert (height <= 1e4).all()
-    assert (
-        el[~np.isnan(el)] >= -np.deg2rad(5)
-    ).all()  # consider slightly negative elevation...
 
     # standard atmosphere model
     height_new = height.copy()  # to avoid changing input
@@ -190,6 +187,11 @@ def compute_tropo_delay_saastamoinen(height, el, lat, humi=0.7):
 
     # total tropospheric delay (projected on the slant path)
     tropo_tot = tropo_h + tropo_w
+
+    # set negative elevation satellite to nan
+    tropo_h[el < -np.deg2rad(5)] = np.nan
+    tropo_w[el < -np.deg2rad(5)] = np.nan
+    tropo_tot[el < -np.deg2rad(5)] = np.nan
 
     return tropo_tot, tropo_h, tropo_w
 

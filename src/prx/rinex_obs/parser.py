@@ -59,7 +59,7 @@ def parse(file_path):
     df = df.iloc[i_end_of_header + 1 :].reset_index(drop=True)
     df["i"] = df.index
     is_timestamp = df.lines.str.startswith(">")
-    timestamps = df[is_timestamp]
+    timestamps = df[is_timestamp].copy()
     timestamps["time"] = pd.to_datetime(
         timestamps.lines.str[2:29], format="%Y %m %d %H %M %S.%f"
     )
@@ -67,7 +67,7 @@ def parse(file_path):
     df = pd.merge_asof(df, timestamps, on="i", direction="backward").drop(columns="i")[
         ~is_timestamp
     ]
-    df = df[~is_timestamp]
+    df = df.loc[~is_timestamp]
     df.columns = ["records", "time"]
     # See table A3 in the RINEX 3.05 specification
     block_length = 14 + 1 + 1
