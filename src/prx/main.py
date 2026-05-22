@@ -207,6 +207,7 @@ def build_records_levels_12(
     approximate_receiver_ecef_position_m,
     prx_level,
     model_tropo,
+    joblib_backend: str = "loky",
 ):
     """
     Creates a flat_obs dataframe including columns for prx processing levels 1 and 2.
@@ -318,6 +319,7 @@ def build_records_levels_12(
             rinex_evaluate.compute_parallel(
                 file,
                 day_query,
+                joblib_backend=joblib_backend,
             )
         )
         if prx_level == 1:  # drop sat group delay
@@ -612,7 +614,12 @@ def build_records_level_3(
 
 
 @util.timeit
-def process(observation_file_path: Path, prx_level=2, model_tropo="saastamoinen"):
+def process(
+    observation_file_path: Path,
+    prx_level=2,
+    model_tropo="saastamoinen",
+    joblib_backend: str = "loky",
+):
     t0 = pd.Timestamp.now()
     # We expect a Path, but might get a string here:
     observation_file_path = Path(observation_file_path)
@@ -641,6 +648,7 @@ def process(observation_file_path: Path, prx_level=2, model_tropo="saastamoinen"
                 metadata["approximate_receiver_ecef_position_m"],
                 prx_level,
                 model_tropo,
+                joblib_backend,
             )
         case 3:
             aux_files = {}
