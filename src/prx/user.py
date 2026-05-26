@@ -244,7 +244,7 @@ def bootstrap_coarse_receiver_position(filepath_obs, filepath_nav):
             n_obs = len(obs.sv.values)
         else:
             n_obs = 0
-        first_epoch = first_epoch + pd.Timedelta(seconds=obs.interval)
+        first_epoch = first_epoch + pd.Timedelta(seconds=1)
 
     time_of_flight = [
         pd.Timedelta(
