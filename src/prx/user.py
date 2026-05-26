@@ -308,7 +308,7 @@ def bootstrap_coarse_receiver_position(filepath_obs, filepath_nav):
         ],
         how="left",
         on="sv",
-    )
+    ).dropna()
     obs_df = obs_df.rename(columns={"observation_value": "C_obs_m"})
     # add missing columns with 0 value, since approximate position is unknown
     obs_df = pd.concat(
@@ -316,9 +316,9 @@ def bootstrap_coarse_receiver_position(filepath_obs, filepath_nav):
             obs_df,
             pd.DataFrame(
                 {
-                    "sagnac_effect_m": np.zeros(len(obs.sv)),
-                    "iono_delay_m": np.zeros(len(obs.sv)),
-                    "tropo_delay_m": np.zeros(len(obs.sv)),
+                    "sagnac_effect_m": np.zeros(len(obs_df)),
+                    "iono_delay_m": np.zeros(len(obs_df)),
+                    "tropo_delay_m": np.zeros(len(obs_df)),
                     "constellation": "G",
                 }
             ),
