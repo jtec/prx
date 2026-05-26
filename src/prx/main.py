@@ -198,6 +198,15 @@ def warm_up_parser_cache(rinex_files):
     _ = [parse_rinex_nav_or_obs_file(file) for file in rinex_files]
 
 
+def assign_carrier_frequencies(flat_obs):
+    freq_dict = pd.json_normalize(carrier_frequencies_hz(), sep="_").to_dict(
+        orient="records"
+    )[0]
+    freq_dict[None] = None
+    keys = flat_obs["satellite"].str.slice(0,1) + "_L" + flat_obs["observation_type"].str.slice(1,1) + "_" + flat_obs["frequency_slot"].cast(int).cast(str)
+    flat_obs = flat_obs.with_columns(keys.replace(freq_dict).cast(float).alias("carrier_frequency_hz"))
+    return flat_obs
+
 @util.timeit
 def build_records_levels_12(
     rinex_3_obs_file,
@@ -271,7 +280,7 @@ def build_records_levels_12(
             1e3
             * (pl.mean_horizontal(code_phase_columns) / constants.cGpsSpeedOfLight_mps)
         )
-        .cast(pl.Duration(time_unit="ms"))
+        .cast(pl.Duration(time_unit="ns"))
         .alias("tof_dtrx")
     )
     # As error terms are tens of nanoseconds here, and the receiver clock is integer-second aligned to GPST, we
@@ -375,51 +384,45 @@ def build_records_levels_12(
     )
     flat_obs = flat_obs.with_columns(code_id=pl.col("observation_type").str.slice(1, 2))
 
-    flat_obs = flat_obs.merge(
-        sat_states.drop(columns=["observation_type"]),
+    flat_obs = flat_obs.join(
+        sat_states.drop(["observation_type"]),
         on=["satellite", "code_id", "time_of_emission_isagpst"],
         how="left",
-    ).drop(columns=["code_id"])
+    ).drop(["code_id"])
 
     if prx_level == 2:
         # Fix code biases being merged into lines with signals that are not code signals
-        flat_obs.loc[
-            ~(flat_obs.observation_type.str.startswith("C")), "sat_code_bias_m"
-        ] = np.nan
+        flat_obs = flat_obs.with_columns(
+            pl.when(pl.col("observation_type").str.starts_with("C").not_())
+            .then(np.nan)
+            .otherwise(pl.col("sat_code_bias_m"))
+            .alias("sat_code_bias_m")
+        )
 
     # GLONASS satellites with both FDMA and CDMA signals have a frequency slot for FDMA signals,
     # for CDMA signals we use the common carrier frequency of those signals.
-    glo_cdma = flat_obs[
-        (flat_obs.satellite.str[0] == "R")
-        & (flat_obs["observation_type"].str[1].astype(int) > 2)
-    ]
-    flat_obs.loc[glo_cdma.index, "frequency_slot"] = int(1)
-
-    def assign_carrier_frequencies(flat_obs):
-        freq_dict = pd.json_normalize(carrier_frequencies_hz(), sep="_").to_dict(
-            orient="records"
-        )[0]
-        assignable = flat_obs.frequency_slot.notna()
-        keys = (
-            flat_obs.satellite[assignable].str[0]
-            + "_L"
-            + flat_obs["observation_type"][assignable].str[1]
-            + "_"
-            + flat_obs.frequency_slot[assignable].astype(int).astype(str)
+    flat_obs = flat_obs.with_columns(
+        pl.when(
+            pl.col("satellite").str.starts_with("R")
+            & (pl.col("observation_type").str.slice(1,1).cast(int) > 2)
         )
-        flat_obs.loc[:, "carrier_frequency_hz"] = keys.map(freq_dict)
-        return flat_obs
+        .then(1)
+        .otherwise(pl.col("frequency_slot"))
+        .alias("frequency_slot")
+    )
 
-    flat_obs = assign_carrier_frequencies(flat_obs).drop(columns=["frequency_slot"])
+
+
+    flat_obs = assign_carrier_frequencies(flat_obs).drop(["frequency_slot"])
 
     if prx_level == 2:
         # add iono correction
-        iono_idx, iono_delay = atmo.add_iono_column(
-            flat_obs, rinex_3_ephemerides_files, approximate_receiver_ecef_position_m
+        iono_delay = atmo.add_iono_column(
+            flat_obs.to_pandas(), rinex_3_ephemerides_files, approximate_receiver_ecef_position_m
         )
-        flat_obs.loc[iono_idx, "iono_delay_m"] = iono_delay
+        flat_obs = flat_obs.with_columns(iono_delay_m=iono_delay)
 
-    return flat_obs
+    return flat_obs.to_pandas()
 
 
 def build_records_level_3(
