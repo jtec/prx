@@ -277,7 +277,7 @@ def build_records_levels_12(
     # satellite clock offset plus those small terms of a few tens of nanoseconds
     per_sat = per_sat.with_columns(
         (
-            1e3
+            1e9
             * (pl.mean_horizontal(code_phase_columns) / constants.cGpsSpeedOfLight_mps)
         )
         .cast(pl.Duration(time_unit="ns"))
