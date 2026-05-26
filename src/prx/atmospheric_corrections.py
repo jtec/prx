@@ -148,7 +148,9 @@ def add_iono_column(
         else:
             logging.warning(f"Missing iono model parameters for day {doy:03d}")
             iono_all_days.append(np.full(mask_idx.shape, np.nan))
-    return np.concatenate(idx_all_days), np.concatenate(iono_all_days)
+    delays = np.ones((len(flat_obs.index))) * np.nan
+    delays[np.concatenate(idx_all_days)] = np.concatenate(iono_all_days)
+    return delays
 
 
 def compute_tropo_delay_saastamoinen(height, el, lat, humi=0.7):
