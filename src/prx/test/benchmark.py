@@ -48,7 +48,9 @@ def run_case(case: dict, ram: bool, warm_parser_cache: bool) -> pd.DataFrame:
         with memray.Tracker(memray_output, follow_fork=True):
             # Use multithreading here, memray does not track memory allocations in child processes with
             # joblib's "loky" backend. This likely makes prx slower, but we only care about memory allocation here.
-            process(observation_file_path=obs_file, joblib_backend="threading")
+            process(
+                observation_file_path=obs_file, prx_level=2, joblib_backend="threading"
+            )
         reader = memray.FileReader(memray_output)
         metadata = reader.metadata
         peak_ram_mb = metadata.peak_memory / 1024 / 1024
