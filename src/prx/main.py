@@ -203,9 +203,18 @@ def assign_carrier_frequencies(flat_obs):
         orient="records"
     )[0]
     freq_dict[None] = None
-    keys = flat_obs["satellite"].str.slice(0,1) + "_L" + flat_obs["observation_type"].str.slice(1,1) + "_" + flat_obs["frequency_slot"].cast(int).cast(str)
-    flat_obs = flat_obs.with_columns(keys.replace(freq_dict).cast(float).alias("carrier_frequency_hz"))
+    keys = (
+        flat_obs["satellite"].str.slice(0, 1)
+        + "_L"
+        + flat_obs["observation_type"].str.slice(1, 1)
+        + "_"
+        + flat_obs["frequency_slot"].cast(int).cast(str)
+    )
+    flat_obs = flat_obs.with_columns(
+        keys.replace(freq_dict).cast(float).alias("carrier_frequency_hz")
+    )
     return flat_obs
+
 
 @util.timeit
 def build_records_levels_12(
@@ -214,7 +223,7 @@ def build_records_levels_12(
     approximate_receiver_ecef_position_m,
     prx_level,
     model_tropo,
-    joblib_backend: str = "threading",
+    joblib_backend: str = "loky",
 ):
     """
     Creates a flat_obs dataframe including columns for prx processing levels 1 and 2.
@@ -404,21 +413,21 @@ def build_records_levels_12(
     flat_obs = flat_obs.with_columns(
         pl.when(
             pl.col("satellite").str.starts_with("R")
-            & (pl.col("observation_type").str.slice(1,1).cast(int) > 2)
+            & (pl.col("observation_type").str.slice(1, 1).cast(int) > 2)
         )
         .then(1)
         .otherwise(pl.col("frequency_slot"))
         .alias("frequency_slot")
     )
 
-
-
     flat_obs = assign_carrier_frequencies(flat_obs).drop(["frequency_slot"])
 
     if prx_level == 2:
         # add iono correction
         iono_delay = atmo.add_iono_column(
-            flat_obs.to_pandas(), rinex_3_ephemerides_files, approximate_receiver_ecef_position_m
+            flat_obs.to_pandas(),
+            rinex_3_ephemerides_files,
+            approximate_receiver_ecef_position_m,
         )
         flat_obs = flat_obs.with_columns(iono_delay_m=iono_delay)
 
@@ -574,7 +583,10 @@ def build_records_level_3(
 
     # TODO: change to TROPEX when implemented
     sat_states["tropo_delay_m"] = atmo.compute_tropo_delay(
-        sat_states, flat_obs, approximate_receiver_ecef_position_m, model_tropo
+        sat_states["elevation_rad"].to_numpy(),
+        sat_states["time_of_emission_isagpst"].to_numpy(),
+        approximate_receiver_ecef_position_m,
+        model_tropo,
     )
 
     # Merge sat states into observation dataframe. Due to Galileo's FNAV/INAV ephemerides
@@ -627,10 +639,10 @@ def build_records_level_3(
     rnx3_nav_files = nav_file_discovery.discover_or_download_auxiliary_files(
         rinex_3_obs_file
     )["broadcast_ephemerides"]
-    iono_idx, iono_delay = atmo.add_iono_column(
+    iono_delay = atmo.add_iono_column(
         flat_obs, rnx3_nav_files, approximate_receiver_ecef_position_m
     )
-    flat_obs.loc[iono_idx, "iono_delay_m"] = iono_delay
+    flat_obs["iono_delay_m"] = iono_delay
 
     return flat_obs
 
