@@ -129,5 +129,5 @@ system_time_scale_rinex_utc_epoch = {
     "GST": cGpstUtcEpoch,
     "BDT": cBdtUtcEpoch,
     # GLONASS time does not use weeks and week seconds, it has no epoch,
-    "GLONASST": pd.NaT,
+    "GLONASST": None,
 }
