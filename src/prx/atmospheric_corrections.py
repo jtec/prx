@@ -2,6 +2,9 @@ import numpy as np
 import pandas as pd
 import georinex
 import logging
+
+from numpy.typing import NDArray
+
 from prx.util import deg_2_rad, ecef_2_geodetic, timedelta_2_weeks_and_seconds
 import prx.constants as constants
 
@@ -145,7 +148,9 @@ def add_iono_column(
         else:
             logging.warning(f"Missing iono model parameters for day {doy:03d}")
             iono_all_days.append(np.full(mask_idx.shape, np.nan))
-    return np.concatenate(idx_all_days), np.concatenate(iono_all_days)
+    delays = np.ones((len(flat_obs.index))) * np.nan
+    delays[np.concatenate(idx_all_days)] = np.concatenate(iono_all_days)
+    return delays
 
 
 def compute_tropo_delay_saastamoinen(height, el, lat, humi=0.7):
@@ -420,7 +425,12 @@ def compute_tropo_delay_unb3m(
     )
 
 
-def compute_tropo_delay(sat_states, flat_obs, receiver_ecef_position_m, model):
+def compute_tropo_delay(
+    elevation_rad: NDArray,
+    time_isagpst: NDArray,
+    receiver_ecef_position_m: NDArray,
+    model: str,
+):
     """
     model is either "saastamoinen" or "unb3m"
     """
@@ -428,28 +438,12 @@ def compute_tropo_delay(sat_states, flat_obs, receiver_ecef_position_m, model):
     match model:
         case "saastamoinen":
             tropo_delay_m, _, _ = compute_tropo_delay_saastamoinen(
-                height_user_m * np.ones((len(sat_states),)),
-                sat_states.elevation_rad.to_numpy(),
-                latitude_user_rad * np.ones((len(sat_states),)),
+                height_user_m * np.ones((len(elevation_rad),)),
+                elevation_rad,
+                latitude_user_rad * np.ones((len(elevation_rad),)),
             )
         case "unb3m":
-            # We need Timestamps to compute tropo delays
-            sat_states = sat_states.merge(
-                flat_obs[
-                    [
-                        "satellite",
-                        "time_of_emission_isagpst",
-                        "time_of_reception_in_receiver_time",
-                    ]
-                ].drop_duplicates(),
-                on=["satellite", "time_of_emission_isagpst"],
-                how="left",
-            )
-            days_of_year = np.array(
-                sat_states["time_of_reception_in_receiver_time"]
-                .apply(lambda element: element.timetuple().tm_yday)
-                .to_numpy()
-            )
+            days_of_year = pd.Series(time_isagpst).dt.dayofyear.to_numpy()
             (
                 tropo_delay_m,
                 __,
@@ -457,11 +451,11 @@ def compute_tropo_delay(sat_states, flat_obs, receiver_ecef_position_m, model):
                 __,
                 __,
             ) = compute_tropo_delay_unb3m(
-                latitude_user_rad * np.ones((len(sat_states),)),
-                height_user_m * np.ones((len(sat_states),)),
+                latitude_user_rad * np.ones((len(elevation_rad),)),
+                height_user_m * np.ones((len(elevation_rad),)),
                 days_of_year,
-                sat_states.elevation_rad.to_numpy(),
+                elevation_rad,
             )
         case _:
-            assert False, f"tropospheric model not recognized: {model}"
+            raise AssertionError(f"tropospheric model not recognized: {model}")
     return tropo_delay_m
