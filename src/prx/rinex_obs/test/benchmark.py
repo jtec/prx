@@ -12,7 +12,6 @@ import plotly.graph_objects as go
 import georinex
 
 
-
 def generate_inputs(
     n_steps: int = 10, root: Path = None, obs_file: Path = None
 ) -> list[dict]:
