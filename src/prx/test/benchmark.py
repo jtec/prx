@@ -34,7 +34,8 @@ def run_case(case: dict, ram: bool, warm_parser_cache: bool) -> pd.DataFrame:
         disk_cache.clear()
     p = cProfile.Profile()
     p.enable()
-    process(observation_file_path=obs_file)
+    # cProfile does not profile subprocesses with joblib's loky backend, use threading
+    process(observation_file_path=obs_file, joblib_backend="threading")
     p.disable()
 
     # RAM
@@ -72,7 +73,7 @@ def run_case(case: dict, ram: bool, warm_parser_cache: bool) -> pd.DataFrame:
     df = df[["func", "tottime"]]
     df["function"] = df["func"].apply(lambda x: getattr(x, "co_name", None))
     df["file"] = df["func"].apply(lambda x: getattr(x, "co_filename", None))
-    df = df[df["function"].notnull() & df["file"].str.contains(r"prx[\\/]src[\\/]prx")]
+    df = df[df["function"].notnull() & df["file"].str.contains(r"prx/src/prx")]
     not_interesting = ["timeit_wrapper", "<genexpr>"]
     df = df[~df["function"].isin(not_interesting)]
     df = df.drop(columns=["func"])
