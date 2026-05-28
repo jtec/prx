@@ -244,7 +244,7 @@ def bootstrap_coarse_receiver_position(filepath_obs, filepath_nav):
             n_obs = len(obs.sv.values)
         else:
             n_obs = 0
-        first_epoch = first_epoch + pd.Timedelta(seconds=obs.interval)
+        first_epoch = first_epoch + pd.Timedelta(seconds=1)
 
     time_of_flight = [
         pd.Timedelta(
@@ -284,30 +284,34 @@ def bootstrap_coarse_receiver_position(filepath_obs, filepath_nav):
     )
 
     # create obs df by merging query and sat_states
-    obs_df = query[
-        [
-            "time_of_reception_in_receiver_time",
-            "sv",
-            "observation_value",
-        ]
-    ].merge(
-        sat_states[
+    obs_df = (
+        query[
             [
-                "sat_code_bias_m",
-                "sat_clock_offset_m",
-                "sat_clock_drift_mps",
+                "time_of_reception_in_receiver_time",
                 "sv",
-                "sat_pos_x_m",
-                "sat_pos_y_m",
-                "sat_pos_z_m",
-                "sat_vel_x_mps",
-                "sat_vel_y_mps",
-                "sat_vel_z_mps",
-                "relativistic_clock_effect_m",
+                "observation_value",
             ]
-        ],
-        how="left",
-        on="sv",
+        ]
+        .merge(
+            sat_states[
+                [
+                    "sat_code_bias_m",
+                    "sat_clock_offset_m",
+                    "sat_clock_drift_mps",
+                    "sv",
+                    "sat_pos_x_m",
+                    "sat_pos_y_m",
+                    "sat_pos_z_m",
+                    "sat_vel_x_mps",
+                    "sat_vel_y_mps",
+                    "sat_vel_z_mps",
+                    "relativistic_clock_effect_m",
+                ]
+            ],
+            how="left",
+            on="sv",
+        )
+        .dropna()
     )
     obs_df = obs_df.rename(columns={"observation_value": "C_obs_m"})
     # add missing columns with 0 value, since approximate position is unknown
@@ -316,9 +320,9 @@ def bootstrap_coarse_receiver_position(filepath_obs, filepath_nav):
             obs_df,
             pd.DataFrame(
                 {
-                    "sagnac_effect_m": np.zeros(len(obs.sv)),
-                    "iono_delay_m": np.zeros(len(obs.sv)),
-                    "tropo_delay_m": np.zeros(len(obs.sv)),
+                    "sagnac_effect_m": np.zeros(len(obs_df)),
+                    "iono_delay_m": np.zeros(len(obs_df)),
+                    "tropo_delay_m": np.zeros(len(obs_df)),
                     "constellation": "G",
                 }
             ),
