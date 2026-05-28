@@ -1,5 +1,6 @@
 import logging
 import math
+from functools import lru_cache
 from pathlib import Path
 
 import numpy as np
@@ -133,6 +134,7 @@ def parse(file_path):
 
 @timeit
 def parse_rinex_obs_file(rinex_file_path: Path):
+    @lru_cache
     @disk_cache.cache(ignore=["rinex_file"])
     def parse_rinex_obs_file_cached(rinex_file: Path, file_hash: str):
         logger.info(f"Parsing {rinex_file} (hash {file_hash}) ...")

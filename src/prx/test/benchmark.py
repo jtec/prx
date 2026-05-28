@@ -8,9 +8,11 @@ from pathlib import Path
 from plotly.subplots import make_subplots
 import plotly.graph_objects as go
 
-from prx.main import process
+from prx.main import process, warm_up_parser_cache
 import cProfile
 import platform
+
+from prx.rinex_nav.nav_file_discovery import discover_or_download_auxiliary_files
 
 if platform.system() != "Windows":
     import memray
@@ -20,13 +22,20 @@ from prx.util import configure_logging, disk_cache
 logger = logging.getLogger(__name__)
 
 
-def run_case(case: dict, ram: bool) -> pd.DataFrame:
+def run_case(case: dict, ram: bool, warm_parser_cache: bool) -> pd.DataFrame:
     obs_file = Path(case["obs_file"])
-    # Purge caches, we're going for run time and peak RAM with a file prx has never seen before
-    disk_cache.clear()
+    # Fetch navigation files if necessary
+    if warm_parser_cache:
+        nav_files = discover_or_download_auxiliary_files(obs_file)[
+            "broadcast_ephemerides"
+        ]
+        warm_up_parser_cache(nav_files + [obs_file])
+    if not warm_parser_cache:
+        disk_cache.clear()
     p = cProfile.Profile()
     p.enable()
-    process(observation_file_path=obs_file)
+    # cProfile does not profile subprocesses with joblib's loky backend, use threading
+    process(observation_file_path=obs_file, joblib_backend="threading")
     p.disable()
 
     # RAM
@@ -35,7 +44,8 @@ def run_case(case: dict, ram: bool) -> pd.DataFrame:
     if ram and (platform.system() != "Windows"):
         memray_output = obs_file.parent / f"{obs_file.stem}_memray.bin"
         memray_output.unlink(missing_ok=True)
-        disk_cache.clear()
+        if not warm_parser_cache:
+            disk_cache.clear()
         with memray.Tracker(memray_output, follow_fork=True):
             # Use multithreading here, memray does not track memory allocations in child processes with
             # joblib's "loky" backend. This likely makes prx slower, but we only care about memory allocation here.
@@ -63,7 +73,7 @@ def run_case(case: dict, ram: bool) -> pd.DataFrame:
     df = df[["func", "tottime"]]
     df["function"] = df["func"].apply(lambda x: getattr(x, "co_name", None))
     df["file"] = df["func"].apply(lambda x: getattr(x, "co_filename", None))
-    df = df[df["function"].notnull() & df["file"].str.contains(r"prx[\\/]src[\\/]prx")]
+    df = df[df["function"].notnull() & df["file"].str.contains(r"prx/src/prx")]
     not_interesting = ["timeit_wrapper", "<genexpr>"]
     df = df[~df["function"].isin(not_interesting)]
     df = df.drop(columns=["func"])
@@ -72,16 +82,15 @@ def run_case(case: dict, ram: bool) -> pd.DataFrame:
     return df
 
 
-def main(ram: bool, obs_file: Path, nav_file: Path):
+def main(ram: bool, obs_file: Path, warm_parser_cache: bool):
     configure_logging("DEBUG")
 
     cases = generate_inputs(
         n_steps=10,
         obs_file=obs_file,
-        nav_file=nav_file,
         root=obs_file.parent / "benchmark_datasets" if obs_file is not None else None,
     )
-    df = pd.concat([run_case(case, ram) for case in cases])
+    df = pd.concat([run_case(case, ram, warm_parser_cache) for case in cases])
     fig = make_subplots(rows=2, cols=1)
     for (file, function), group in df.groupby(["file", "function"]):
         fig.add_trace(
@@ -113,7 +122,12 @@ def main(ram: bool, obs_file: Path, nav_file: Path):
 if __name__ == "__main__":
     arg_parser = argparse.ArgumentParser()
     arg_parser.add_argument("--ram", action="store_true")
+    arg_parser.add_argument(
+        "--warm-parser-cache",
+        action="store_true",
+        help="Provide this argument to have the benchmark parse observation and navigation files before profiling run time and RAM. "
+        "Gives a faster result because parser outputs are cached.",
+    )
     arg_parser.add_argument("--obs", type=Path, default=None)
-    arg_parser.add_argument("--nav", type=Path, default=None)
     args = arg_parser.parse_args()
-    main(ram=args.ram, obs_file=args.obs, nav_file=args.nav)
+    main(ram=args.ram, obs_file=args.obs, warm_parser_cache=args.warm_parser_cache)
