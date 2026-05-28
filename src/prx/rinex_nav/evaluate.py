@@ -1,4 +1,5 @@
 import logging
+from functools import lru_cache
 
 import pandas as pd
 import numpy as np
@@ -15,6 +16,7 @@ log = logging.getLogger(__name__)
 
 @timeit
 def parse_rinex_nav_file(rinex_file: Path):
+    @lru_cache
     @util.disk_cache.cache(ignore=["rinex_file_path"])
     def cached_load(rinex_file_path: Path, file_hash: str):
         try_repair_with_gfzrnx(rinex_file)

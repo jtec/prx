@@ -1,4 +1,3 @@
-import shutil
 import subprocess
 import timeit
 
@@ -12,11 +11,9 @@ from plotly.subplots import make_subplots
 import plotly.graph_objects as go
 import georinex
 
-from prx.util import prx_src_directory
-
 
 def generate_inputs(
-    n_steps: int = 10, root: Path = None, obs_file: Path = None, nav_file: Path = None
+    n_steps: int = 10, root: Path = None, obs_file: Path = None
 ) -> list[dict]:
     if root is None:
         root = Path(__file__).parent / "benchmark_datasets"
@@ -25,12 +22,6 @@ def generate_inputs(
         obs_file = converters.anything_to_rinex_3(
             root / "datasets" / "TLSE00FRA_R_20220010000_01D_30S_MO.rnx.gz"
         )
-        nav_file = converters.anything_to_rinex_3(
-            prx_src_directory()
-            / "rinex_nav/test/datasets/BRDC00IGS_R_20220010000_01D_MN.zip"
-        )
-    else:
-        assert nav_file is not None, "Please provide both obs and nav files"
     sweep_dir = root / "sweep"
     sweep_dir.mkdir(exist_ok=True)
     times = georinex.obstime3(obs_file)
@@ -57,14 +48,10 @@ def generate_inputs(
             assert process_output.returncode == 0
             print(f"Created {slice_obs_file}")
         print(f"Adding {slice_obs_file} to the database ...")
-        slice_nav_file = slice_obs_file.parent / nav_file.name
-        if not slice_nav_file.exists():
-            shutil.copy(nav_file, slice_nav_file)
         cases.append(
             {
                 "epochs": (duration / pd.Timedelta("1s")) / float(header["INTERVAL"]),
                 "obs_file": slice_obs_file,
-                "nav_file": slice_nav_file,
             }
         )
     return cases
