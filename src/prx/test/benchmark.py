@@ -86,7 +86,7 @@ def main(ram: bool, obs_file: Path, warm_parser_cache: bool):
     configure_logging("DEBUG")
 
     cases = generate_inputs(
-        n_steps=10,
+        n_steps=6,
         obs_file=obs_file,
         root=obs_file.parent / "benchmark_datasets" if obs_file is not None else None,
     )
