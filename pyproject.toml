@@ -27,6 +27,7 @@ dependencies = [
     "georinex",
     "polars>=1.31.0",
     "pyarrow>=20.0.0",
+    "hatanaka>=2.8.1",
 ]
 
 [project.scripts]
