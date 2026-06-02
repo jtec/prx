@@ -1,10 +1,9 @@
 import logging
 from pathlib import Path
-import glob
 import itertools
-import subprocess
 import gzip
 import zipfile
+import hatanaka
 from prx.util import (
     is_rinex_2_obs_file,
     is_rinex_2_nav_file,
@@ -52,20 +51,14 @@ def compact_rinex_obs_file_to_rinex_obs_file(file: Path):
     if not is_compact_rinex_obs_file(file):
         return None
     expanded_file = Path(str(file).replace(".crx", ".rnx"))
-    # CRX2RNX generates a slightly different uncompressed file when it already exists
-    if expanded_file.exists():
-        expanded_file.unlink()
-    crx2rnx_binaries = glob.glob(
-        str(Path(__file__).parent / "tools/RNXCMP/**/CRX2RNX*"), recursive=True
-    )
-    assert len(crx2rnx_binaries) > 0, "Could not find any CRX2RNX binary"
-    for crx2rnx_binary in crx2rnx_binaries:
-        command = f" {crx2rnx_binary} -f {file}"
-        result = subprocess.run(command, capture_output=True, shell=True)
-        if result.returncode == 0:
-            log.info(f"Converted compact Rinex to Rinex: {expanded_file}")
-            return expanded_file
-    return None
+    hatanaka.decompress_on_disk(file)
+    if not expanded_file.exists():
+        log.error(
+            f"Expanded compact RINEX to RINEX but can't find the expected {expanded_file}"
+        )
+        return None
+    log.info(f"Converted compact Rinex to Rinex: {expanded_file}")
+    return expanded_file
 
 
 def rinex_2_to_rinex_3(file: Path):
