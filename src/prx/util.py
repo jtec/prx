@@ -234,7 +234,9 @@ def week_and_seconds_2_timedelta(weeks, seconds):
     return pd.Timedelta(weeks * constants.cSecondsPerWeek + seconds, "seconds")
 
 
-def timedelta_2_seconds(time_delta: pd.Timedelta | pd.Series | pl.Series):
+def timedelta_2_seconds(
+    time_delta: pd.Timedelta | pd.Series | pl.Series,
+) -> float | pd.Series | pl.Series:
     if isinstance(time_delta, pd.Timedelta):
         return timedelta_2_seconds(
             pl.Series([time_delta.value], dtype=pl.Duration(time_unit="ns"))
@@ -243,7 +245,9 @@ def timedelta_2_seconds(time_delta: pd.Timedelta | pd.Series | pl.Series):
         return timedelta_2_seconds(pl.from_pandas(time_delta)).to_pandas()
     assert isinstance(time_delta, pl.Series)
     assert time_delta.dtype.time_unit == "ns"
-    return time_delta.dt.total_nanoseconds() / constants.cNanoSecondsPerSecond
+    return (
+        time_delta.dt.total_nanoseconds().cast(float) / constants.cNanoSecondsPerSecond
+    )
 
 
 def timedelta_2_nanoseconds(time_delta: pd.Timedelta):

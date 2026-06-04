@@ -15,6 +15,7 @@ from prx.util import week_and_seconds_2_timedelta
 import shutil
 import pytest
 import itertools
+import polars as pl
 
 # The following thresholds are the achieved maximum difference between broadcast and
 # MGEX precise orbit and clock solutions seen in this test.
@@ -746,8 +747,8 @@ def test_select_ephemerides():
             "TransTime": [9, 9, 100, 999],
         }
     )
-    ephemerides = set_time_of_validity(ephemerides)
-    query = pd.DataFrame(
+    ephemerides = pl.from_pandas(set_time_of_validity(ephemerides))
+    query = pl.from_pandas(pd.DataFrame(
         {
             "sv": ["E01", "G01", "G01"],
             "query_time_isagpst": [
@@ -757,15 +758,15 @@ def test_select_ephemerides():
             ],
             "signal": ["C5X", "C1C", "C1C"],
         }
-    )
+    ))
     query_with_ephemerides = select_ephemerides(ephemerides, query)
-    query_with_ephemerides = query_with_ephemerides.sort_values(
+    query_with_ephemerides = query_with_ephemerides.sort(
         by=["sv", "query_time_isagpst"]
-    ).reset_index(drop=True)
-    assert query_with_ephemerides.query_time_isagpst.equals(
-        pd.Series([pd.Timedelta("100s"), pd.Timedelta("50s"), pd.Timedelta("90s")])
     )
-    assert query_with_ephemerides.ephemeris_hash.equals(pd.Series([1, 2, 2]))
+    assert query_with_ephemerides["query_time_isagpst"].equals(
+        pl.Series([pd.Timedelta("100s").value, pd.Timedelta("50s").value, pd.Timedelta("90s").value])
+    )
+    assert query_with_ephemerides["ephemeris_hash"].equals(pl.Series([1, 2, 2]))
 
 
 def test_compute_health_flag(input_for_test_2):
