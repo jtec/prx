@@ -644,14 +644,14 @@ def extract_health_flag_from_query(query: pl.DataFrame) -> pl.DataFrame:
 
 def compute_clock_offsets(df):
     df = df.with_columns(
-        sat_clock_offset_m=constants.cGpsSpeedOfLight_mps * pl.col("SVclockBias")
+        sat_clock_offset_m=constants.cGpsSpeedOfLight_mps * (pl.col("SVclockBias")
         + pl.col("SVclockDrift") * pl.col("query_time_wrt_clock_reference_time_s")
         + pl.col("SVclockDriftRate")
-        * pl.col("query_time_wrt_clock_reference_time_s") ** 2,
-        sat_clock_drift_mps=constants.cGpsSpeedOfLight_mps * pl.col("SVclockDrift")
+        * pl.col("query_time_wrt_clock_reference_time_s") ** 2),
+        sat_clock_drift_mps=constants.cGpsSpeedOfLight_mps * (pl.col("SVclockDrift")
         + 2
         * pl.col("SVclockDriftRate")
-        * pl.col("query_time_wrt_clock_reference_time_s"),
+        * pl.col("query_time_wrt_clock_reference_time_s")),
     )
     return df
 
@@ -759,16 +759,16 @@ def compute(
     per_signal_query = per_signal_query.join(
         per_sat_eph_query, on=["sv", "query_time_isagpst", "ephemeris_hash"], how="left"
     )
-    columns_to_keep += [
+    columns_to_keep = [
         "sat_clock_offset_m",
         "sat_clock_drift_mps",
-    ]
+    ] + columns_to_keep
     per_signal_query = pl.from_pandas(
         compute_total_group_delays(per_signal_query.to_pandas())
     )
 
     if "signal" in per_signal_query.columns:
-        columns_to_keep += ["signal", "sat_code_bias_m"]
+        columns_to_keep = ["signal", "sat_code_bias_m"] + columns_to_keep
     columns_to_keep += ["frequency_slot"]
     computed_columns_to_keep = [
         col for col in columns_to_keep if col not in query_columns
@@ -776,7 +776,7 @@ def compute(
     per_signal_query = per_signal_query.with_columns(
         [
             pl.when(~pl.col("ephemeris_valid"))
-            .then(np.nan)
+            .then(None)
             .otherwise(pl.col(col))
             .alias(col)
             for col in computed_columns_to_keep
