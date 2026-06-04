@@ -237,7 +237,7 @@ def week_and_seconds_2_timedelta(weeks, seconds):
 def timedelta_2_seconds(time_delta: pd.Timedelta | pd.Series | pl.Series):
     if isinstance(time_delta, pd.Timedelta):
         return timedelta_2_seconds(
-            pl.Series([time_delta], dtype=pl.Duration(time_unit="ns"))
+            pl.Series([time_delta.value], dtype=pl.Duration(time_unit="ns"))
         )[0]
     if isinstance(time_delta, pd.Series):
         return timedelta_2_seconds(pl.from_pandas(time_delta)).to_pandas()
