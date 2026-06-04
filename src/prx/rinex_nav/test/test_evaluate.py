@@ -748,23 +748,31 @@ def test_select_ephemerides():
         }
     )
     ephemerides = pl.from_pandas(set_time_of_validity(ephemerides))
-    query = pl.from_pandas(pd.DataFrame(
-        {
-            "sv": ["E01", "G01", "G01"],
-            "query_time_isagpst": [
-                pd.Timedelta("100s"),
-                pd.Timedelta("50s"),
-                pd.Timedelta("90s"),
-            ],
-            "signal": ["C5X", "C1C", "C1C"],
-        }
-    ))
+    query = pl.from_pandas(
+        pd.DataFrame(
+            {
+                "sv": ["E01", "G01", "G01"],
+                "query_time_isagpst": [
+                    pd.Timedelta("100s"),
+                    pd.Timedelta("50s"),
+                    pd.Timedelta("90s"),
+                ],
+                "signal": ["C5X", "C1C", "C1C"],
+            }
+        )
+    )
     query_with_ephemerides = select_ephemerides(ephemerides, query)
     query_with_ephemerides = query_with_ephemerides.sort(
         by=["sv", "query_time_isagpst"]
     )
     assert query_with_ephemerides["query_time_isagpst"].equals(
-        pl.Series([pd.Timedelta("100s").value, pd.Timedelta("50s").value, pd.Timedelta("90s").value])
+        pl.Series(
+            [
+                pd.Timedelta("100s").value,
+                pd.Timedelta("50s").value,
+                pd.Timedelta("90s").value,
+            ]
+        )
     )
     assert query_with_ephemerides["ephemeris_hash"].equals(pl.Series([1, 2, 2]))
 

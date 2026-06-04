@@ -341,15 +341,14 @@ def build_records_levels_12(
         day_query["query_time_isagpst"] = day_query["query_time_isagpst"].astype(
             "datetime64[ns]"
         )
-        sat_states_per_day.append(
-            pl.from_pandas(
-                rinex_evaluate.compute_parallel(
-                    file,
-                    day_query,
-                    joblib_backend=joblib_backend,
-                )
+        day_sat_states = pl.from_pandas(
+            rinex_evaluate.compute_parallel(
+                file,
+                day_query,
+                joblib_backend=joblib_backend,
             )
         )
+        sat_states_per_day.append(day_sat_states)
         if prx_level == 1:  # drop sat group delay
             sat_states_per_day[-1] = sat_states_per_day[-1].drop(["sat_code_bias_m"])
     sat_states = pl.concat(sat_states_per_day)

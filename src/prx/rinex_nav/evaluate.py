@@ -527,6 +527,7 @@ def convert_nav_dataset_to_dataframe(nav_ds):
     )
     df = df.reset_index(drop=True)
     df = compute_gal_inav_fnav_indicators(df)
+    df["frequency_slot"] = int(1)
     if "R" in df.constellation.unique():
         df["frequency_slot"] = df.FreqNum.where(df.sv.str[0] == "R", 1).astype(int)
     df.attrs["ionospheric_corr_GPS"] = nav_ds.ionospheric_corr_GPS
@@ -644,14 +645,20 @@ def extract_health_flag_from_query(query: pl.DataFrame) -> pl.DataFrame:
 
 def compute_clock_offsets(df):
     df = df.with_columns(
-        sat_clock_offset_m=constants.cGpsSpeedOfLight_mps * (pl.col("SVclockBias")
-        + pl.col("SVclockDrift") * pl.col("query_time_wrt_clock_reference_time_s")
-        + pl.col("SVclockDriftRate")
-        * pl.col("query_time_wrt_clock_reference_time_s") ** 2),
-        sat_clock_drift_mps=constants.cGpsSpeedOfLight_mps * (pl.col("SVclockDrift")
-        + 2
-        * pl.col("SVclockDriftRate")
-        * pl.col("query_time_wrt_clock_reference_time_s")),
+        sat_clock_offset_m=constants.cGpsSpeedOfLight_mps
+        * (
+            pl.col("SVclockBias")
+            + pl.col("SVclockDrift") * pl.col("query_time_wrt_clock_reference_time_s")
+            + pl.col("SVclockDriftRate")
+            * pl.col("query_time_wrt_clock_reference_time_s") ** 2
+        ),
+        sat_clock_drift_mps=constants.cGpsSpeedOfLight_mps
+        * (
+            pl.col("SVclockDrift")
+            + 2
+            * pl.col("SVclockDriftRate")
+            * pl.col("query_time_wrt_clock_reference_time_s")
+        ),
     )
     return df
 
@@ -674,7 +681,9 @@ def compute_parallel(
         )
         for chunk in chunks
     )
-    return pd.concat(processed_chunks)
+    result = pd.concat(processed_chunks)
+    result["frequency_slot"] = result["frequency_slot"].astype(float)
+    return result
 
 
 def compute(
@@ -757,7 +766,9 @@ def compute(
     per_sat_eph_query = per_sat_eph_query.select(columns_to_keep)
     # Merge the computed satellite states into the larger signal-specific query dataframe
     per_signal_query = per_signal_query.join(
-        per_sat_eph_query, on=["sv", "query_time_isagpst", "ephemeris_hash"], how="left"
+        per_sat_eph_query,
+        on=["sv", "query_time_isagpst", "ephemeris_hash"],
+        how="inner",
     )
     columns_to_keep = [
         "sat_clock_offset_m",
@@ -783,7 +794,7 @@ def compute(
         ]
     )
     per_signal_query = per_signal_query.select(columns_to_keep)
-    return per_signal_query.to_pandas()
+    return per_signal_query.sort(by=["query_time_isagpst", "sv"]).to_pandas()
 
 
 def compute_total_group_delays(
