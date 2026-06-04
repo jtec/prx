@@ -13,6 +13,7 @@ import git
 import georinex
 import joblib
 import numpy as np
+import polars as pl
 import pandas as pd
 import xarray
 from imohash import imohash
@@ -233,21 +234,16 @@ def week_and_seconds_2_timedelta(weeks, seconds):
     return pd.Timedelta(weeks * constants.cSecondsPerWeek + seconds, "seconds")
 
 
-def timedelta_2_seconds(time_delta: pd.Timedelta):
-    if pd.isnull(time_delta):
-        return np.nan
-    assert isinstance(time_delta, pd.Timedelta), (
-        "time_delta must be of type pd.Timedelta"
-    )
-    integer_seconds = np.float64(round(time_delta.total_seconds()))
-    fractional_seconds = (
-        np.float64(
-            timedelta_2_nanoseconds(time_delta)
-            - integer_seconds * constants.cNanoSecondsPerSecond
-        )
-        / constants.cNanoSecondsPerSecond
-    )
-    return integer_seconds + fractional_seconds
+def timedelta_2_seconds(time_delta: pd.Timedelta | pd.Series | pl.Series):
+    if isinstance(time_delta, pd.Timedelta):
+        return timedelta_2_seconds(
+            pl.Series([time_delta], dtype=pl.Duration(time_unit="ns"))
+        )[0]
+    if isinstance(time_delta, pd.Series):
+        return timedelta_2_seconds(pl.from_pandas(time_delta)).to_pandas()
+    assert isinstance(time_delta, pl.Series)
+    assert time_delta.dtype.time_unit == "ns"
+    return time_delta.dt.total_nanoseconds() / constants.cNanoSecondsPerSecond
 
 
 def timedelta_2_nanoseconds(time_delta: pd.Timedelta):

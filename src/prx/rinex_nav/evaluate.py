@@ -1,9 +1,11 @@
 import logging
 from functools import lru_cache
 
+import polars as pl
 import pandas as pd
 import numpy as np
 from pathlib import Path
+
 import scipy
 from joblib import Parallel, delayed
 import georinex
@@ -535,21 +537,22 @@ def compute_gal_inav_fnav_indicators(df):
     """
     Based on RINEX 3.05, section A8
     """
-    df["fnav_or_inav"] = ""
     is_gal = df.sv.str[0] == "E"
-    df.loc[is_gal, "fnav_or_inav_indicator"] = np.bitwise_and(
+    df["fnav_or_inav_int"] = -1
+    df.loc[is_gal, "fnav_or_inav_indicator_int"] = np.bitwise_and(
         df[is_gal].DataSrc.astype(np.uint).to_numpy(), 0b111
     )
     # We expect only the following navigation message types for Galileo:
-    indicators = set(df[is_gal].fnav_or_inav_indicator.unique())
+    indicators = set(df.loc[is_gal, "fnav_or_inav_indicator_int"].unique())
     assert len(indicators.intersection({1, 2, 4, 5})) == len(indicators), (
         f"Unexpected Galileo navigation message type: {indicators}"
     )
-    df.loc[is_gal & (df.fnav_or_inav_indicator == 1), "fnav_or_inav"] = "inav"
-    df.loc[is_gal & (df.fnav_or_inav_indicator == 2), "fnav_or_inav"] = "fnav"
-    df.loc[is_gal & (df.fnav_or_inav_indicator == 4), "fnav_or_inav"] = "inav"
-    df.loc[is_gal & (df.fnav_or_inav_indicator == 5), "fnav_or_inav"] = "inav"
-    return df
+    df["fnav_or_inav"] = ""
+    df.loc[is_gal & (df["fnav_or_inav_indicator_int"] == 1), "fnav_or_inav"] = "inav"
+    df.loc[is_gal & (df["fnav_or_inav_indicator_int"] == 2), "fnav_or_inav"] = "fnav"
+    df.loc[is_gal & (df["fnav_or_inav_indicator_int"] == 4), "fnav_or_inav"] = "inav"
+    df.loc[is_gal & (df["fnav_or_inav_indicator_int"] == 5), "fnav_or_inav"] = "inav"
+    return df.drop(columns=["fnav_or_inav_indicator_int"])
 
 
 def to_isagpst(time, timescale, gpst_utc_leapseconds):
@@ -572,37 +575,49 @@ def to_isagpst(time, timescale, gpst_utc_leapseconds):
 
 
 @timeit
-def select_ephemerides(df, query):
-    df = df[df.ephemeris_reference_time_isagpst.notna()]
-    query = query.sort_values(by="query_time_isagpst")
-    df = df.sort_values(by="ephemeris_reference_time_isagpst")
+def select_ephemerides(pandas_df: pd.DataFrame, pandas_query: pd.DataFrame):
+    df = pl.from_pandas(pandas_df)
+    query = pl.from_pandas(pandas_query)
+    df = df.drop_nulls(subset=["ephemeris_reference_time_isagpst"])
     # Add fnav/inav indicator to query for to select the FNAV ephemeris for E5b signals, and INAV for other signals
-    query["fnav_or_inav"] = ""
-    query.loc[
-        (query.sv.str[0] == "E") & (query.signal.str[1] == "5"), "fnav_or_inav"
-    ] = "fnav"
-    query.loc[
-        (query.sv.str[0] == "E") & (query.signal.str[1] != "5"), "fnav_or_inav"
-    ] = "inav"
-    query = pd.merge_asof(
-        query,
-        df,
+    query = query.with_columns(
+        pl.when(
+            (pl.col("sv").str.starts_with("E"))
+            & (pl.col("signal").str.slice(1, 1) == "5")
+        )
+        .then(pl.lit("fnav"))
+        .when(
+            (pl.col("sv").str.starts_with("E"))
+            & (pl.col("signal").str.slice(1, 1) != "5")
+        )
+        .then(pl.lit("inav"))
+        .otherwise(pl.lit(""))
+        .alias("fnav_or_inav")
+    )
+    query = query.sort("query_time_isagpst").join_asof(
+        df.sort("ephemeris_reference_time_isagpst"),
         left_on="query_time_isagpst",
         right_on="ephemeris_reference_time_isagpst",
         by=["sv", "fnav_or_inav"],
-        direction="backward",
+        strategy="backward",
     )
     # Compute times w.r.t. orbit and clock reference times used by downstream computations
-    query["query_time_wrt_ephemeris_reference_time_s"] = (
-        query["query_time_isagpst"] - query["ephemeris_reference_time_isagpst"]
-    ).apply(util.timedelta_2_seconds)
-    query["query_time_wrt_clock_reference_time_s"] = (
-        query["query_time_isagpst"] - query["clock_reference_time_isagpst"]
-    ).apply(util.timedelta_2_seconds)
-    query["ephemeris_valid"] = (query["query_time_isagpst"] < query["validity_end"]) & (
-        query["query_time_isagpst"] > query["validity_start"]
+    query = query.with_columns(
+        query_time_wrt_ephemeris_reference_time_s=util.timedelta_2_seconds(
+            query["query_time_isagpst"] - query["ephemeris_reference_time_isagpst"]
+        ),
+        query_time_wrt_clock_reference_time_s=util.timedelta_2_seconds(
+            query["query_time_isagpst"] - query["clock_reference_time_isagpst"]
+        ),
+        ephemeris_valid=(
+            (query["query_time_isagpst"] < query["validity_end"])
+            & (query["query_time_isagpst"] > query["validity_start"])
+        ).cast(bool),
     )
-    return query
+
+    result = query.to_pandas()
+    result["ephemeris_valid"] = result["ephemeris_valid"].astype(bool)
+    return result
 
 
 def extract_health_flag_from_query(query):
