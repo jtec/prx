@@ -575,10 +575,8 @@ def to_isagpst(time, timescale, gpst_utc_leapseconds):
 
 
 @timeit
-def select_ephemerides(pandas_df: pd.DataFrame, pandas_query: pd.DataFrame):
-    df = pl.from_pandas(pandas_df)
-    query = pl.from_pandas(pandas_query)
-    df = df.drop_nulls(subset=["ephemeris_reference_time_isagpst"])
+def select_ephemerides(ephemerides: pl.DataFrame, query: pl.DataFrame):
+    ephemerides = ephemerides.drop_nulls(subset=["ephemeris_reference_time_isagpst"])
     # Add fnav/inav indicator to query for to select the FNAV ephemeris for E5b signals, and INAV for other signals
     query = query.with_columns(
         pl.when(
@@ -595,7 +593,7 @@ def select_ephemerides(pandas_df: pd.DataFrame, pandas_query: pd.DataFrame):
         .alias("fnav_or_inav")
     )
     query = query.sort("query_time_isagpst").join_asof(
-        df.sort("ephemeris_reference_time_isagpst"),
+        ephemerides.sort("ephemeris_reference_time_isagpst"),
         left_on="query_time_isagpst",
         right_on="ephemeris_reference_time_isagpst",
         by=["sv", "fnav_or_inav"],
@@ -615,12 +613,10 @@ def select_ephemerides(pandas_df: pd.DataFrame, pandas_query: pd.DataFrame):
         ).cast(bool),
     )
 
-    result = query.to_pandas()
-    result["ephemeris_valid"] = result["ephemeris_valid"].astype(bool)
-    return result
+    return query
 
 
-def extract_health_flag_from_query(query):
+def extract_health_flag_from_query(query: pl.DataFrame) -> pl.DataFrame:
     """
     Extracts the health flag for each row of a query from a `query` DataFrame containing ephemeris data.
 
@@ -637,27 +633,25 @@ def extract_health_flag_from_query(query):
         "C" : "SatH1"
     """
 
-    query = query.copy()
-    query["constellation"] = query["sv"].str[0]
-
-    query["health_flag"] = query["health"]
-    if "C" in query["constellation"].unique():
-        query.loc[query.constellation == "C", "health_flag"] = query.loc[
-            query.constellation == "C", "SatH1"
-        ]
-
-    return query["health_flag"]
+    query = query.with_columns(
+        pl.when(pl.col("sv").str.starts_with("C"))
+        .then(pl.col("SatH1"))
+        .otherwise(pl.col("health"))
+        .alias("health_flag")
+    )
+    return query
 
 
 def compute_clock_offsets(df):
-    df["sat_clock_offset_m"] = constants.cGpsSpeedOfLight_mps * (
-        df["SVclockBias"]
-        + df["SVclockDrift"] * df["query_time_wrt_clock_reference_time_s"]
-        + df["SVclockDriftRate"] * df["query_time_wrt_clock_reference_time_s"] ** 2
-    )
-    df["sat_clock_drift_mps"] = constants.cGpsSpeedOfLight_mps * (
-        df["SVclockDrift"]
-        + 2 * df["SVclockDriftRate"] * df["query_time_wrt_clock_reference_time_s"]
+    df = df.with_columns(
+        sat_clock_offset_m=constants.cGpsSpeedOfLight_mps * pl.col("SVclockBias")
+        + pl.col("SVclockDrift") * pl.col("query_time_wrt_clock_reference_time_s")
+        + pl.col("SVclockDriftRate")
+        * pl.col("query_time_wrt_clock_reference_time_s") ** 2,
+        sat_clock_drift_mps=constants.cGpsSpeedOfLight_mps * pl.col("SVclockDrift")
+        + 2
+        * pl.col("SVclockDriftRate")
+        * pl.col("query_time_wrt_clock_reference_time_s"),
     )
     return df
 
@@ -684,47 +678,47 @@ def compute_parallel(
 
 
 def compute(
-    rinex_nav_file_path, per_signal_query, is_query_corrected_by_sat_clock_offset=False
+    rinex_nav_file_path,
+    per_signal_query_pd,
+    is_query_corrected_by_sat_clock_offset=False,
 ):
+    per_signal_query = pl.from_pandas(per_signal_query_pd)
     query_columns = per_signal_query.columns
-    # per_signal_query is a pd.DataFrame with the following columns
-    #   - time_of_reception_in_receiver_time
-    #   - observation_value
-    #   - signal
-    #   - sv
-    #   - query_time_isagpst
     rinex_nav_file_path = Path(rinex_nav_file_path)
-    ephemerides = parse_rinex_nav_file(rinex_nav_file_path)
+    ephemerides = pl.from_pandas(parse_rinex_nav_file(rinex_nav_file_path))
     # Group delays and clock offsets can be signal-specific, so we need to match ephemerides to code signals,
     # not only to satellites
     # Example: Galileo transmits E5a clock and group delay parameters in the F/NAV message, but parameters for other
     # signals in the I/NAV message
-    per_signal_query = select_ephemerides(ephemerides, per_signal_query)
+    per_signal_query = select_ephemerides(
+        ephemerides=ephemerides, query=per_signal_query
+    )
 
     # compute satellite clock bias
     if is_query_corrected_by_sat_clock_offset:
         per_signal_query = compute_clock_offsets(per_signal_query)
     else:  # compute satellite clock offset iteratively
-        t = per_signal_query.query_time_wrt_clock_reference_time_s
+        t = per_signal_query["query_time_wrt_clock_reference_time_s"]
         for _ in range(2):
             per_signal_query = compute_clock_offsets(per_signal_query)
-            per_signal_query.query_time_wrt_clock_reference_time_s = (
-                t - per_signal_query.sat_clock_offset_m / constants.cGpsSpeedOfLight_mps
+            per_signal_query = per_signal_query.with_columns(
+                query_time_wrt_clock_reference_time_s=(
+                    t - pl.col("sat_clock_offset_m") / constants.cGpsSpeedOfLight_mps
+                )
             )
         # Apply sat clock correction to the query time for satellite position computation
-        per_signal_query.query_time_wrt_ephemeris_reference_time_s -= (
-            per_signal_query.sat_clock_offset_m / constants.cGpsSpeedOfLight_mps
+
+        per_signal_query = per_signal_query.with_columns(
+            query_time_wrt_ephemeris_reference_time_s=pl.col(
+                "query_time_wrt_ephemeris_reference_time_s"
+            )
+            - pl.col("sat_clock_offset_m") / constants.cGpsSpeedOfLight_mps
         )
 
     # Compute orbital states for each (satellite,ephemeris) pair only once:
-    per_sat_eph_query = (
-        per_signal_query.groupby(["sv", "query_time_isagpst", "ephemeris_hash"])
-        .first()
-        .reset_index()
-    )
-    per_sat_eph_query = per_sat_eph_query.drop(
-        columns=["sat_clock_offset_m", "sat_clock_drift_mps"]
-    )
+    per_sat_eph_query = per_signal_query.unique(
+        subset=["sv", "query_time_isagpst", "ephemeris_hash"]
+    ).drop(["sat_clock_offset_m", "sat_clock_drift_mps"])
 
     def evaluate_orbit(sub_df):
         orbit_type = sub_df["orbit_type"].iloc[0]
@@ -741,11 +735,12 @@ def compute(
             sub_df[["x_m", "y_m", "z_m", "dx_mps", "dy_mps", "dz_mps"]] = np.nan
         return sub_df
 
-    per_sat_eph_query = per_sat_eph_query.groupby("orbit_type")[
-        per_sat_eph_query.columns
-    ].apply(evaluate_orbit)
-    per_sat_eph_query = per_sat_eph_query.reset_index(drop=True)
-    per_sat_eph_query["health_flag"] = extract_health_flag_from_query(per_sat_eph_query)
+    per_sat_eph_query = pl.from_pandas(
+        per_sat_eph_query.to_pandas()
+        .groupby("orbit_type")[per_sat_eph_query.columns]
+        .apply(evaluate_orbit)
+    )
+    per_sat_eph_query = extract_health_flag_from_query(per_sat_eph_query)
     columns_to_keep = [
         "sv",
         "sat_pos_x_m",
@@ -759,28 +754,36 @@ def compute(
         "health_flag",
         "relativistic_clock_effect_m",
     ]
-    per_sat_eph_query = per_sat_eph_query[columns_to_keep]
+    per_sat_eph_query = per_sat_eph_query.select(columns_to_keep)
     # Merge the computed satellite states into the larger signal-specific query dataframe
-    per_signal_query = per_signal_query.merge(
-        per_sat_eph_query, on=["sv", "query_time_isagpst", "ephemeris_hash"]
+    per_signal_query = per_signal_query.join(
+        per_sat_eph_query, on=["sv", "query_time_isagpst", "ephemeris_hash"], how="left"
     )
-    columns_to_keep = [
+    columns_to_keep += [
         "sat_clock_offset_m",
         "sat_clock_drift_mps",
-    ] + columns_to_keep
-    per_signal_query = compute_total_group_delays(per_signal_query)
+    ]
+    per_signal_query = pl.from_pandas(
+        compute_total_group_delays(per_signal_query.to_pandas())
+    )
 
     if "signal" in per_signal_query.columns:
-        columns_to_keep = ["signal", "sat_code_bias_m"] + columns_to_keep
-    columns_to_keep.append("frequency_slot")
+        columns_to_keep += ["signal", "sat_code_bias_m"]
+    columns_to_keep += ["frequency_slot"]
     computed_columns_to_keep = [
         col for col in columns_to_keep if col not in query_columns
     ]
-    per_signal_query.loc[
-        ~per_signal_query.ephemeris_valid, computed_columns_to_keep
-    ] = np.nan
-    per_signal_query = per_signal_query[columns_to_keep].reset_index(drop=True)
-    return per_signal_query
+    per_signal_query = per_signal_query.with_columns(
+        [
+            pl.when(~pl.col("ephemeris_valid"))
+            .then(np.nan)
+            .otherwise(pl.col(col))
+            .alias(col)
+            for col in computed_columns_to_keep
+        ]
+    )
+    per_signal_query = per_signal_query.select(columns_to_keep)
+    return per_signal_query.to_pandas()
 
 
 def compute_total_group_delays(
