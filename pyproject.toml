@@ -28,6 +28,7 @@ dependencies = [
     "polars>=1.31.0",
     "pyarrow>=20.0.0",
     "hatanaka>=2.8.1",
+    "psutil>=7.2.2",
 ]
 
 [project.scripts]
