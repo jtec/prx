@@ -46,7 +46,7 @@ def run_case(case: dict, ram: bool, warm_parser_cache: bool) -> pd.DataFrame:
         memray_output.unlink(missing_ok=True)
         if not warm_parser_cache:
             disk_cache.clear()
-        with memray.Tracker(memray_output, follow_fork=True):
+        with memray.Tracker(memray_output, follow_fork=True, native_traces=True) as _:
             # Use multithreading here, memray does not track memory allocations in child processes with
             # joblib's "loky" backend. This likely makes prx slower, but we only care about memory allocation here.
             process(
