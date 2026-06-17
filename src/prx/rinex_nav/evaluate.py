@@ -371,12 +371,12 @@ def handle_bds_geos(eph):
 
 
 @timeit
-def handle_bds_geos_faster(eph):
+def handle_bds_geos(eph):
     # Do special rotation from inertial to BDCS (ECEF) frame for Beidou GEO satellites, see
     # Beidou_ICD_B3I_v1.0, Table 5-11
     geos = eph[eph.is_bds_geo]
     if geos.empty:
-        return
+        return eph
     P_GK = np.reshape(geos[["X_k", "Y_k", "Z_k"]].to_numpy(), (-1, 1))
     V_GK = np.reshape(geos[["dX_k", "dY_k", "dZ_k"]].to_numpy(), (-1, 1))
     z_angles = geos["OmegaEarthIcd_rps"] * geos["t_k"]
