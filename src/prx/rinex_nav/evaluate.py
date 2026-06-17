@@ -321,75 +321,20 @@ def handle_bds_geos(eph):
     # Beidou_ICD_B3I_v1.0, Table 5-11
     geos = eph[eph.is_bds_geo]
     if geos.empty:
-        return
-    P_GK = np.reshape(geos[["X_k", "Y_k", "Z_k"]].to_numpy(), (-1, 1))
-    V_GK = np.reshape(geos[["dX_k", "dY_k", "dZ_k"]].to_numpy(), (-1, 1))
-    z_angles = geos["OmegaEarthIcd_rps"] * geos["t_k"]
-    rotation_matrices = []
-    x_angle = util.deg_2_rad(-5.0)
-    for i, z_angle in enumerate(z_angles):
-        Rx = np.array(
-            [
-                [1, 0, 0],
-                [0, np.cos(x_angle), np.sin(x_angle)],
-                [0, -np.sin(x_angle), np.cos(x_angle)],
-            ]
-        )
-        Rz = np.array(
-            [
-                [np.cos(z_angle), np.sin(z_angle), 0],
-                [-np.sin(z_angle), np.cos(z_angle), 0],
-                [0, 0, 1],
-            ]
-        )
-        rotation_matrices.append(np.matmul(Rz, Rx))
-    R = scipy.sparse.block_diag(rotation_matrices)
-    P_K = R @ P_GK
-    P_K = np.reshape(P_K, (-1, 3))
-    geos["X_k"] = P_K[:, 0]
-    geos["Y_k"] = P_K[:, 1]
-    geos["Z_k"] = P_K[:, 2]
-    # Velocity in inertial frame that coincides with BDCS at this time, ie a "frozen" ECEF frame
-    V_K_frozen = R @ V_GK
-    V_K_frozen = np.reshape(V_K_frozen, (-1, 3))
-    geos["dX_k"] = V_K_frozen[:, 0]
-    geos["dY_k"] = V_K_frozen[:, 1]
-    geos["dZ_k"] = V_K_frozen[:, 2]
-
-    # Add term due to ECEFs angular velocity w.r.t. the frozen frame
-
-    def frozen_to_rotating_bdcs(row):
-        p = np.array([row["X_k"], row["Y_k"], row["Z_k"]])
-        v_frozen = np.array([row["dX_k"], row["dY_k"], row["dZ_k"]])
-        v_rotating = v_frozen + np.cross(np.array([0, 0, -row.OmegaEarthIcd_rps]), p)
-        row[["dX_k", "dY_k", "dZ_k"]] = v_rotating
-        return row
-
-    geos = geos.apply(frozen_to_rotating_bdcs, axis=1)
-    eph[eph.is_bds_geo] = geos
-    return eph
-
-
-@timeit
-def handle_bds_geos(eph):
-    # Do special rotation from inertial to BDCS (ECEF) frame for Beidou GEO satellites, see
-    # Beidou_ICD_B3I_v1.0, Table 5-11
-    geos = eph[eph.is_bds_geo]
-    if geos.empty:
         return eph
     P_GK = np.reshape(geos[["X_k", "Y_k", "Z_k"]].to_numpy(), (-1, 1))
     V_GK = np.reshape(geos[["dX_k", "dY_k", "dZ_k"]].to_numpy(), (-1, 1))
     z_angles = geos["OmegaEarthIcd_rps"] * geos["t_k"]
     rotation_matrices = []
     x_angle = util.deg_2_rad(-5.0)
+    Rx = np.array(
+        [
+            [1, 0, 0],
+            [0, np.cos(x_angle), np.sin(x_angle)],
+            [0, -np.sin(x_angle), np.cos(x_angle)],
+        ]
+    )
     for i, z_angle in enumerate(z_angles):
-        Rx = np.array(
-            [
-                [1, 0, 0],
-                [0, np.cos(x_angle), np.sin(x_angle)],
-                [0, -np.sin(x_angle), np.cos(x_angle)],
-            ]
-        )
         Rz = np.array(
             [
                 [np.cos(z_angle), np.sin(z_angle), 0],
