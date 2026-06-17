@@ -7,6 +7,7 @@ from pathlib import Path
 from scipy.interpolate import KroghInterpolator
 from prx import constants, util
 from prx.precise_corrections.antex import antex_processing as atx_processing
+from prx.util import timedelta_2_seconds
 
 log = logging.getLogger(__name__)
 
@@ -32,9 +33,7 @@ def parse_sp3_file(file_path: Path):
             if "position" not in col and "velocity" not in col:
                 df.rename(columns={col: col.replace("_x", "")}, inplace=True)
         # Convert timestamps to seconds since GPST epoch
-        df["gpst_s"] = (df["time"] - constants.cGpstUtcEpoch).apply(
-            util.timedelta_2_seconds
-        )
+        df["gpst_s"] = timedelta_2_seconds(df["time"] - constants.cGpstUtcEpoch)
         df.drop(columns=["time"], inplace=True)
         df["sat_clock_offset_m"] = (
             constants.cGpsSpeedOfLight_mps * df["clock"]
