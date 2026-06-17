@@ -5,13 +5,13 @@ from pathlib import Path
 from prx.rinex_nav.evaluate import (
     select_ephemerides,
     set_time_of_validity,
-    parse_rinex_nav_file,
+    parse_rinex_nav_file, handle_bds_geos, handle_bds_geos_faster,
 )
 from prx.rinex_obs.parser import parse_rinex_obs_file
 from prx.precise_corrections.sp3 import evaluate as sp3_evaluate
 from prx.rinex_nav import evaluate as rinex_nav_evaluate
 from prx import constants, converters
-from prx.util import week_and_seconds_2_timedelta
+from prx.util import week_and_seconds_2_timedelta, configure_logging
 import shutil
 import pytest
 import itertools
@@ -833,3 +833,19 @@ def test_compute_health_flag(input_for_test_2):
         assert (values == test[2]).all()
 
     print("done")
+
+
+def test_benchmark_geo_rotation():
+    # GIVEN the following - not physically meaningful - satellite positions and velocities
+    df = pd.DataFrame(np.random.rand(int(1e6), 6))
+    df.columns = ["X_k", "Y_k", "Z_k", "dX_k", "dY_k", "dZ_k"]
+    # With roughly half of them belonging to BDS GEO satellites
+    df["is_bds_geo"] = df["X_k"] > 0.5
+    df["t_k"] = 1.23
+    df["OmegaEarthIcd_rps"] = constants.cBdsOmegaDotEarth_rps
+    configure_logging("DEBUG")
+    reference = handle_bds_geos(df.copy())
+    candidate = handle_bds_geos_faster(df.copy())
+    assert reference.equals(candidate)
+    #assert len(result_df) == len(df)
+    pass
