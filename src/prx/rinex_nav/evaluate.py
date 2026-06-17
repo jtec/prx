@@ -314,7 +314,7 @@ def orbital_plane_to_earth_centered_cartesian(eph):
     eph["dZ_k"] = eph.y_k * eph.di_k * np.cos(eph.i_k) + eph.dy_k * np.sin(eph.i_k)
     pass
 
-
+@timeit
 def handle_bds_geos(eph):
     # Do special rotation from inertial to BDCS (ECEF) frame for Beidou GEO satellites, see
     # Beidou_ICD_B3I_v1.0, Table 5-11
@@ -323,10 +323,10 @@ def handle_bds_geos(eph):
         return
     P_GK = np.reshape(geos[["X_k", "Y_k", "Z_k"]].to_numpy(), (-1, 1))
     V_GK = np.reshape(geos[["dX_k", "dY_k", "dZ_k"]].to_numpy(), (-1, 1))
-    z_angles = geos.OmegaEarthIcd_rps * geos.t_k
+    z_angles = geos["OmegaEarthIcd_rps"] * geos["t_k"]
     rotation_matrices = []
+    x_angle = util.deg_2_rad(-5.0)
     for i, z_angle in enumerate(z_angles):
-        x_angle = util.deg_2_rad(-5.0)
         Rx = np.array(
             [
                 [1, 0, 0],
@@ -366,6 +366,58 @@ def handle_bds_geos(eph):
 
     geos = geos.apply(frozen_to_rotating_bdcs, axis=1)
     eph[eph.is_bds_geo] = geos
+    return eph
+
+
+@timeit
+def handle_bds_geos_faster(eph):
+    # Do special rotation from inertial to BDCS (ECEF) frame for Beidou GEO satellites, see
+    # Beidou_ICD_B3I_v1.0, Table 5-11
+    geos = eph[eph.is_bds_geo]
+    if geos.empty:
+        return
+    P_GK = np.reshape(geos[["X_k", "Y_k", "Z_k"]].to_numpy(), (-1, 1))
+    V_GK = np.reshape(geos[["dX_k", "dY_k", "dZ_k"]].to_numpy(), (-1, 1))
+    z_angles = geos["OmegaEarthIcd_rps"] * geos["t_k"]
+    rotation_matrices = []
+    x_angle = util.deg_2_rad(-5.0)
+    for i, z_angle in enumerate(z_angles):
+        Rx = np.array(
+            [
+                [1, 0, 0],
+                [0, np.cos(x_angle), np.sin(x_angle)],
+                [0, -np.sin(x_angle), np.cos(x_angle)],
+            ]
+        )
+        Rz = np.array(
+            [
+                [np.cos(z_angle), np.sin(z_angle), 0],
+                [-np.sin(z_angle), np.cos(z_angle), 0],
+                [0, 0, 1],
+            ]
+        )
+        rotation_matrices.append(np.matmul(Rz, Rx))
+    R = scipy.sparse.block_diag(rotation_matrices)
+    P_K = R @ P_GK
+    P_K = np.reshape(P_K, (-1, 3))
+    geos["X_k"] = P_K[:, 0]
+    geos["Y_k"] = P_K[:, 1]
+    geos["Z_k"] = P_K[:, 2]
+    # Velocity in inertial frame that coincides with BDCS at this time, ie a "frozen" ECEF frame
+    V_K_frozen = R @ V_GK
+    V_K_frozen = np.reshape(V_K_frozen, (-1, 3))
+    geos["dX_k"] = V_K_frozen[:, 0]
+    geos["dY_k"] = V_K_frozen[:, 1]
+    geos["dZ_k"] = V_K_frozen[:, 2]
+
+    # Add term due to ECEFs angular velocity w.r.t. the frozen frame
+    # Leverage the fact that there are only BDS GEOs
+    assert geos["OmegaEarthIcd_rps"].nunique() == 1
+    OmegaEarthIcd_rps = geos["OmegaEarthIcd_rps"].iloc[0]
+    geos[["dX_k", "dY_k", "dZ_k"]] += np.cross(np.array([0, 0, - OmegaEarthIcd_rps]), geos[["X_k", "Y_k", "Z_k"]].to_numpy())
+
+    eph[eph.is_bds_geo] = geos
+    return eph
 
 
 # Adapted from gnss_lib_py's find_sat()
@@ -392,7 +444,7 @@ def kepler_orbit_position_and_velocity(eph):
     )
     position_in_orbital_plane(eph)
     orbital_plane_to_earth_centered_cartesian(eph)
-    handle_bds_geos(eph)
+    eph = handle_bds_geos(eph)
     eph = eph.rename(
         columns={
             "X_k": "sat_pos_x_m",
