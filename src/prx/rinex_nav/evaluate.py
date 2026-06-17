@@ -314,6 +314,7 @@ def orbital_plane_to_earth_centered_cartesian(eph):
     eph["dZ_k"] = eph.y_k * eph.di_k * np.cos(eph.i_k) + eph.dy_k * np.sin(eph.i_k)
     pass
 
+
 @timeit
 def handle_bds_geos(eph):
     # Do special rotation from inertial to BDCS (ECEF) frame for Beidou GEO satellites, see
@@ -414,7 +415,9 @@ def handle_bds_geos_faster(eph):
     # Leverage the fact that there are only BDS GEOs
     assert geos["OmegaEarthIcd_rps"].nunique() == 1
     OmegaEarthIcd_rps = geos["OmegaEarthIcd_rps"].iloc[0]
-    geos[["dX_k", "dY_k", "dZ_k"]] += np.cross(np.array([0, 0, - OmegaEarthIcd_rps]), geos[["X_k", "Y_k", "Z_k"]].to_numpy())
+    geos[["dX_k", "dY_k", "dZ_k"]] += np.cross(
+        np.array([0, 0, -OmegaEarthIcd_rps]), geos[["X_k", "Y_k", "Z_k"]].to_numpy()
+    )
 
     eph[eph.is_bds_geo] = geos
     return eph
