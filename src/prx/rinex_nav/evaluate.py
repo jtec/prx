@@ -11,7 +11,7 @@ from joblib import Parallel, delayed
 import georinex
 from prx import util
 from prx import constants
-from prx.util import timeit, try_repair_with_gfzrnx
+from prx.util import timeit, try_repair_with_gfzrnx, timedelta_2_seconds
 
 log = logging.getLogger(__name__)
 
@@ -42,7 +42,9 @@ def parse_rinex_nav_file(rinex_file: Path):
     return cached_load(rinex_file, file_content_hash)
 
 
-def time_scale_integer_second_offset_wrt_gpst(time_scale, utc_gpst_leap_seconds=None):
+def time_scale_integer_second_offset_wrt_gpst(
+    time_scale: str, utc_gpst_leap_seconds: int = None
+):
     if time_scale in ["GPST", "SBAST", "QZSST", "IRNSST", "GST"]:
         return pd.Timedelta(seconds=0)
     if time_scale == "BDT":
@@ -317,25 +319,26 @@ def orbital_plane_to_earth_centered_cartesian(eph):
     pass
 
 
+@timeit
 def handle_bds_geos(eph):
     # Do special rotation from inertial to BDCS (ECEF) frame for Beidou GEO satellites, see
     # Beidou_ICD_B3I_v1.0, Table 5-11
     geos = eph[eph.is_bds_geo]
     if geos.empty:
-        return
+        return eph
     P_GK = np.reshape(geos[["X_k", "Y_k", "Z_k"]].to_numpy(), (-1, 1))
     V_GK = np.reshape(geos[["dX_k", "dY_k", "dZ_k"]].to_numpy(), (-1, 1))
-    z_angles = geos.OmegaEarthIcd_rps * geos.t_k
+    z_angles = geos["OmegaEarthIcd_rps"] * geos["t_k"]
     rotation_matrices = []
+    x_angle = util.deg_2_rad(-5.0)
+    Rx = np.array(
+        [
+            [1, 0, 0],
+            [0, np.cos(x_angle), np.sin(x_angle)],
+            [0, -np.sin(x_angle), np.cos(x_angle)],
+        ]
+    )
     for i, z_angle in enumerate(z_angles):
-        x_angle = util.deg_2_rad(-5.0)
-        Rx = np.array(
-            [
-                [1, 0, 0],
-                [0, np.cos(x_angle), np.sin(x_angle)],
-                [0, -np.sin(x_angle), np.cos(x_angle)],
-            ]
-        )
         Rz = np.array(
             [
                 [np.cos(z_angle), np.sin(z_angle), 0],
@@ -358,16 +361,15 @@ def handle_bds_geos(eph):
     geos["dZ_k"] = V_K_frozen[:, 2]
 
     # Add term due to ECEFs angular velocity w.r.t. the frozen frame
+    # Leverage the fact that there are only BDS GEOs
+    assert geos["OmegaEarthIcd_rps"].nunique() == 1
+    OmegaEarthIcd_rps = geos["OmegaEarthIcd_rps"].iloc[0]
+    geos[["dX_k", "dY_k", "dZ_k"]] += np.cross(
+        np.array([0, 0, -OmegaEarthIcd_rps]), geos[["X_k", "Y_k", "Z_k"]].to_numpy()
+    )
 
-    def frozen_to_rotating_bdcs(row):
-        p = np.array([row["X_k"], row["Y_k"], row["Z_k"]])
-        v_frozen = np.array([row["dX_k"], row["dY_k"], row["dZ_k"]])
-        v_rotating = v_frozen + np.cross(np.array([0, 0, -row.OmegaEarthIcd_rps]), p)
-        row[["dX_k", "dY_k", "dZ_k"]] = v_rotating
-        return row
-
-    geos = geos.apply(frozen_to_rotating_bdcs, axis=1)
     eph[eph.is_bds_geo] = geos
+    return eph
 
 
 # Adapted from gnss_lib_py's find_sat()
@@ -394,7 +396,7 @@ def kepler_orbit_position_and_velocity(eph):
     )
     position_in_orbital_plane(eph)
     orbital_plane_to_earth_centered_cartesian(eph)
-    handle_bds_geos(eph)
+    eph = handle_bds_geos(eph)
     eph = eph.rename(
         columns={
             "X_k": "sat_pos_x_m",
@@ -556,22 +558,13 @@ def compute_gal_inav_fnav_indicators(df):
     return df.drop(columns=["fnav_or_inav_indicator_int"])
 
 
-def to_isagpst(time, timescale, gpst_utc_leapseconds):
-    if (isinstance(time, pd.Timedelta) or isinstance(time, pd.Series)) and isinstance(
-        timescale, str
-    ):
-        return time - time_scale_integer_second_offset_wrt_gpst(
-            timescale, gpst_utc_leapseconds
-        )
-    if isinstance(time, pd.Series) and isinstance(timescale, pd.Series):
-        return time - timescale.apply(
-            lambda element: time_scale_integer_second_offset_wrt_gpst(
-                element, gpst_utc_leapseconds
-            )
-        )
-
-    assert False, (
-        f"Unexpected types: time is {type(time)}, timescale is {type(timescale)}"
+def to_isagpst(
+    time: pd.Timedelta | pd.Series,
+    timescale: str,
+    gpst_utc_leapseconds: int | None,
+) -> pd.Timedelta | pd.Series:
+    return time - time_scale_integer_second_offset_wrt_gpst(
+        timescale, gpst_utc_leapseconds
     )
 
 
@@ -602,10 +595,10 @@ def select_ephemerides(ephemerides: pl.DataFrame, query: pl.DataFrame):
     )
     # Compute times w.r.t. orbit and clock reference times used by downstream computations
     query = query.with_columns(
-        query_time_wrt_ephemeris_reference_time_s=util.timedelta_2_seconds(
+        query_time_wrt_ephemeris_reference_time_s=timedelta_2_seconds(
             query["query_time_isagpst"] - query["ephemeris_reference_time_isagpst"]
         ),
-        query_time_wrt_clock_reference_time_s=util.timedelta_2_seconds(
+        query_time_wrt_clock_reference_time_s=timedelta_2_seconds(
             query["query_time_isagpst"] - query["clock_reference_time_isagpst"]
         ),
         ephemeris_valid=(

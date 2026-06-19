@@ -9,11 +9,10 @@ from functools import wraps
 from pathlib import Path
 import importlib.metadata as md
 import git
-
+import polars as pl
 import georinex
 import joblib
 import numpy as np
-import polars as pl
 import pandas as pd
 import xarray
 from imohash import imohash
