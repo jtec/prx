@@ -41,7 +41,7 @@ def parse_rinex_nav_file(rinex_file: Path):
 
 
 def time_scale_integer_second_offset_wrt_gpst(
-    time_scale: str, utc_gpst_leap_seconds=None
+    time_scale: str, utc_gpst_leap_seconds: int = None
 ):
     if time_scale in ["GPST", "SBAST", "QZSST", "IRNSST", "GST"]:
         return pd.Timedelta(seconds=0)
@@ -556,8 +556,8 @@ def compute_gal_inav_fnav_indicators(df):
 
 def to_isagpst(
     time: pd.Timedelta | pd.Series,
-    timescale: str | pd.Series,
-    gpst_utc_leapseconds: int,
+    timescale: str,
+    gpst_utc_leapseconds: int | None,
 ) -> pd.Timedelta | pd.Series:
     return time - time_scale_integer_second_offset_wrt_gpst(
         timescale, gpst_utc_leapseconds
