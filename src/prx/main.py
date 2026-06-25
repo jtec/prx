@@ -253,7 +253,7 @@ def build_records_levels_12(
     log.info("Computing times of emission in satellite time")
     per_sat = flat_obs.pivot(
         index=["time_of_reception_in_receiver_time", "satellite"],
-        columns=["observation_type"],
+        on=["observation_type"],
         values="observation_value",
     )
     per_sat = per_sat.with_columns(
@@ -427,12 +427,11 @@ def build_records_levels_12(
 
     if prx_level == 2:
         # add iono correction
-        iono_delay = atmo.compute_iono_column(
+        flat_obs = atmo.compute_iono_column(
             flat_obs,
             rinex_3_ephemerides_files,
             approximate_receiver_ecef_position_m,
         )
-        flat_obs = flat_obs.with_columns(iono_delay_m=iono_delay)
 
     return flat_obs.to_pandas()
 
@@ -470,7 +469,7 @@ def build_records_level_3(
     log.info("Computing times of emission in satellite time")
     per_sat = flat_obs.pivot(
         index=["time_of_reception_in_receiver_time", "satellite"],
-        columns=["observation_type"],
+        on=["observation_type"],
         values="observation_value",
     ).reset_index()
     per_sat["time_scale"] = (
