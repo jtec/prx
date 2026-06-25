@@ -9,7 +9,7 @@ from joblib import Parallel, delayed
 import georinex
 from prx import util
 from prx import constants
-from prx.util import timeit, try_repair_with_gfzrnx
+from prx.util import timeit, try_repair_with_gfzrnx, timedelta_2_seconds
 
 log = logging.getLogger(__name__)
 
@@ -40,7 +40,9 @@ def parse_rinex_nav_file(rinex_file: Path):
     return cached_load(rinex_file, file_content_hash)
 
 
-def time_scale_integer_second_offset_wrt_gpst(time_scale, utc_gpst_leap_seconds=None):
+def time_scale_integer_second_offset_wrt_gpst(
+    time_scale: str, utc_gpst_leap_seconds: int = None
+):
     if time_scale in ["GPST", "SBAST", "QZSST", "IRNSST", "GST"]:
         return pd.Timedelta(seconds=0)
     if time_scale == "BDT":
@@ -552,22 +554,13 @@ def compute_gal_inav_fnav_indicators(df):
     return df
 
 
-def to_isagpst(time, timescale, gpst_utc_leapseconds):
-    if (isinstance(time, pd.Timedelta) or isinstance(time, pd.Series)) and isinstance(
-        timescale, str
-    ):
-        return time - time_scale_integer_second_offset_wrt_gpst(
-            timescale, gpst_utc_leapseconds
-        )
-    if isinstance(time, pd.Series) and isinstance(timescale, pd.Series):
-        return time - timescale.apply(
-            lambda element: time_scale_integer_second_offset_wrt_gpst(
-                element, gpst_utc_leapseconds
-            )
-        )
-
-    assert False, (
-        f"Unexpected types: time is {type(time)}, timescale is {type(timescale)}"
+def to_isagpst(
+    time: pd.Timedelta | pd.Series,
+    timescale: str,
+    gpst_utc_leapseconds: int | None,
+) -> pd.Timedelta | pd.Series:
+    return time - time_scale_integer_second_offset_wrt_gpst(
+        timescale, gpst_utc_leapseconds
     )
 
 
@@ -593,12 +586,12 @@ def select_ephemerides(df, query):
         direction="backward",
     )
     # Compute times w.r.t. orbit and clock reference times used by downstream computations
-    query["query_time_wrt_ephemeris_reference_time_s"] = (
+    query["query_time_wrt_ephemeris_reference_time_s"] = timedelta_2_seconds(
         query["query_time_isagpst"] - query["ephemeris_reference_time_isagpst"]
-    ).apply(util.timedelta_2_seconds)
-    query["query_time_wrt_clock_reference_time_s"] = (
+    )
+    query["query_time_wrt_clock_reference_time_s"] = timedelta_2_seconds(
         query["query_time_isagpst"] - query["clock_reference_time_isagpst"]
-    ).apply(util.timedelta_2_seconds)
+    )
     query["ephemeris_valid"] = (query["query_time_isagpst"] < query["validity_end"]) & (
         query["query_time_isagpst"] > query["validity_start"]
     )
