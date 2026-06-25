@@ -222,8 +222,10 @@ def timestamp_to_mid_day(ts):
 def timedelta_2_weeks_and_seconds(time_delta: pd.Timedelta | pd.Series | pl.Series):
     if time_delta is pd.NaT:
         return np.nan, np.nan
-    if isinstance(time_delta, pd.Timedelta) :
-        w, s = timedelta_2_weeks_and_seconds(pl.Series([time_delta.value], dtype=pl.Duration(time_unit="ns")))
+    if isinstance(time_delta, pd.Timedelta):
+        w, s = timedelta_2_weeks_and_seconds(
+            pl.Series([time_delta.value], dtype=pl.Duration(time_unit="ns"))
+        )
         return w[0], s[0]
     if isinstance(time_delta, pd.Series):
         w, s = timedelta_2_weeks_and_seconds(pl.from_pandas(time_delta))
@@ -253,7 +255,9 @@ def timedelta_2_seconds(
     nanoseconds = time_delta.dt.total_nanoseconds()
     integer_seconds = (nanoseconds / constants.cNanoSecondsPerSecond).floor().cast(int)
     return (
-        integer_seconds + (nanoseconds - integer_seconds*constants.cNanoSecondsPerSecond).cast(float) / constants.cNanoSecondsPerSecond
+        integer_seconds
+        + (nanoseconds - integer_seconds * constants.cNanoSecondsPerSecond).cast(float)
+        / constants.cNanoSecondsPerSecond
     )
 
 

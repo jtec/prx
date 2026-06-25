@@ -218,6 +218,7 @@ def assign_carrier_frequencies(flat_obs):
 
 from line_profiler import profile
 
+
 @util.timeit
 @profile
 def build_records_levels_12(

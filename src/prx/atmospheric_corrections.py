@@ -86,7 +86,9 @@ def compute_l1_iono_delay_klobuchar(
 
 
 def compute_iono_column(
-    flat_obs: pl.DataFrame, rinex_3_ephemerides_files: list[Path], approximate_receiver_ecef_position_m: NDArray[np.float64]
+    flat_obs: pl.DataFrame,
+    rinex_3_ephemerides_files: list[Path],
+    approximate_receiver_ecef_position_m: NDArray[np.float64],
 ):
     # create a dictionary containing the headers of the different NAV files.
     # The keys are the "YYYYDDD" (year and day of year) and are located at
@@ -98,7 +100,9 @@ def compute_iono_column(
     [latitude_user_rad, longitude_user_rad, __] = ecef_2_geodetic(
         approximate_receiver_ecef_position_m
     )
-    flat_obs = flat_obs.with_columns( gpsa=pl.lit(None), gpsb=pl.lit(None), iono_delay=pl.lit(None))
+    flat_obs = flat_obs.with_columns(
+        gpsa=pl.lit(None), gpsb=pl.lit(None), iono_delay=pl.lit(None)
+    )
     for file in rinex_3_ephemerides_files:
         # get year and doy from NAV filename
         year = int(file.name[12:16])
@@ -108,35 +112,35 @@ def compute_iono_column(
             continue
         # Assign iono model parameters to rows
         # Assignment criteria: time of emission belonging to the day of the current NAV file
-        gpsa = nav_header_dict[f"{year:03d}" + f"{doy:03d}"]["IONOSPHERIC CORR"][
-            "GPSA"
-        ]
-        gpsb = nav_header_dict[f"{year:03d}" + f"{doy:03d}"]["IONOSPHERIC CORR"][
-            "GPSB"
-        ]
-        matching_rows = pl.when(pl.col("time_of_emission_isagpst")
+        gpsa = nav_header_dict[f"{year:03d}" + f"{doy:03d}"]["IONOSPHERIC CORR"]["GPSA"]
+        gpsb = nav_header_dict[f"{year:03d}" + f"{doy:03d}"]["IONOSPHERIC CORR"]["GPSB"]
+        matching_rows = pl.when(
+            pl.col("time_of_emission_isagpst")
             >= pd.Timestamp(year=year, month=1, day=1) + pd.Timedelta(days=doy - 1),
             pl.col("time_of_emission_isagpst")
-            < pd.Timestamp(year=year, month=1, day=1) + pd.Timedelta(days=doy), pl.col("observation_type").str.starts_with("C")
+            < pd.Timestamp(year=year, month=1, day=1) + pd.Timedelta(days=doy),
+            pl.col("observation_type").str.starts_with("C"),
         )
-        flat_obs = flat_obs.with_columns(matching_rows.then(gpsa).otherwise(pl.col("gpsa")).alias("gpsa"),
-                                         matching_rows.then(gpsb).otherwise(pl.col("gpsb")).alias("gpsb")
-                                         )
+        flat_obs = flat_obs.with_columns(
+            matching_rows.then(gpsa).otherwise(pl.col("gpsa")).alias("gpsa"),
+            matching_rows.then(gpsb).otherwise(pl.col("gpsb")).alias("gpsb"),
+        )
     time_of_emission_weeksecond_isagpst = timedelta_2_weeks_and_seconds(
-        (flat_obs.select("time_of_emission_isagpst") - constants.system_time_scale_rinex_utc_epoch["GPST"]).to_series().cast(dtype=pl.Duration(time_unit="ns"))
+        (
+            flat_obs.select("time_of_emission_isagpst")
+            - constants.system_time_scale_rinex_utc_epoch["GPST"]
+        )
+        .to_series()
+        .cast(dtype=pl.Duration(time_unit="ns"))
     )[1]
     delay = compute_l1_iono_delay_klobuchar(
-    time_of_emission_weeksecond_isagpst,
-    nav_header_dict[f"{year:03d}" + f"{doy:03d}"]["IONOSPHERIC CORR"][
-        "GPSA"
-    ],
-    nav_header_dict[f"{year:03d}" + f"{doy:03d}"]["IONOSPHERIC CORR"][
-        "GPSB"
-    ],
-    flat_obs.loc[mask_idx, "elevation_rad"],
-    flat_obs.loc[mask_idx, "azimuth_rad"],
-    latitude_user_rad,
-    longitude_user_rad,
+        time_of_emission_weeksecond_isagpst,
+        nav_header_dict[f"{year:03d}" + f"{doy:03d}"]["IONOSPHERIC CORR"]["GPSA"],
+        nav_header_dict[f"{year:03d}" + f"{doy:03d}"]["IONOSPHERIC CORR"]["GPSB"],
+        flat_obs.loc[mask_idx, "elevation_rad"],
+        flat_obs.loc[mask_idx, "azimuth_rad"],
+        latitude_user_rad,
+        longitude_user_rad,
     ) * (
         constants.carrier_frequencies_hz()["G"]["L1"][1] ** 2
         / flat_obs.loc[mask_idx, "carrier_frequency_hz"] ** 2
