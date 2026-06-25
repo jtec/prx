@@ -113,7 +113,7 @@ def compute_iono_column(
         matching_rows = ((pl.col("time_of_emission_isagpst") >= pd.Timestamp(year=year, month=1, day=1) + pd.Timedelta(days=doy - 1)) &
                          (pl.col("time_of_emission_isagpst") < pd.Timestamp(year=year, month=1, day=1) + pd.Timedelta(days=doy)) &
                          pl.col("observation_type").str.starts_with("C"))
-        day_df = flat_obs.filter(matching_rows)
+        day_df = flat_obs.filter(matching_rows).select("index", "time_of_emission_isagpst", "elevation_rad", "azimuth_rad", "carrier_frequency_hz")
         time_of_emission_weeksecond_isagpst = timedelta_2_weeks_and_seconds(
             (
                     day_df.select("time_of_emission_isagpst")
