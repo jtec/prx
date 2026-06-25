@@ -6,8 +6,11 @@ import pandas as pd
 from pathlib import Path
 import shutil
 import os
-
+import polars as pl
+import datetime
+from prx.constants import cSecondsPerDay
 from prx.converters import anything_to_rinex_3
+from prx.util import timedelta_2_seconds
 
 log = logging.getLogger(__name__)
 
@@ -344,3 +347,29 @@ def test_rinex_type_based_on_first_line(input_for_test):
     assert util.is_rinex_3_nav_file(nav)
     assert not util.is_rinex_3_obs_file(nav)
     assert not util.is_rinex_3_nav_file(obs)
+
+
+def test_timedelta_2_seconds():
+    expected_timedelta_s = cSecondsPerDay + 1.23456789
+    assert np.isclose(
+        timedelta_2_seconds(pd.Timedelta(days=1, seconds=1.23456789)),
+        expected_timedelta_s,
+        atol=1e-9,
+    )
+    assert np.isclose(
+        timedelta_2_seconds(pd.Series([pd.Timedelta(days=1, seconds=1.23456789)])).iloc[
+            0
+        ],
+        expected_timedelta_s,
+        atol=1e-9,
+    )
+    assert np.isclose(
+        timedelta_2_seconds(
+            pl.Series(
+                values=[datetime.timedelta(days=1, seconds=1.23456789)],
+                dtype=pl.Duration(time_unit="ns"),
+            )
+        )[0],
+        expected_timedelta_s,
+        atol=1e-12,
+    )

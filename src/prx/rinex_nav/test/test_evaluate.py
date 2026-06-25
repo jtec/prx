@@ -11,7 +11,7 @@ from prx.rinex_obs.parser import parse_rinex_obs_file
 from prx.precise_corrections.sp3 import evaluate as sp3_evaluate
 from prx.rinex_nav import evaluate as rinex_nav_evaluate
 from prx import constants, converters
-from prx.util import week_and_seconds_2_timedelta
+from prx.util import week_and_seconds_2_timedelta, disk_cache
 import shutil
 import pytest
 import itertools
@@ -108,6 +108,7 @@ def input_for_test_2023(tmp_path_factory):
 
 def test_parse_nav_file(input_for_test):
     path_to_rnx3_nav_file = converters.anything_to_rinex_3(input_for_test["nav"])
+    disk_cache.clear()
     df = parse_rinex_nav_file(path_to_rnx3_nav_file)
     assert not df.empty
 
