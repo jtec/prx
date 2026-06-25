@@ -619,20 +619,6 @@ def build_records_level_3(
     # set frequency slot to 1 for non-GLONASS satellites
     flat_obs.loc[flat_obs.satellite.str[0] != "R", "frequency_slot"] = int(1)
 
-    def assign_carrier_frequencies(flat_obs):
-        freq_dict = pd.json_normalize(carrier_frequencies_hz(), sep="_").to_dict(
-            orient="records"
-        )[0]
-        assignable = flat_obs.frequency_slot.notna()
-        keys = (
-            flat_obs.satellite[assignable].str[0]
-            + "_L"
-            + flat_obs["observation_type"][assignable].str[1]
-            + "_"
-            + flat_obs.frequency_slot[assignable].astype(int).astype(str)
-        )
-        flat_obs.loc[:, "carrier_frequency_hz"] = keys.map(freq_dict)
-        return flat_obs
 
     flat_obs = assign_carrier_frequencies(flat_obs).drop(columns=["frequency_slot"])
 
