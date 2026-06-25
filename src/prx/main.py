@@ -27,11 +27,10 @@ log = logging.getLogger(__name__)
 @util.timeit
 def write_prx_file(
     prx_header: dict,
-    prx_records_pd: pd.DataFrame,
+    prx_records: pl.DataFrame,
     file_name_without_extension: Path,
 ):
     output_file = Path(f"{str(file_name_without_extension)}.csv")
-    prx_records = pl.from_pandas(prx_records_pd)
     prx_records = prx_records.with_columns(
         (pl.col("elevation_rad") * cDegPerRad).alias("sat_elevation_deg"),
         (pl.col("azimuth_rad") * cDegPerRad).alias("sat_azimuth_deg"),
@@ -433,7 +432,7 @@ def build_records_levels_12(
             approximate_receiver_ecef_position_m,
         )
 
-    return flat_obs.to_pandas()
+    return flat_obs
 
 
 def build_records_level_3(
@@ -702,13 +701,13 @@ def process(
             metadata["processing_start_time"] = t0
 
             # build record
-            records = build_records_level_3(
+            records = pl.from_pandas(build_records_level_3(
                 rinex_3_obs_file,
                 aux_files["sp3_orb"],
                 aux_files["atx"],
                 metadata["approximate_receiver_ecef_position_m"],
                 model_tropo,
-            )
+            ))
     metadata["processing_time"] = str(
         pd.Timestamp.now() - metadata["processing_start_time"]
     )
