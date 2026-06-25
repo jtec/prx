@@ -668,12 +668,15 @@ def compute_parallel(
     # split dataframe into `n_chunks` smaller dataframes
     n_chunks = min(len(per_signal_query.index), 4)
     chunks = np.array_split(per_signal_query, n_chunks)
-    processed_chunks = parallel(
-        delayed(compute)(
-            rinex_nav_file_path, chunk, is_query_corrected_by_sat_clock_offset
+    if joblib_backend == "sequential":
+        processed_chunks = [compute(rinex_nav_file_path, chunk, is_query_corrected_by_sat_clock_offset) for chunk in chunks]
+    else:
+        processed_chunks = parallel(
+            delayed(compute)(
+                rinex_nav_file_path, chunk, is_query_corrected_by_sat_clock_offset
+            )
+            for chunk in chunks
         )
-        for chunk in chunks
-    )
     result = pd.concat(processed_chunks)
     result["frequency_slot"] = result["frequency_slot"].astype(float)
     return result
@@ -709,7 +712,6 @@ def compute(
                 )
             )
         # Apply sat clock correction to the query time for satellite position computation
-
         per_signal_query = per_signal_query.with_columns(
             query_time_wrt_ephemeris_reference_time_s=pl.col(
                 "query_time_wrt_ephemeris_reference_time_s"

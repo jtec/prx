@@ -219,14 +219,19 @@ def timestamp_to_mid_day(ts):
     )
 
 
-def timedelta_2_weeks_and_seconds(time_delta: pd.Timedelta | pd.Series):
-    if isinstance(time_delta, pd.Timedelta):
-        wn_series, tow_series = timedelta_2_weeks_and_seconds(pd.Series([time_delta]))
-        return wn_series.iloc[0], tow_series.iloc[0]
-    in_nanoseconds = time_delta / pd.Timedelta(1, "ns")
-    weeks = np.floor(in_nanoseconds / constants.cNanoSecondsPerWeek)
-    week_nanoseconds = in_nanoseconds - weeks * constants.cNanoSecondsPerWeek
-    return weeks, week_nanoseconds.astype(np.float64) / constants.cNanoSecondsPerSecond
+def timedelta_2_weeks_and_seconds(time_delta: pd.Timedelta | pd.Series | pl.Series):
+    if time_delta is pd.NaT:
+        return np.nan, np.nan
+    if isinstance(time_delta, pd.Timedelta) :
+        w, s = timedelta_2_weeks_and_seconds(pl.Series([time_delta.value], dtype=pl.Duration(time_unit="ns")))
+        return w[0], s[0]
+    if isinstance(time_delta, pd.Series):
+        w, s = timedelta_2_weeks_and_seconds(pl.from_pandas(time_delta))
+        return w, s
+    seconds = timedelta_2_seconds(time_delta)
+    weeks = (seconds / constants.cSecondsPerWeek).floor()
+    week_seconds = seconds - weeks * constants.cSecondsPerWeek
+    return weeks, week_seconds
 
 
 def week_and_seconds_2_timedelta(weeks, seconds):
@@ -244,8 +249,11 @@ def timedelta_2_seconds(
         return timedelta_2_seconds(pl.from_pandas(time_delta)).to_pandas()
     assert isinstance(time_delta, pl.Series)
     assert time_delta.dtype.time_unit == "ns"
+    # Don't lose float resolution unnecessarily here
+    nanoseconds = time_delta.dt.total_nanoseconds()
+    integer_seconds = (nanoseconds / constants.cNanoSecondsPerSecond).floor().cast(int)
     return (
-        time_delta.dt.total_nanoseconds().cast(float) / constants.cNanoSecondsPerSecond
+        integer_seconds + (nanoseconds - integer_seconds*constants.cNanoSecondsPerSecond).cast(float) / constants.cNanoSecondsPerSecond
     )
 
 

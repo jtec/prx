@@ -230,7 +230,7 @@ def test_timedelta_2_weeks_and_seconds():
     seconds_of_week_expected = [280800, 281400, 317400, 302400, np.nan]
 
     np.testing.assert_array_equal(week_computed, week_expected)
-    np.testing.assert_array_equal(seconds_of_week_computed, seconds_of_week_expected)
+    np.testing.assert_allclose(seconds_of_week_computed, seconds_of_week_expected, atol=1e-15, rtol=0)
 
     # We also expect the function to work for Series of timestamps
     week_series_computed, seconds_of_week_series_computed = (
