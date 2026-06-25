@@ -669,7 +669,10 @@ def compute_parallel(
     n_chunks = min(len(per_signal_query.index), 4)
     chunks = np.array_split(per_signal_query, n_chunks)
     if joblib_backend == "sequential":
-        processed_chunks = [compute(rinex_nav_file_path, chunk, is_query_corrected_by_sat_clock_offset) for chunk in chunks]
+        processed_chunks = [
+            compute(rinex_nav_file_path, chunk, is_query_corrected_by_sat_clock_offset)
+            for chunk in chunks
+        ]
     else:
         processed_chunks = parallel(
             delayed(compute)(
