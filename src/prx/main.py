@@ -216,7 +216,10 @@ def assign_carrier_frequencies(flat_obs):
     return flat_obs
 
 
+from line_profiler import profile
+
 @util.timeit
+@profile
 def build_records_levels_12(
     rinex_3_obs_file,
     rinex_3_ephemerides_files,
@@ -423,8 +426,8 @@ def build_records_levels_12(
 
     if prx_level == 2:
         # add iono correction
-        iono_delay = atmo.add_iono_column(
-            flat_obs.to_pandas(),
+        iono_delay = atmo.compute_iono_column(
+            flat_obs,
             rinex_3_ephemerides_files,
             approximate_receiver_ecef_position_m,
         )
@@ -638,7 +641,7 @@ def build_records_level_3(
     rnx3_nav_files = nav_file_discovery.discover_or_download_auxiliary_files(
         rinex_3_obs_file
     )["broadcast_ephemerides"]
-    iono_delay = atmo.add_iono_column(
+    iono_delay = atmo.compute_iono_column(
         flat_obs, rnx3_nav_files, approximate_receiver_ecef_position_m
     )
     flat_obs["iono_delay_m"] = iono_delay
