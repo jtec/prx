@@ -35,7 +35,9 @@ def run_case(case: dict, ram: bool, warm_parser_cache: bool) -> pd.DataFrame:
     p = cProfile.Profile()
     p.enable()
     # cProfile does not profile subprocesses with joblib's loky backend, use threading
+    t0 = pd.Timestamp.now()
     process(observation_file_path=obs_file, joblib_backend="threading")
+    t_exec = pd.Timestamp.now() - t0
     p.disable()
 
     # RAM
@@ -55,7 +57,9 @@ def run_case(case: dict, ram: bool, warm_parser_cache: bool) -> pd.DataFrame:
         reader = memray.FileReader(memray_output)
         metadata = reader.metadata
         peak_ram_mb = metadata.peak_memory / 1024 / 1024
-
+    logger.info(
+        f"Processed {obs_file.name} in {t_exec}: {case['epochs'] / t_exec.seconds} epochs/s, peak RAM [Mb]: {peak_ram_mb}"
+    )
     # Run time
     stats_file = Path("benchmark_prx.prof").resolve()
     p.dump_stats(stats_file)
@@ -66,9 +70,6 @@ def run_case(case: dict, ram: bool, warm_parser_cache: bool) -> pd.DataFrame:
         )
         .sort_values(by="tottime", ascending=False)
         .reset_index(drop=True)
-    )
-    logger.info(
-        f"Processed {obs_file.name} in {df.iloc[0, :]['tottime']} seconds: {case['epochs'] / df.iloc[0, :]['tottime']} epochs/s, peak RAM [Mb]: {peak_ram_mb}"
     )
     df = df[["func", "tottime"]]
     df["function"] = df["func"].apply(lambda x: getattr(x, "co_name", None))
