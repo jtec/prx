@@ -198,21 +198,18 @@ def warm_up_parser_cache(rinex_files):
 
 
 def assign_carrier_frequencies(flat_obs):
-    freq_dict = pd.json_normalize(carrier_frequencies_hz(), sep="_").to_dict(
-        orient="records"
-    )[0]
-    freq_dict[None] = None
-    keys = (
+    freq_df = pl.from_pandas(pd.json_normalize(carrier_frequencies_hz(), sep="_").T.reset_index())
+    freq_df.columns = ["lookup_key", "carrier_frequency_hz"]
+    flat_obs = flat_obs.with_columns(
+        lookup_key =
         flat_obs["satellite"].str.slice(0, 1)
         + "_L"
         + flat_obs["observation_type"].str.slice(1, 1)
         + "_"
         + flat_obs["frequency_slot"].cast(int).cast(str)
     )
-    flat_obs = flat_obs.with_columns(
-        keys.replace(freq_dict).cast(float).alias("carrier_frequency_hz")
-    )
-    return flat_obs
+    flat_obs = flat_obs.join(freq_df, on="lookup_key", how="left")
+    return flat_obs.drop("lookup_key")
 
 
 from line_profiler import profile
