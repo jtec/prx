@@ -85,10 +85,19 @@ def timeit(func):
 
 @timeit
 def try_repair_with_gfzrnx(file):
-    with open(file) as f:
-        if "gfzrnx" in f.read():
-            logging.warning(f"File {file} already contains 'gfzrnx', skipping repair.")
-            return file
+    def _check_gfzrnx_processing(file):
+        with open(file) as f:
+            for line in f:
+                if "END OF HEADER" in line:
+                    break
+                if ("gfzrnx" in line) and ("FILE PROCESSING" in line):
+                    return True
+            return False
+
+    if _check_gfzrnx_processing(file):
+        logging.warning(f"File {file} already contains 'gfzrnx', skipping repair.")
+        return file
+
     tool_path = shutil.which("gfzrnx")
     if tool_path is None:
         logger.info(
