@@ -85,16 +85,24 @@ def timeit(func):
 
 @timeit
 def try_repair_with_gfzrnx(file):
-    def _check_gfzrnx_processing(file):
-        with open(file) as f:
-            for line in f:
-                if "END OF HEADER" in line:
-                    break
-                if ("gfzrnx" in line) and ("FILE PROCESSING" in line):
-                    return True
-            return False
+    # check if file has been processed by gfzrnx
+    check_gfzrnx_processing = False
+    n_line_read = 0
+    # assume that RINEX header is less than 1000 lines
+    n_header_max = 1000
+    with open(file) as f:
+        for line in f:
+            if "END OF HEADER" in line:
+                break
+            if ("gfzrnx" in line) and ("FILE PROCESSING" in line):
+                check_gfzrnx_processing = True
+                break
+            n_line_read += 1
+            if n_line_read > n_header_max:
+                # prevents reading the whole file is not a rinex file
+                break
 
-    if _check_gfzrnx_processing(file):
+    if check_gfzrnx_processing:
         logging.warning(f"File {file} already contains 'gfzrnx', skipping repair.")
         return file
 
