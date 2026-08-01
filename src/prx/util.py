@@ -99,7 +99,7 @@ def try_repair_with_gfzrnx(file):
                 break
             n_line_read += 1
             if n_line_read > n_header_max:
-                # prevents reading the whole file is not a rinex file
+                # prevents reading the whole file if it is not a RINEX file
                 break
 
     if check_gfzrnx_processing:
