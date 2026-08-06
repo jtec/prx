@@ -5,21 +5,26 @@ from prx import constants, converters
 
 def parse_bia_file(filepath_bia_gz: Path) -> pl.DataFrame:
     """
-    Parse gzipped BIA file and returns a pl.DataFrame with columns:
-    - sat_id
-    - one column per obs identifier (e.g. "C1C", "L2X", etc), containing the bias value in meters
+        Parse gzipped BIA file and returns a pl.DataFrame with columns:
+        - sat_id:
+        - obs_id: rinex obs identifier
+        - sat_hw_bias_m: bias value in meters
 
-    Example:
-    ┌────────┬──────────┬──────────┬─────────┬───┬──────────┬──────────┬──────────┬──────────┐
-    │ sat_id ┆ C1C      ┆ C1W      ┆ C2L     ┆ … ┆ L2X      ┆ L2W      ┆ L5Q      ┆ L5X      │
-    │ ---    ┆ ---      ┆ ---      ┆ ---     ┆   ┆ ---      ┆ ---      ┆ ---      ┆ ---      │
-    │ str    ┆ f64      ┆ f64      ┆ f64     ┆   ┆ f64      ┆ f64      ┆ f64      ┆ f64      │
-    ╞════════╪══════════╪══════════╪═════════╪═══╪══════════╪══════════╪══════════╪══════════╡
-    │ G01    ┆ 9.2018   ┆ 10.5943  ┆ 16.1153 ┆ … ┆ 0.22928  ┆ 0.22928  ┆ null     ┆ null     │
-    │ G02    ┆ -10.2757 ┆ -11.9688 ┆ null    ┆ … ┆ 0.70426  ┆ 0.70426  ┆ null     ┆ null     │
-    │ G03    ┆ 6.7032   ┆ 7.3863   ┆ 12.852  ┆ … ┆ 0.69414  ┆ 0.69414  ┆ null     ┆ null     │
-    │ …      ┆ …        ┆ …        ┆ …       ┆ … ┆ …        ┆ …        ┆ …        ┆ …        │
-    └────────┴──────────┴──────────┴─────────┴───┴──────────┴──────────┴──────────┴──────────┘
+        Example:
+    ┌────────┬────────┬───────────────┐
+    │ sat_id ┆ obs_id ┆ sat_hw_bias_m │
+    │ ---    ┆ ---    ┆ ---           │
+    │ str    ┆ str    ┆ f64           │
+    ╞════════╪════════╪═══════════════╡
+    │ G01    ┆ C1C    ┆ 2.75863       │
+    │ G01    ┆ C1W    ┆ 3.176091      │
+    │ G01    ┆ C2L    ┆ 4.831245      │
+    │ …      ┆ …      ┆ …             │
+    │ E36    ┆ L1C    ┆ 0.074504      │
+    │ E36    ┆ L1X    ┆ 0.074504      │
+    │ E36    ┆ L5Q    ┆ 0.136439      │
+    │ E36    ┆ L5X    ┆ 0.136439      │
+    └────────┴────────┴───────────────┘
 
     """
     filepath_bia = converters.compressed_to_uncompressed(filepath_bia_gz)
@@ -55,6 +60,6 @@ def parse_bia_file(filepath_bia_gz: Path) -> pl.DataFrame:
                 obs1_list.append(obs1)
                 val_list.append(estimated_value)
         bia_df = pl.DataFrame(
-            {"sat_id": sat_id_list, "obs1": obs1_list, "val": val_list}
-        ).pivot(on="obs1", index="sat_id", values="val")
+            {"sat_id": sat_id_list, "obs_id": obs1_list, "sat_hw_bias_m": val_list}
+        )
         return bia_df

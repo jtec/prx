@@ -29,10 +29,14 @@ def test_bia_parsing(input_for_test):
     bia_df = bia.parse_bia_file(input_for_test["bia"])
     # manual check in file
     assert (
-        bia_df.filter(pl.col("sat_id") == "G01").get_column("C1C").item()
+        bia_df.filter((pl.col("sat_id") == "G01") & (pl.col("obs_id") == "C1C")).item(
+            0, "sat_hw_bias_m"
+        )
         == 9.2018 / constants.cNanoSecondsPerSecond * constants.cGpsSpeedOfLight_mps
     )
     assert (
-        bia_df.filter(pl.col("sat_id") == "G01").get_column("C1W").item()
+        bia_df.filter((pl.col("sat_id") == "G01") & (pl.col("obs_id") == "C1W")).item(
+            0, "sat_hw_bias_m"
+        )
         == 10.5943 / constants.cNanoSecondsPerSecond * constants.cGpsSpeedOfLight_mps
     )
