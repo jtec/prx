@@ -20,7 +20,7 @@ def bia_file_database_folder():
 
 
 def build_bia_file_name(year: int, doy: int, analysis_center: str):
-    return f"{analysis_center}0OPSFIN_{year}{doy:03d}0000_01D_01D_OSB.BIA.gz"
+    return f"{analysis_center}0MGXFIN_{year}{doy:03d}0000_01D_01D_OSB.BIA.gz"
 
 
 def bia_file_folder(year: int, doy: int):
