@@ -65,7 +65,7 @@ def input_for_test_tlse(tmp_path_factory):
     assert atx_local.exists()
 
     os.makedirs(bia_file_database_folder() / "2023/001/", exist_ok=True)
-    bia = datasets_directory / "TLSE_2023001/COD0OPSFIN_20230010000_01D_01D_OSB.BIA.gz"
+    bia = datasets_directory / "TLSE_2023001/COD0MGXFIN_20230010000_01D_01D_OSB.BIA.gz"
     bia_local = shutil.copy(bia, bia_file_database_folder() / "2023/001" / bia.name)
     assert bia_local.exists()
 
