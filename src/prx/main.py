@@ -11,6 +11,7 @@ import git
 import prx.util as util
 from prx import atmospheric_corrections as atmo
 from prx.constants import carrier_frequencies_hz, cDegPerRad
+from prx.precise_corrections.bia import bia_file_discovery, bia_processing
 from prx.rinex_obs.parser import parse_rinex_obs_file, get_glonass_slot
 from prx.util import is_rinex_3_obs_file, is_rinex_3_nav_file, configure_logging
 from prx.rinex_nav import nav_file_discovery
@@ -435,11 +436,12 @@ def build_records_levels_12(
 
 
 def build_records_level_3(
-    rinex_3_obs_file,
-    sp3_orbit_files,
-    atx_file,
-    approximate_receiver_ecef_position_m,
-    model_tropo,
+    rinex_3_obs_file: Path,
+    sp3_orbit_files: list[Path],
+    atx_file: Path,
+    bia_files: list[Path],
+    approximate_receiver_ecef_position_m: list,
+    model_tropo: str,
 ):
     """
     Creates a flat_obs dataframe including columns for prx processing level 3.
@@ -528,12 +530,13 @@ def build_records_level_3(
         },
     )
 
-    # Compute broadcast position, velocity, clock offset, clock offset rate and TGDs
+    # Compute broadcast position, velocity, clock offset, clock offset rate and hardware biases
     sat_states_per_day = []
-    for file in sp3_orbit_files:
+    for file_sp3, file_bia in zip(sp3_orbit_files, bia_files):
         # get year and doy from sp3 orb filename
-        year = int(file.name[11:15])
-        doy = int(file.name[15:18])
+        year = int(file_sp3.name[11:15])
+        doy = int(file_sp3.name[15:18])
+        # create query for single day
         day_query = query.loc[
             (
                 query.query_time_isagpst
@@ -547,17 +550,38 @@ def build_records_level_3(
         if day_query.empty:
             continue
 
+        # compute satellite position, velocity and clock
         log.info(f"Computing satellite states for {year}-{doy:03d}")
-        sat_states_per_day.append(
-            sp3_evaluate.compute(
-                file,
-                day_query,
-                atx_file,
-            ).assign(  # TODO: add hw satellite biases
-                sat_code_bias_m=np.nan,
-                sat_carrier_bias_m=np.nan,
+        sat_states_single_day = sp3_evaluate.compute(file_sp3, day_query, atx_file)
+        # add satellite hardware biases
+        bia_df = bia_processing.parse_bia_file(file_bia).to_pandas()
+        sat_code_bias = (
+            sat_states_single_day.merge(
+                bia_df,
+                left_on=["sv", "signal"],
+                right_on=["sat_id", "obs_id"],
+                how="left",
             )
+            .drop(columns=["sat_id", "obs_id"])["sat_hw_bias_m"]
+            .to_numpy()
         )
+        sat_carrier_bias = (
+            sat_states_single_day.assign(signal=lambda d: "L" + d["signal"].str[1:])
+            .merge(
+                bia_df,
+                left_on=["sv", "signal"],
+                right_on=["sat_id", "obs_id"],
+                how="left",
+            )
+            .drop(columns=["sat_id", "obs_id"])["sat_hw_bias_m"]
+            .to_numpy()
+        )
+        sat_states_single_day = sat_states_single_day.assign(
+            sat_code_bias_m=sat_code_bias,
+            sat_carrier_bias_m=sat_carrier_bias,
+        )
+        # collect satellite states per day
+        sat_states_per_day.append(sat_states_single_day)
 
     sat_states = pd.concat(sat_states_per_day)
     sat_states = sat_states.rename(
@@ -567,12 +591,11 @@ def build_records_level_3(
             "query_time_isagpst": "time_of_emission_isagpst",
         },
     )
-    (
-        sat_states["elevation_rad"],
-        sat_states["azimuth_rad"],
-    ) = util.compute_satellite_elevation_and_azimuth(
-        sat_states[["sat_pos_x_m", "sat_pos_y_m", "sat_pos_z_m"]].to_numpy(),
-        approximate_receiver_ecef_position_m,
+    (sat_states["elevation_rad"], sat_states["azimuth_rad"]) = (
+        util.compute_satellite_elevation_and_azimuth(
+            sat_states[["sat_pos_x_m", "sat_pos_y_m", "sat_pos_z_m"]].to_numpy(),
+            approximate_receiver_ecef_position_m,
+        )
     )
 
     # Compute anything else that is satellite-specific
@@ -693,6 +716,10 @@ def process(
             aux_files["atx"] = antex_file_discovery.discover_or_download_atx_file(
                 rinex_3_obs_file
             )
+            aux_files["bia"] = [
+                bia_file_discovery.discover_or_download_bia_file(sp3_file)
+                for sp3_file in aux_files["sp3_orb"]
+            ]
 
             # define metadata
             metadata = build_metadata({"obs_file": rinex_3_obs_file, "nav_file": []})
@@ -704,6 +731,7 @@ def process(
                 rinex_3_obs_file,
                 aux_files["sp3_orb"],
                 aux_files["atx"],
+                aux_files["bia"],
                 metadata["approximate_receiver_ecef_position_m"],
                 model_tropo,
             )
