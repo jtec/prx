@@ -367,7 +367,7 @@ def test_spp_lsq_tlse_single_freq(input_for_test_tlse):
         assert np.max(np.abs(velocity_offset)) < 3e-2
 
 
-def test_spp_lsq_tlse_with_precise_corrections(input_for_test_tlse):
+def test_spp_lsq_tlse_iono_free_with_precise_corrections(input_for_test_tlse):
     """
     Use iono-free combinations considered by IGS conventions (CODE Analysis Center):
     | Constellation | Frequency pair             |
