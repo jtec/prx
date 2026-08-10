@@ -555,27 +555,26 @@ def build_records_level_3(
         sat_states_single_day = sp3_evaluate.compute(file_sp3, day_query, atx_file)
         # add satellite hardware biases
         bia_df = bia_processing.parse_bia_file(file_bia).to_pandas()
-        sat_code_bias = (
-            sat_states_single_day.merge(
-                bia_df,
-                left_on=["sv", "signal"],
-                right_on=["sat_id", "obs_id"],
-                how="left",
-            )
-            .drop(columns=["sat_id", "obs_id"])["sat_hw_bias_m"]
-            .to_numpy()
-        )
-        sat_carrier_bias = (
-            sat_states_single_day.assign(signal=lambda d: "L" + d["signal"].str[1:])
-            .merge(
-                bia_df,
-                left_on=["sv", "signal"],
-                right_on=["sat_id", "obs_id"],
-                how="left",
-            )
-            .drop(columns=["sat_id", "obs_id"])["sat_hw_bias_m"]
-            .to_numpy()
-        )
+        sat_code_bias = pd.merge_asof(
+            query.sort_values("query_time_isagpst"),
+            bia_df.sort_values("start"),
+            left_on="query_time_isagpst",
+            right_on="start",
+            left_by=["sv", "signal"],
+            right_by=["sat_id", "obs_id"],
+            direction="backward",
+        )["sat_hw_bias_m"]
+        sat_carrier_bias = pd.merge_asof(
+            query.assign(signal=lambda d: "L" + d["signal"].str[1:]).sort_values(
+                "query_time_isagpst"
+            ),
+            bia_df.sort_values("start"),
+            left_on="query_time_isagpst",
+            right_on="start",
+            left_by=["sv", "signal"],
+            right_by=["sat_id", "obs_id"],
+            direction="backward",
+        )["sat_hw_bias_m"]
         sat_states_single_day = sat_states_single_day.assign(
             sat_code_bias_m=sat_code_bias,
             sat_carrier_bias_m=sat_carrier_bias,

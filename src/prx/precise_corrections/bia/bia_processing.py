@@ -1,30 +1,30 @@
 from pathlib import Path
 import polars as pl
 from prx import constants, converters, util
+from datetime import datetime, timedelta
 
 
 def parse_bia_file(filepath_bia_gz: Path) -> pl.DataFrame:
     """
-        Parse gzipped BIA file and returns a pl.DataFrame with columns:
-        - sat_id:
-        - obs_id: rinex obs identifier
-        - sat_hw_bias_m: bias value in meters
+            Parse gzipped BIA file and returns a pl.DataFrame with columns:
+            - sat_id:
+            - obs_id: rinex obs identifier
+            - sat_hw_bias_m: bias value in meters
+            - start: timestamp
+            - end: timestamp
 
-        Example:
-    ┌────────┬────────┬───────────────┐
-    │ sat_id ┆ obs_id ┆ sat_hw_bias_m │
-    │ ---    ┆ ---    ┆ ---           │
-    │ str    ┆ str    ┆ f64           │
-    ╞════════╪════════╪═══════════════╡
-    │ G01    ┆ C1C    ┆ 2.75863       │
-    │ G01    ┆ C1W    ┆ 3.176091      │
-    │ G01    ┆ C2L    ┆ 4.831245      │
-    │ …      ┆ …      ┆ …             │
-    │ E36    ┆ L1C    ┆ 0.074504      │
-    │ E36    ┆ L1X    ┆ 0.074504      │
-    │ E36    ┆ L5Q    ┆ 0.136439      │
-    │ E36    ┆ L5X    ┆ 0.136439      │
-    └────────┴────────┴───────────────┘
+            Example:
+    ┌────────┬────────┬───────────────┬─────────────────────┬─────────────────────┐
+    │ sat_id ┆ obs_id ┆ sat_hw_bias_m ┆ start               ┆ end                 │
+    │ ---    ┆ ---    ┆ ---           ┆ ---                 ┆ ---                 │
+    │ str    ┆ str    ┆ f64           ┆ datetime[ns]        ┆ datetime[ns]        │
+    ╞════════╪════════╪═══════════════╪═════════════════════╪═════════════════════╡
+    │ G01    ┆ C1C    ┆ -0.425645     ┆ 2023-01-01 00:00:00 ┆ 2023-01-02 00:00:00 │
+    │ G01    ┆ C1W    ┆ -0.0          ┆ 2023-01-01 00:00:00 ┆ 2023-01-02 00:00:00 │
+    │ …      ┆ …      ┆ …             ┆ …                   ┆ …                   │
+    │ E36    ┆ L5Q    ┆ -0.018269     ┆ 2023-01-01 00:00:00 ┆ 2023-01-02 00:00:00 │
+    │ E36    ┆ L5X    ┆ -0.018269     ┆ 2023-01-01 00:00:00 ┆ 2023-01-02 00:00:00 │
+    └────────┴────────┴───────────────┴─────────────────────┴─────────────────────┘
 
     """
 
@@ -35,6 +35,8 @@ def parse_bia_file(filepath_bia_gz: Path) -> pl.DataFrame:
             sat_id_list = []
             obs1_list = []
             val_list = []
+            start_list = []
+            end_list = []
             # find beginning of block BIAS/SOLUTION
             for line in f:
                 if line.startswith("+BIAS/SOLUTION"):
@@ -61,11 +63,28 @@ def parse_bia_file(filepath_bia_gz: Path) -> pl.DataFrame:
                         / constants.cNanoSecondsPerSecond
                         * constants.cGpsSpeedOfLight_mps
                     )
+                    start = datetime(int(line[35:39]), 1, 1) + timedelta(
+                        days=int(line[40:43]) - 1, seconds=int(line[44:49])
+                    )
+                    end = datetime(int(line[50:54]), 1, 1) + timedelta(
+                        days=int(line[55:58]) - 1, seconds=int(line[59:64])
+                    )
                     sat_id_list.append(sat_id)
                     obs1_list.append(obs1)
                     val_list.append(estimated_value)
+                    start_list.append(start)
+                    end_list.append(end)
             bia_df = pl.DataFrame(
-                {"sat_id": sat_id_list, "obs_id": obs1_list, "sat_hw_bias_m": val_list}
+                {
+                    "sat_id": sat_id_list,
+                    "obs_id": obs1_list,
+                    "sat_hw_bias_m": val_list,
+                    "start": start_list,
+                    "end": end_list,
+                },
+            ).with_columns(
+                pl.col("start").cast(pl.Datetime("ns")),
+                pl.col("end").cast(pl.Datetime("ns")),
             )
             return bia_df
 
