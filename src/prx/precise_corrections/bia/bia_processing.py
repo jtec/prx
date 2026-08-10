@@ -31,7 +31,7 @@ def parse_bia_file(filepath_bia_gz: Path) -> pl.DataFrame:
     @util.disk_cache.cache(ignore=["filepath_bia_gz"])
     def cached_load(filepath_bia_gz: Path, file_hash: str):
         filepath_bia = converters.compressed_to_uncompressed(filepath_bia_gz)
-        with open(filepath_bia, "r") as f:
+        with open(filepath_bia, "r", encoding="cp1250") as f:
             sat_id_list = []
             obs1_list = []
             val_list = []
