@@ -1,5 +1,6 @@
 from pathlib import Path
 import polars as pl
+import pandas as pd
 from prx import constants, converters, util
 from datetime import datetime, timedelta
 
@@ -90,3 +91,40 @@ def parse_bia_file(filepath_bia_gz: Path) -> pl.DataFrame:
 
     file_content_hash = util.hash_of_file_content(filepath_bia_gz)
     return cached_load(filepath_bia_gz, file_content_hash)
+
+
+def compute_sat_hw_biases(query: pd.DataFrame, bia_df: pl.DataFrame) -> pd.DataFrame:
+    query_sorted = pl.from_pandas(query).sort("query_time_isagpst")
+    bia_sorted = bia_df.sort("start")
+
+    sat_code_bias = query_sorted.join_asof(
+        bia_sorted,
+        left_on="query_time_isagpst",
+        right_on="start",
+        by_left=["sv", "signal"],
+        by_right=["sat_id", "obs_id"],
+        strategy="backward",
+    ).get_column("sat_hw_bias_m")
+
+    sat_carrier_bias = (
+        query_sorted.with_columns(
+            (pl.lit("L") + pl.col("signal").str.slice(1)).alias("signal")
+        )
+        .join_asof(
+            bia_sorted,
+            left_on="query_time_isagpst",
+            right_on="start",
+            by_left=["sv", "signal"],
+            by_right=["sat_id", "obs_id"],
+            strategy="backward",
+        )
+        .get_column("sat_hw_bias_m")
+    )
+
+    sat_bias = query_sorted.with_columns(
+        sat_code_bias.alias("sat_code_bias_m"),
+        sat_carrier_bias.alias("sat_carrier_bias_m"),
+    )
+    return sat_bias[
+        ["sv", "signal", "query_time_isagpst", "sat_code_bias_m", "sat_carrier_bias_m"]
+    ]

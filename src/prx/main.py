@@ -22,6 +22,7 @@ from prx.precise_corrections.sp3 import evaluate as sp3_evaluate
 from prx.precise_corrections.sp3 import sp3_file_discovery
 from prx.precise_corrections.antex import antex_file_discovery
 
+
 log = logging.getLogger(__name__)
 
 
@@ -554,31 +555,13 @@ def build_records_level_3(
         log.info(f"Computing satellite states for {year}-{doy:03d}")
         sat_states_single_day = sp3_evaluate.compute(file_sp3, day_query, atx_file)
         # add satellite hardware biases
-        bia_df = bia_processing.parse_bia_file(file_bia).to_pandas()
-        sat_code_bias = pd.merge_asof(
-            query.sort_values("query_time_isagpst"),
-            bia_df.sort_values("start"),
-            left_on="query_time_isagpst",
-            right_on="start",
-            left_by=["sv", "signal"],
-            right_by=["sat_id", "obs_id"],
-            direction="backward",
-        )["sat_hw_bias_m"]
-        sat_carrier_bias = pd.merge_asof(
-            query.assign(signal=lambda d: "L" + d["signal"].str[1:]).sort_values(
-                "query_time_isagpst"
-            ),
-            bia_df.sort_values("start"),
-            left_on="query_time_isagpst",
-            right_on="start",
-            left_by=["sv", "signal"],
-            right_by=["sat_id", "obs_id"],
-            direction="backward",
-        )["sat_hw_bias_m"]
-        sat_states_single_day = sat_states_single_day.assign(
-            sat_code_bias_m=sat_code_bias,
-            sat_carrier_bias_m=sat_carrier_bias,
+        sat_bias = bia_processing.compute_sat_hw_biases(
+            sat_states_single_day, bia_processing.parse_bia_file(file_bia)
+        ).to_pandas()
+        sat_states_single_day = sat_states_single_day.merge(
+            sat_bias, on=["sv", "signal", "query_time_isagpst"], how="left"
         )
+
         # collect satellite states per day
         sat_states_per_day.append(sat_states_single_day)
 

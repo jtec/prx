@@ -120,7 +120,6 @@ def test_iono_free_code_bias(input_for_test):
 
 
 def test_retrieve_satellite_biases(input_for_test):
-    bia_df = bia.parse_bia_file(input_for_test["wum"]).to_pandas()
     # choose a query where 2 different biases exists for the same sat/sig at different times
     query = pd.DataFrame(
         {
@@ -133,36 +132,15 @@ def test_retrieve_satellite_biases(input_for_test):
         }
     )
 
-    sat_code_bias = pd.merge_asof(
-        query.sort_values("query_time_isagpst"),
-        bia_df.sort_values("start"),
-        left_on="query_time_isagpst",
-        right_on="start",
-        left_by=["sv", "signal"],
-        right_by=["sat_id", "obs_id"],
-        direction="backward",
-    )["sat_hw_bias_m"]
-
-    sat_carrier_bias = pd.merge_asof(
-        query.assign(signal=lambda d: "L" + d["signal"].str[1:]).sort_values(
-            "query_time_isagpst"
-        ),
-        bia_df.sort_values("start"),
-        left_on="query_time_isagpst",
-        right_on="start",
-        left_by=["sv", "signal"],
-        right_by=["sat_id", "obs_id"],
-        direction="backward",
-    )["sat_hw_bias_m"]
-
-    query = query.assign(
-        sat_code_bias_m=sat_code_bias,
-        sat_carrier_bias_m=sat_carrier_bias,
+    sat_bias = bia.compute_sat_hw_biases(
+        query, bia.parse_bia_file(input_for_test["wum"])
     )
 
-    assert "sat_code_bias_m" in query.columns
-    assert "sat_carrier_bias_m" in query.columns
+    assert "sat_code_bias_m" in sat_bias.columns
+    assert "sat_carrier_bias_m" in sat_bias.columns
     # manual check in bia file
-    assert query[["sat_code_bias_m", "sat_carrier_bias_m"]].to_numpy() == pytest.approx(
+    assert sat_bias[
+        ["sat_code_bias_m", "sat_carrier_bias_m"]
+    ].to_numpy() == pytest.approx(
         np.array([[1.84671646, 0.38192426], [1.84671646, 0.39412953]])
     )
