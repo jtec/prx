@@ -657,6 +657,7 @@ def process(
     observation_file_path: Path,
     prx_level=2,
     model_tropo="saastamoinen",
+    analysis_center="COD",
     joblib_backend: str = "loky",
 ):
     t0 = pd.Timestamp.now()
@@ -693,7 +694,9 @@ def process(
             aux_files = {}
             # define auxiliary files
             aux_files["sp3_orb"], aux_files["sp3_clk"] = (
-                sp3_file_discovery.discover_or_download_sp3_file(rinex_3_obs_file)
+                sp3_file_discovery.discover_or_download_sp3_file(
+                    rinex_3_obs_file, analysis_center
+                )
             )
             aux_files["atx"] = antex_file_discovery.discover_or_download_atx_file(
                 rinex_3_obs_file
@@ -749,6 +752,13 @@ if __name__ == "__main__":
         default=2,
     )
     parser.add_argument(
+        "--analysis_center",
+        type=str,
+        help="Analysis center as source for precise correction (cod, gfz, grg, wum)",
+        choices=["cod", "gfz", "grg", "wum"],
+        default="cod",
+    )
+    parser.add_argument(
         "--tropo",
         type=str,
         choices=["saastamoinen", "unb3m"],
@@ -763,6 +773,7 @@ if __name__ == "__main__":
         required=False,
     )
     args = parser.parse_args()
+
     configure_logging(args.log_level)
     if args.observation_file_path is None:
         log.error("No observation file path provided.")
@@ -770,4 +781,9 @@ if __name__ == "__main__":
     if not Path(args.observation_file_path).exists():
         log.error(f"Observation file {args.observation_file_path} does not exist.")
         sys.exit(1)
-    process(Path(args.observation_file_path), args.prx_level, args.tropo)
+    process(
+        Path(args.observation_file_path),
+        args.prx_level,
+        args.tropo,
+        args.analysis_center,
+    )

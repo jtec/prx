@@ -143,6 +143,7 @@ def try_downloading_sp3_ftp(gps_week: int, folder: Path, file: str) -> Path | No
 def get_sp3_files(
     mid_day_start: pd.Timestamp,
     mid_day_end: pd.Timestamp,
+    analysis_center: str,
     db_folder=sp3_file_database_folder(),
 ) -> tuple[list[Path | None], list[Path | None]]:
     sp3_orb_files = []
@@ -151,31 +152,33 @@ def get_sp3_files(
     gps_week, _ = timestamp_to_gps_week_and_dow(date)
     while date <= mid_day_end:
         for p in priority:
-            sp3_filename, clk_filename = build_sp3_filename(date, p)
-            file_orb = get_local_sp3(date, sp3_filename, db_folder)
-            file_clk = get_local_sp3(date, clk_filename, db_folder)
-            if file_orb is None:
-                file_orb = try_downloading_sp3_ftp(
-                    gps_week, sp3_file_folder(date, db_folder), sp3_filename
-                )
-            if file_clk is None:
-                file_clk = try_downloading_sp3_ftp(
-                    gps_week, sp3_file_folder(date, db_folder), clk_filename
-                )
-            if file_orb is not None and file_clk is not None:
-                sp3_orb_files.append(file_orb)
-                sp3_clk_files.append(file_clk)
-                break
-            # If we reach the end of the priority list without success
-            if file_orb is None and file_clk is None and p == priority[-1]:
-                sp3_orb_files.append(None)
-                sp3_clk_files.append(None)
+            if analysis_center == p[0]:
+                sp3_filename, clk_filename = build_sp3_filename(date, p)
+                file_orb = get_local_sp3(date, sp3_filename, db_folder)
+                file_clk = get_local_sp3(date, clk_filename, db_folder)
+                if file_orb is None:
+                    file_orb = try_downloading_sp3_ftp(
+                        gps_week, sp3_file_folder(date, db_folder), sp3_filename
+                    )
+                if file_clk is None:
+                    file_clk = try_downloading_sp3_ftp(
+                        gps_week, sp3_file_folder(date, db_folder), clk_filename
+                    )
+                if file_orb is not None and file_clk is not None:
+                    sp3_orb_files.append(file_orb)
+                    sp3_clk_files.append(file_clk)
+                    break
+                # If we reach the end of the priority list without success
+                if file_orb is None and file_clk is None and p == priority[-1]:
+                    sp3_orb_files.append(None)
+                    sp3_clk_files.append(None)
         date += pd.Timedelta(1, unit="days")
     return sp3_orb_files, sp3_clk_files
 
 
 def discover_or_download_sp3_file(
     observation_file_path=Path,
+    analysis_center="COD",
 ) -> tuple[list[Path | None], list[Path | None]]:
     """
     Returns the path to a valid SP3 file (local or downloaded) corresponding to the observation file.
@@ -193,5 +196,5 @@ def discover_or_download_sp3_file(
         util.rinex_header_time_string_2_timestamp_ns(header["TIME OF LAST OBS"])
     )
 
-    sp3_orb_files, sp3_clk_files = get_sp3_files(t_start, t_end)
+    sp3_orb_files, sp3_clk_files = get_sp3_files(t_start, t_end, analysis_center)
     return sp3_orb_files, sp3_clk_files
