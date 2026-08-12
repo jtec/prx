@@ -110,7 +110,9 @@ def test_get_sp3_files(set_up_test):
             return_value=None,
         ),
     ):
-        sp3_orb_files, sp3_clk_files = sp3.get_sp3_files(t_start, t_end, "COD", local_db)
+        sp3_orb_files, sp3_clk_files = sp3.get_sp3_files(
+            t_start, t_end, "COD", local_db
+        )
 
     file_orb = sp3_orb_files[0].name
     file_clk = sp3_clk_files[0].name
@@ -176,7 +178,9 @@ def test_download_FIN_when_local_RAP_is_available(set_up_test):
             new=prx.precise_corrections.sp3.sp3_file_discovery.check_online_availability,
         ),
     ):
-        sp3_orb_files, sp3_clk_files = sp3.get_sp3_files(t_start, t_end, "COD", local_db)
+        sp3_orb_files, sp3_clk_files = sp3.get_sp3_files(
+            t_start, t_end, "COD", local_db
+        )
 
     file_orb = sp3_orb_files[0].name
     file_clk = sp3_clk_files[0].name
@@ -219,7 +223,9 @@ def test_match_CLK_and_ORB(set_up_test):
             new=prx.precise_corrections.sp3.sp3_file_discovery.check_online_availability,
         ),
     ):
-        sp3_orb_files, sp3_clk_files = sp3.get_sp3_files(t_start, t_end, ac_code, local_db)
+        sp3_orb_files, sp3_clk_files = sp3.get_sp3_files(
+            t_start, t_end, ac_code, local_db
+        )
 
     file_orb = sp3_orb_files[0].name
     file_clk = sp3_clk_files[0].name
