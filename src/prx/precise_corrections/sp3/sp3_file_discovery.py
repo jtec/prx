@@ -130,8 +130,9 @@ def try_downloading_sp3_ftp(gps_week: int, folder: Path, file: str) -> Path | No
         remote_folder = f"/gnss/products/{gps_week}/mgex"
     ftp_file = f"ftp://{server}/{remote_folder}/{file}"
     local_compressed_file = folder / file
-    urllib.request.urlretrieve(ftp_file, local_compressed_file)
-    if not local_compressed_file.exists():
+    try:
+        urllib.request.urlretrieve(ftp_file, local_compressed_file)
+    except urllib.request.URLError:
         log.warning(f"Could not download {ftp_file}")
         return None
     local_file = converters.compressed_to_uncompressed(local_compressed_file)
