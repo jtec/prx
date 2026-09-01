@@ -11,6 +11,7 @@ import git
 import prx.util as util
 from prx import atmospheric_corrections as atmo
 from prx.constants import carrier_frequencies_hz, cDegPerRad
+from prx.precise_corrections.bia import bia_file_discovery, bia_processing
 from prx.rinex_obs.parser import parse_rinex_obs_file, get_glonass_slot
 from prx.util import is_rinex_3_obs_file, is_rinex_3_nav_file, configure_logging
 from prx.rinex_nav import nav_file_discovery
@@ -20,6 +21,7 @@ from prx.rinex_nav.evaluate import parse_rinex_nav_file
 from prx.precise_corrections.sp3 import evaluate as sp3_evaluate
 from prx.precise_corrections.sp3 import sp3_file_discovery
 from prx.precise_corrections.antex import antex_file_discovery
+
 
 log = logging.getLogger(__name__)
 
@@ -435,11 +437,12 @@ def build_records_levels_12(
 
 
 def build_records_level_3(
-    rinex_3_obs_file,
-    sp3_orbit_files,
-    atx_file,
-    approximate_receiver_ecef_position_m,
-    model_tropo,
+    rinex_3_obs_file: Path,
+    sp3_orbit_files: list[Path],
+    atx_file: Path,
+    bia_files: list[Path],
+    approximate_receiver_ecef_position_m: list,
+    model_tropo: str,
 ):
     """
     Creates a flat_obs dataframe including columns for prx processing level 3.
@@ -528,12 +531,13 @@ def build_records_level_3(
         },
     )
 
-    # Compute broadcast position, velocity, clock offset, clock offset rate and TGDs
+    # Compute broadcast position, velocity, clock offset, clock offset rate and hardware biases
     sat_states_per_day = []
-    for file in sp3_orbit_files:
+    for file_sp3, file_bia in zip(sp3_orbit_files, bia_files):
         # get year and doy from sp3 orb filename
-        year = int(file.name[11:15])
-        doy = int(file.name[15:18])
+        year = int(file_sp3.name[11:15])
+        doy = int(file_sp3.name[15:18])
+        # create query for single day
         day_query = query.loc[
             (
                 query.query_time_isagpst
@@ -547,17 +551,19 @@ def build_records_level_3(
         if day_query.empty:
             continue
 
+        # compute satellite position, velocity and clock
         log.info(f"Computing satellite states for {year}-{doy:03d}")
-        sat_states_per_day.append(
-            sp3_evaluate.compute(
-                file,
-                day_query,
-                atx_file,
-            ).assign(  # TODO: add hw satellite biases
-                sat_code_bias_m=np.nan,
-                sat_carrier_bias_m=np.nan,
-            )
+        sat_states_single_day = sp3_evaluate.compute(file_sp3, day_query, atx_file)
+        # add satellite hardware biases
+        sat_bias = bia_processing.compute_sat_hw_biases(
+            sat_states_single_day, bia_processing.parse_bia_file(file_bia)
+        ).to_pandas()
+        sat_states_single_day = sat_states_single_day.merge(
+            sat_bias, on=["sv", "signal", "query_time_isagpst"], how="left"
         )
+
+        # collect satellite states per day
+        sat_states_per_day.append(sat_states_single_day)
 
     sat_states = pd.concat(sat_states_per_day)
     sat_states = sat_states.rename(
@@ -567,12 +573,11 @@ def build_records_level_3(
             "query_time_isagpst": "time_of_emission_isagpst",
         },
     )
-    (
-        sat_states["elevation_rad"],
-        sat_states["azimuth_rad"],
-    ) = util.compute_satellite_elevation_and_azimuth(
-        sat_states[["sat_pos_x_m", "sat_pos_y_m", "sat_pos_z_m"]].to_numpy(),
-        approximate_receiver_ecef_position_m,
+    (sat_states["elevation_rad"], sat_states["azimuth_rad"]) = (
+        util.compute_satellite_elevation_and_azimuth(
+            sat_states[["sat_pos_x_m", "sat_pos_y_m", "sat_pos_z_m"]].to_numpy(),
+            approximate_receiver_ecef_position_m,
+        )
     )
 
     # Compute anything else that is satellite-specific
@@ -652,6 +657,7 @@ def process(
     observation_file_path: Path,
     prx_level=2,
     model_tropo="saastamoinen",
+    analysis_center="COD",
     joblib_backend: str = "loky",
 ):
     t0 = pd.Timestamp.now()
@@ -688,11 +694,17 @@ def process(
             aux_files = {}
             # define auxiliary files
             aux_files["sp3_orb"], aux_files["sp3_clk"] = (
-                sp3_file_discovery.discover_or_download_sp3_file(rinex_3_obs_file)
+                sp3_file_discovery.discover_or_download_sp3_file(
+                    rinex_3_obs_file, analysis_center
+                )
             )
             aux_files["atx"] = antex_file_discovery.discover_or_download_atx_file(
                 rinex_3_obs_file
             )
+            aux_files["bia"] = [
+                bia_file_discovery.discover_or_download_bia_file(sp3_file)
+                for sp3_file in aux_files["sp3_orb"]
+            ]
 
             # define metadata
             metadata = build_metadata({"obs_file": rinex_3_obs_file, "nav_file": []})
@@ -704,6 +716,7 @@ def process(
                 rinex_3_obs_file,
                 aux_files["sp3_orb"],
                 aux_files["atx"],
+                aux_files["bia"],
                 metadata["approximate_receiver_ecef_position_m"],
                 model_tropo,
             )
@@ -739,6 +752,13 @@ if __name__ == "__main__":
         default=2,
     )
     parser.add_argument(
+        "--analysis_center",
+        type=str,
+        help="Analysis center as source for precise correction (cod, gfz, grg, wum)",
+        choices=["cod", "gfz", "grg", "wum"],
+        default="cod",
+    )
+    parser.add_argument(
         "--tropo",
         type=str,
         choices=["saastamoinen", "unb3m"],
@@ -753,6 +773,7 @@ if __name__ == "__main__":
         required=False,
     )
     args = parser.parse_args()
+
     configure_logging(args.log_level)
     if args.observation_file_path is None:
         log.error("No observation file path provided.")
@@ -760,4 +781,9 @@ if __name__ == "__main__":
     if not Path(args.observation_file_path).exists():
         log.error(f"Observation file {args.observation_file_path} does not exist.")
         sys.exit(1)
-    process(Path(args.observation_file_path), args.prx_level, args.tropo)
+    process(
+        Path(args.observation_file_path),
+        args.prx_level,
+        args.tropo,
+        args.analysis_center,
+    )

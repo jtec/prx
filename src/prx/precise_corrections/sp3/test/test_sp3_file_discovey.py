@@ -110,7 +110,9 @@ def test_get_sp3_files(set_up_test):
             return_value=None,
         ),
     ):
-        sp3_orb_files, sp3_clk_files = sp3.get_sp3_files(t_start, t_end, local_db)
+        sp3_orb_files, sp3_clk_files = sp3.get_sp3_files(
+            t_start, t_end, "COD", local_db
+        )
 
     file_orb = sp3_orb_files[0].name
     file_clk = sp3_clk_files[0].name
@@ -141,7 +143,7 @@ def test_get_sp3_files_multiple_days(set_up_test):
             return_value=None,
         ),
     ):
-        sp3_files = sp3.get_sp3_files(t_start, t_end, local_db)
+        sp3_files = sp3.get_sp3_files(t_start, t_end, "COD", local_db)
 
     assert len(sp3_files) == 2
     for ind_day in range(2):
@@ -176,7 +178,9 @@ def test_download_FIN_when_local_RAP_is_available(set_up_test):
             new=prx.precise_corrections.sp3.sp3_file_discovery.check_online_availability,
         ),
     ):
-        sp3_orb_files, sp3_clk_files = sp3.get_sp3_files(t_start, t_end, local_db)
+        sp3_orb_files, sp3_clk_files = sp3.get_sp3_files(
+            t_start, t_end, "COD", local_db
+        )
 
     file_orb = sp3_orb_files[0].name
     file_clk = sp3_clk_files[0].name
@@ -205,6 +209,7 @@ def test_match_CLK_and_ORB(set_up_test):
         _, file_clk_expected = sp3.build_sp3_filename(
             t_start, sp3.priority[idx_priority]
         )
+        ac_code = sp3.priority[idx_priority][0]
         if not list(local_db.glob("**/file_clk_expected")):
             break
 
@@ -218,7 +223,9 @@ def test_match_CLK_and_ORB(set_up_test):
             new=prx.precise_corrections.sp3.sp3_file_discovery.check_online_availability,
         ),
     ):
-        sp3_orb_files, sp3_clk_files = sp3.get_sp3_files(t_start, t_end, local_db)
+        sp3_orb_files, sp3_clk_files = sp3.get_sp3_files(
+            t_start, t_end, ac_code, local_db
+        )
 
     file_orb = sp3_orb_files[0].name
     file_clk = sp3_clk_files[0].name

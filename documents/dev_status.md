@@ -52,18 +52,18 @@ Same as level 1 and 2, with the following additional parameters. The parameters 
 uv run python src/prx/main.py --observation_file_path <path_to_rinex_file> --prx_level 3
 ```
 
-| Parameters                                                                                           | Name in PRX file                                                                                  | Status |
-|------------------------------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------|--------|
-| Satellite antenna phase center position and velocity                                                 | `sat_pos_x_m`, `sat_pos_y_m`, `sat_pos_z_m`,<br>`sat_vel_x_mps`, `sat_vel_y_mps`, `sat_vel_z_mps` | ✅      |
-| Satellite center of mass position (computed using `sp3` orbit files)                                 | `sat_pos_com_x_m`, `sat_pos_com_y_m`, `sat_pos_com_z_m`                                           | ✅      |
-| Satellite clock offset and drift (including relativistic effect) (computed using `sp3` clock files)  | `sat_clock_offset_m`, `sat_clock_drift_mps`                                                       | ✅      |
-| Tropospheric delay (computed using `tropex` files)                                                   | `tropo_delay_m`                                                                                   | ❌      |
-| Tropospheric mapping function                                                                        | to be completed                                                                                   | ❌      |
-| Ionospheric delay (computed using `ionex` files)                                                     | `iono_delay_m`                                                                                    | ❌      |
-| Satellite code & phase bias (computed using `bia` files)                                             | `sat_code_bias_m`                                                                                 | ❌      |
-| Satellite & receiver phase center offset (computed using `antex` files)                              | `sat_pco_x_m`, `sat_pco_y_m`, `sat_pco_z_m`                                                       | ✅      |
-| Satellite & receiver phase center variation (computed using `antex` files)                      | to be completed                                                       | ❌      |
-| Solid Earth Tide                                                                                     | to be completed                                                                                   | ❌      |
+| Parameters                                                                                          | Name in PRX file                                                                                  | Status |
+|-----------------------------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------|--------|
+| Satellite antenna phase center position and velocity                                                | `sat_pos_x_m`, `sat_pos_y_m`, `sat_pos_z_m`,<br>`sat_vel_x_mps`, `sat_vel_y_mps`, `sat_vel_z_mps` | ✅      |
+| Satellite center of mass position (computed using `sp3` orbit files)                                | `sat_pos_com_x_m`, `sat_pos_com_y_m`, `sat_pos_com_z_m`                                           | ✅      |
+| Satellite clock offset and drift (including relativistic effect) (computed using `sp3` clock files) | `sat_clock_offset_m`, `sat_clock_drift_mps`                                                       | ✅      |
+| Tropospheric delay (computed using `tropex` files)                                                  | `tropo_delay_m`                                                                                   | ❌      |
+| Tropospheric mapping function                                                                       | to be completed                                                                                   | ❌      |
+| Ionospheric delay (computed using `ionex` files)                                                    | `iono_delay_m`                                                                                    | ❌      |
+| Satellite code & phase bias (computed using `bia` files)                                            | `sat_code_bias_m`   , `sat_carrier_bias_m`                                                        | ✅      |
+| Satellite & receiver phase center offset (computed using `antex` files)                             | `sat_pco_x_m`, `sat_pco_y_m`, `sat_pco_z_m`                                                       | ✅      |
+| Satellite & receiver phase center variation (computed using `antex` files)                          | to be completed                                                                                   | ❌      |
+| Solid Earth Tide                                                                                    | to be completed                                                                                   | ❌      |
 
   
 

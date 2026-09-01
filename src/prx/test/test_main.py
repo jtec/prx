@@ -12,6 +12,7 @@ from prx import user
 from prx.main import write_prx_file
 from prx.precise_corrections.antex.antex_file_discovery import atx_file_database_folder
 from prx.precise_corrections.sp3.sp3_file_discovery import sp3_file_database_folder
+from prx.precise_corrections.bia.bia_file_discovery import bia_file_database_folder
 from prx.rinex_nav import nav_file_discovery
 
 log = logging.getLogger(__name__)
@@ -38,10 +39,7 @@ def input_for_test_tlse(tmp_path_factory):
     )
     rnx_nav = datasets_directory / "TLSE_2023001/BRDC00IGS_R_20230010000_01D_MN.rnx.gz"
     for file in [compressed_crx, rnx_nav]:
-        shutil.copy(
-            file,
-            test_directory / file.name,
-        )
+        shutil.copy(file, test_directory / file.name)
 
     # copy and uncompress precise correction files to local database
     os.makedirs(sp3_file_database_folder() / "2023/001/", exist_ok=True)
@@ -66,6 +64,11 @@ def input_for_test_tlse(tmp_path_factory):
     atx_local = shutil.copy(atx, atx_file_database_folder() / atx.name)
     assert atx_local.exists()
 
+    os.makedirs(bia_file_database_folder() / "2023/001/", exist_ok=True)
+    bia = datasets_directory / "TLSE_2023001/COD0MGXFIN_20230010000_01D_01D_OSB.BIA.gz"
+    bia_local = shutil.copy(bia, bia_file_database_folder() / "2023/001" / bia.name)
+    assert bia_local.exists()
+
     yield test_directory / compressed_crx.name
     shutil.rmtree(test_directory)
 
@@ -89,10 +92,7 @@ def input_for_test_tlse_2024(tmp_path_factory):
         datasets_directory / "TLSE00FRA_R_2024001/BRDC00IGS_R_20240010000_01D_MN.rnx.gz"
     )
     for file in [compressed_compact_rinex_file, ephemerides_file]:
-        shutil.copy(
-            file,
-            test_directory / file.name,
-        )
+        shutil.copy(file, test_directory / file.name)
 
     yield test_directory / compressed_compact_rinex_file.name
     shutil.rmtree(test_directory)
@@ -269,11 +269,7 @@ def test_spp_lsq_nist(input_for_test_nist):
         == df.time_of_reception_in_receiver_time.min()
     ]
     for constellations_to_use in [
-        (
-            "G",
-            "E",
-            "C",
-        ),
+        ("G", "E", "C"),
         ("G", "S"),
         ("G",),
         ("E",),
@@ -305,11 +301,7 @@ def test_spp_lsq_tlse(input_for_test_tlse):
         & (df.sat_elevation_deg > 10)
     ]
     for constellations_to_use in [
-        (
-            "G",
-            "E",
-            "C",
-        ),
+        ("G", "E", "C"),
         ("G", "S"),
         ("G",),
         ("E",),
@@ -375,7 +367,7 @@ def test_spp_lsq_tlse_single_freq(input_for_test_tlse):
         assert np.max(np.abs(velocity_offset)) < 3e-2
 
 
-def test_spp_lsq_tlse_with_precise_corrections(input_for_test_tlse):
+def test_spp_lsq_tlse_iono_free_with_precise_corrections(input_for_test_tlse):
     """
     Use iono-free combinations considered by IGS conventions (CODE Analysis Center):
     | Constellation | Frequency pair             |
