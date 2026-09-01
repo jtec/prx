@@ -14,6 +14,7 @@ import georinex
 import joblib
 import numpy as np
 import pandas as pd
+import scipy as sp
 import xarray
 from imohash import imohash
 from astropy.utils import iers
@@ -647,3 +648,52 @@ def compute_sun_ecef_position(epochs: np.array) -> np.array:
     sun_gcrs = get_sun(time)
     sun_ecef = sun_gcrs.transform_to(ITRS(obstime=time))
     return sun_ecef.cartesian.xyz.to(astropy.units.meter).value
+
+
+def compute_phase_wind_up_corr(epoch: np.array, sat_pos: np.array, rx_pos: np.array):
+    """
+    Based on ESA GNSS DATA PROCESSING Vol I, §5.5
+
+    Note: as a correction, it shall be substracted from the observation.
+    """
+    # receiver effective dipole
+    assert sat_pos.shape == rx_pos.shape, (
+        "sat_pos and rx_pos should have the same shape"
+    )
+    u_sat2rx = rx_pos - sat_pos
+    rho = u_sat2rx / np.linalg.norm(u_sat2rx, axis=1).reshape(-1, 1)
+    _, rot_mat = ecef_2_enu(
+        rx_pos[:, 0],
+        rx_pos[:, 1],
+        rx_pos[:, 2],
+        rx_pos[:, 0],
+        rx_pos[:, 1],
+        rx_pos[:, 2],
+    )
+    # East unit vector in ecef frame, corresponds to the 1st line of the rotation matrix between ecef to enu
+    a = rot_mat[:, 0, :]
+    # North unit vector in ecef frame, corresponds to the 2nd line of the rotation matrix between ecef to enu
+    b = rot_mat[:, 1, :]
+    d = a - rho * (np.vecdot(rho, a)).reshape(-1, 1) + np.cross(rho, b)
+
+    # satellite effective dipole
+    _, rot_mat = ecef_2_satellite(sat_pos, sat_pos, epoch)
+    # i-pointing unit vector, eq 5.78, corresponds to 1st line of the rotation matrix between ecef to sat frame
+    a = rot_mat[:, 0, :]
+    # j-pointing unit vector, eq 5.77, corresponds to 2nd line of the rotation matrix between ecef to sat frame
+    b = rot_mat[:, 1, :]
+    d_prime = a - rho * (np.vecdot(rho, a)).reshape(-1, 1) + np.cross(rho, b)
+
+    # fractional part of the cycle
+    ksi = np.vecdot(rho, np.cross(d_prime, d))
+    frac_phi_cycle = (
+        np.sign(ksi)
+        * np.arccos(
+            np.vecdot(d_prime, d)
+            / np.linalg.norm(d_prime, axis=1)
+            / np.linalg.norm(d, axis=1)
+        )
+        / 2
+        / np.pi
+    )
+    return frac_phi_cycle
