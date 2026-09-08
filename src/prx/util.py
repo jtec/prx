@@ -650,11 +650,13 @@ def compute_sun_ecef_position(epochs: np.array) -> np.array:
     return sun_ecef.cartesian.xyz.to(astropy.units.meter).value
 
 
-def compute_phase_wind_up_corr(epoch: np.array, sat_pos: np.array, rx_pos: np.array):
+def compute_phase_wind_up(epoch: np.array, sat_pos: np.array, rx_pos: np.array):
     """
     Based on ESA GNSS DATA PROCESSING Vol I, §5.5
 
-    Note: as a correction, it shall be substracted from the observation.
+    Note: this function computes the effect of the carrier phase wind-up.
+          To correct it, it shall be subtracted from the observation.
+
     """
     # receiver effective dipole
     assert sat_pos.shape == rx_pos.shape, (
@@ -686,7 +688,7 @@ def compute_phase_wind_up_corr(epoch: np.array, sat_pos: np.array, rx_pos: np.ar
 
     # fractional part of the cycle
     ksi = np.vecdot(rho, np.cross(d_prime, d))
-    frac_phi_cycle = (
+    frac_phi_cycle = -1 * (
         np.sign(ksi)
         * np.arccos(
             np.vecdot(d_prime, d)
