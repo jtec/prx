@@ -29,11 +29,10 @@ log = logging.getLogger(__name__)
 @util.timeit
 def write_prx_file(
     prx_header: dict,
-    prx_records_pd: pd.DataFrame,
+    prx_records: pl.DataFrame,
     file_name_without_extension: Path,
 ):
     output_file = Path(f"{str(file_name_without_extension)}.csv")
-    prx_records = pl.from_pandas(prx_records_pd)
     prx_records = prx_records.with_columns(
         (pl.col("elevation_rad") * cDegPerRad).alias("sat_elevation_deg"),
         (pl.col("azimuth_rad") * cDegPerRad).alias("sat_azimuth_deg"),
@@ -218,7 +217,11 @@ def assign_carrier_frequencies(flat_obs):
     return flat_obs
 
 
+from line_profiler import profile
+
+
 @util.timeit
+@profile
 def build_records_levels_12(
     rinex_3_obs_file,
     rinex_3_ephemerides_files,
@@ -251,7 +254,7 @@ def build_records_levels_12(
     log.info("Computing times of emission in satellite time")
     per_sat = flat_obs.pivot(
         index=["time_of_reception_in_receiver_time", "satellite"],
-        columns=["observation_type"],
+        on=["observation_type"],
         values="observation_value",
     )
     per_sat = per_sat.with_columns(
@@ -343,15 +346,14 @@ def build_records_levels_12(
         day_query["query_time_isagpst"] = day_query["query_time_isagpst"].astype(
             "datetime64[ns]"
         )
-        sat_states_per_day.append(
-            pl.from_pandas(
-                rinex_evaluate.compute_parallel(
-                    file,
-                    day_query,
-                    joblib_backend=joblib_backend,
-                )
+        day_sat_states = pl.from_pandas(
+            rinex_evaluate.compute_parallel(
+                file,
+                day_query,
+                joblib_backend=joblib_backend,
             )
         )
+        sat_states_per_day.append(day_sat_states)
         if prx_level == 1:  # drop sat group delay
             sat_states_per_day[-1] = sat_states_per_day[-1].drop(["sat_code_bias_m"])
     sat_states = pl.concat(sat_states_per_day)
@@ -426,14 +428,13 @@ def build_records_levels_12(
 
     if prx_level == 2:
         # add iono correction
-        iono_delay = atmo.add_iono_column(
-            flat_obs.to_pandas(),
+        flat_obs = atmo.compute_iono_column(
+            flat_obs,
             rinex_3_ephemerides_files,
             approximate_receiver_ecef_position_m,
         )
-        flat_obs = flat_obs.with_columns(iono_delay_m=iono_delay)
 
-    return flat_obs.to_pandas()
+    return flat_obs
 
 
 def build_records_level_3(
@@ -470,7 +471,7 @@ def build_records_level_3(
     log.info("Computing times of emission in satellite time")
     per_sat = flat_obs.pivot(
         index=["time_of_reception_in_receiver_time", "satellite"],
-        columns=["observation_type"],
+        on=["observation_type"],
         values="observation_value",
     ).reset_index()
     per_sat["time_scale"] = (
@@ -623,20 +624,6 @@ def build_records_level_3(
     # set frequency slot to 1 for non-GLONASS satellites
     flat_obs.loc[flat_obs.satellite.str[0] != "R", "frequency_slot"] = int(1)
 
-    def assign_carrier_frequencies(flat_obs):
-        freq_dict = pd.json_normalize(carrier_frequencies_hz(), sep="_").to_dict(
-            orient="records"
-        )[0]
-        assignable = flat_obs.frequency_slot.notna()
-        keys = (
-            flat_obs.satellite[assignable].str[0]
-            + "_L"
-            + flat_obs["observation_type"][assignable].str[1]
-            + "_"
-            + flat_obs.frequency_slot[assignable].astype(int).astype(str)
-        )
-        flat_obs.loc[:, "carrier_frequency_hz"] = keys.map(freq_dict)
-        return flat_obs
 
     flat_obs = assign_carrier_frequencies(flat_obs).drop(columns=["frequency_slot"])
 
@@ -644,7 +631,7 @@ def build_records_level_3(
     rnx3_nav_files = nav_file_discovery.discover_or_download_auxiliary_files(
         rinex_3_obs_file
     )["broadcast_ephemerides"]
-    iono_delay = atmo.add_iono_column(
+    iono_delay = atmo.compute_iono_column(
         flat_obs, rnx3_nav_files, approximate_receiver_ecef_position_m
     )
     flat_obs["iono_delay_m"] = iono_delay
@@ -712,14 +699,14 @@ def process(
             metadata["processing_start_time"] = t0
 
             # build record
-            records = build_records_level_3(
+            records = pl.from_pandas(build_records_level_3(
                 rinex_3_obs_file,
                 aux_files["sp3_orb"],
                 aux_files["atx"],
                 aux_files["bia"],
                 metadata["approximate_receiver_ecef_position_m"],
                 model_tropo,
-            )
+            ))
     metadata["processing_time"] = str(
         pd.Timestamp.now() - metadata["processing_start_time"]
     )

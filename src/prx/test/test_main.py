@@ -178,7 +178,9 @@ def test_prx_command_line_call(input_for_test_tlse):
 
 def test_prx_function_call(input_for_test_tlse):
     test_file = input_for_test_tlse
-    main.process(observation_file_path=test_file, prx_level=2)
+    main.process(
+        observation_file_path=test_file, prx_level=2, joblib_backend="sequential"
+    )
     expected_prx_file = Path(str(test_file).replace("crx.gz", "csv"))
     assert expected_prx_file.exists()
     df = pd.read_csv(expected_prx_file, comment="#")
