@@ -1251,7 +1251,7 @@ requires-dist = [
     { name = "dotmap", specifier = ">=1.3.30,<2.0.0" },
     { name = "flake8", specifier = ">=7.1.1,<8.0.0" },
     { name = "georinex", git = "https://github.com/geospace-code/georinex?rev=95ef1d8e7150f998a1b5a429090cadb429128648" },
-    { name = "gitpython", specifier = ">=3.1.58,<4.0.0" },
+    { name = "gitpython", specifier = ">=3.1.59,<4.0.0" },
     { name = "hatanaka", specifier = ">=2.8.1" },
     { name = "imohash", specifier = ">=1.1.0,<2.0.0" },
     { name = "joblib", specifier = ">=1.4.2,<2.0.0" },
