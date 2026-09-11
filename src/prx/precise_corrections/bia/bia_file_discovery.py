@@ -55,7 +55,10 @@ def check_online_availability(year: int, doy: int, analysis_center: str) -> Path
     gps_week, _ = util.timestamp_to_gps_week_and_dow(
         pd.Timestamp(year=year, month=1, day=1) + pd.Timedelta(days=doy - 1)
     )
-    remote_folder = f"gnss/products/{gps_week}"
+    if gps_week > 2237:
+        remote_folder = f"/gnss/products/{gps_week}"
+    else:
+        remote_folder = f"/gnss/products/{gps_week}/mgex"
     file = build_bia_file_name(year, doy, analysis_center)
     ftp = ftplib.FTP(server)
     ftp.login()
@@ -76,7 +79,10 @@ def try_downloading_bia_ftp(year: int, doy: int, analysis_center: str) -> Path |
     gps_week, _ = util.timestamp_to_gps_week_and_dow(
         pd.Timestamp(year=year, month=1, day=1) + pd.Timedelta(days=doy - 1)
     )
-    remote_folder = f"gnss/products/{gps_week}"
+    if gps_week > 2237:
+        remote_folder = f"/gnss/products/{gps_week}"
+    else:
+        remote_folder = f"/gnss/products/{gps_week}/mgex"
     ftp_file = f"ftp://{server}/{remote_folder}/{file}"
     local_file = bia_file_folder(year, doy) / build_bia_file_name(
         year, doy, analysis_center
