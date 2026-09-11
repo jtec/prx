@@ -14,6 +14,7 @@ import georinex
 import joblib
 import numpy as np
 import pandas as pd
+import scipy as sp
 import xarray
 from imohash import imohash
 from astropy.utils import iers
@@ -401,7 +402,9 @@ def compute_satellite_elevation_and_azimuth(sat_pos_ecef, receiver_pos_ecef):
         :, np.newaxis
     ]
     unit_vector_rx_satellite_ecef = sat_pos_wrt_rx_pos_ecef / sat_pos_wrt_rx_pos_norm
-    [receiver_lat_rad, receiver_lon_rad, __] = ecef_2_geodetic(receiver_pos_ecef)
+    [receiver_lat_rad, receiver_lon_rad, __] = ecef_2_geodetic(
+        *[np.array(c) for c in receiver_pos_ecef]
+    )
     unit_e_ecef = [-np.sin(receiver_lon_rad), np.cos(receiver_lon_rad), 0]
     unit_n_ecef = [
         -np.cos(receiver_lon_rad) * np.sin(receiver_lat_rad),
@@ -422,9 +425,45 @@ def compute_satellite_elevation_and_azimuth(sat_pos_ecef, receiver_pos_ecef):
     return elevation_rad, azimuth_rad
 
 
+def ecef_2_geodetic(pos_ecef_x: np.array, pos_ecef_y: np.array, pos_ecef_z: np.array):
+    """
+    pos_ecef_{x,y,z}: np.array of shape (n,)
+    Reference:
+    GNSS data Processing, Vol. I: Fundamentals and Algorithms. Equations (B.4),(B.5),(B.6)
+    """
+    p = np.linalg.norm(np.array([pos_ecef_x, pos_ecef_y]), axis=0)
+    longitude_rad = np.arctan2(pos_ecef_y, pos_ecef_x)
+    precision_rad = np.full(
+        pos_ecef_x.shape, 1.6e-10
+    )  # desired precision in radians, corresponds to 1 mm
+    delta_phi_rad = np.full(
+        pos_ecef_x.shape, 1.0
+    )  # initialization to a value larger than precision
+    altitude_m = np.zeros(pos_ecef_x.shape)
+    latitude_rad = np.arctan2(
+        pos_ecef_z, p * (1 - constants.cWgs84EarthEccentricity**2)
+    )
+    while (delta_phi_rad > precision_rad).any():
+        n = constants.cWgs84EarthSemiMajorAxis_m / np.sqrt(
+            1 - constants.cWgs84EarthEccentricity**2 * np.sin(latitude_rad) ** 2
+        )
+        # altitude_previous = altitude_m
+        altitude_m = p / np.cos(latitude_rad) - n
+        # delta_h_m = np.abs(altitude_m - altitude_previous)
+        latitude_prev = latitude_rad
+        latitude_rad = np.arctan2(
+            pos_ecef_z,
+            p * (1 - n * constants.cWgs84EarthEccentricity**2 / (n + altitude_m)),
+        )
+        delta_phi_rad = np.abs(latitude_rad - latitude_prev)
+    return latitude_rad, longitude_rad, altitude_m
+
+
 def geodetic_2_ecef(lat_rad, lon_rad, altitude_m):
-    """Reference:
-    GNSS Data Processing, Vol. I: Fundamentals and Algorithms. Equations (B.1),(B.2),(B.3)
+    """
+    lat_rad, lon_rad, altitude_m: np.array of shape (n,)
+    Reference:
+    GNSS data Processing, Vol. I: Fundamentals and Algorithms. Equations (B.1),(B.2),(B.3)
     """
     n = constants.cWgs84EarthSemiMajorAxis_m / np.sqrt(
         1 - constants.cWgs84EarthEccentricity**2 * np.sin(lat_rad) ** 2
@@ -435,30 +474,34 @@ def geodetic_2_ecef(lat_rad, lon_rad, altitude_m):
     return [x, y, z]
 
 
-def ecef_2_geodetic(pos_ecef):
-    """Reference:
-    GNSS Data Processing, Vol. I: Fundamentals and Algorithms. Equations (B.4),(B.5),(B.6)
+def ecef_2_enu(
+    x: np.array,
+    y: np.array,
+    z: np.array,
+    x_org: np.array,
+    y_org: np.array,
+    z_org: np.array,
+):
     """
-    p = np.sqrt(pos_ecef[0] ** 2 + pos_ecef[1] ** 2)
-    longitude_rad = np.arctan2(pos_ecef[1], pos_ecef[0])
-    precision_m = 1e-3
-    delta_h_m = 1  # initialization to a value larger than precision
-    altitude_m = 0
-    latitude_rad = np.arctan2(
-        pos_ecef[2], p * (1 - constants.cWgs84EarthEccentricity**2)
-    )
-    while delta_h_m > precision_m:
-        n = constants.cWgs84EarthSemiMajorAxis_m / np.sqrt(
-            1 - constants.cWgs84EarthEccentricity**2 * np.sin(latitude_rad) ** 2
-        )
-        altitude_previous = altitude_m
-        altitude_m = p / np.cos(latitude_rad) - n
-        delta_h_m = np.abs(altitude_m - altitude_previous)
-        latitude_rad = np.arctan2(
-            pos_ecef[2],
-            p * (1 - n * constants.cWgs84EarthEccentricity**2 / (n + altitude_m)),
-        )
-    return [latitude_rad, longitude_rad, altitude_m]
+    Reference: ESA Book, §B2.2
+    """
+    x, y, z, x_org, y_org, z_org = np.atleast_1d(*[x, y, z, x_org, y_org, z_org])
+    lat_org, lon_org, _ = ecef_2_geodetic(x_org, y_org, z_org)
+    lat_org, lon_org = np.atleast_1d(*[lat_org, lon_org])
+    vec = np.array([x - x_org, y - y_org, z - z_org]).T
+
+    rot1 = sp.spatial.transform.Rotation.from_euler(
+        "x", -(90 - np.rad2deg(lat_org)), degrees=True
+    ).as_matrix()  # angle*-1 : left handed *-1
+    rot3 = sp.spatial.transform.Rotation.from_euler(
+        "z", -(90 + np.rad2deg(lon_org)), degrees=True
+    ).as_matrix()  # angle*-1 : left handed *-1
+
+    rotMatrix = rot1 @ rot3
+
+    # faster version of `enu = np.array([rotMatrix[i] @ vec[i] for i in range(len(vec))])`
+    enu = np.einsum("ijk,ik->ij", rotMatrix, vec)
+    return enu, rotMatrix
 
 
 def ecef_2_satellite(pos_ecef: np.array, pos_sat_ecef: np.array, epoch: np.array):
@@ -605,3 +648,54 @@ def compute_sun_ecef_position(epochs: np.array) -> np.array:
     sun_gcrs = get_sun(time)
     sun_ecef = sun_gcrs.transform_to(ITRS(obstime=time))
     return sun_ecef.cartesian.xyz.to(astropy.units.meter).value
+
+
+def compute_phase_wind_up(epoch: np.array, sat_pos: np.array, rx_pos: np.array):
+    """
+    Based on ESA GNSS DATA PROCESSING Vol I, §5.5
+
+    Note: this function computes the effect of the carrier phase wind-up.
+          To correct it, it shall be subtracted from the observation.
+
+    """
+    # receiver effective dipole
+    assert sat_pos.shape == rx_pos.shape, (
+        "sat_pos and rx_pos should have the same shape"
+    )
+    u_sat2rx = rx_pos - sat_pos
+    rho = u_sat2rx / np.linalg.norm(u_sat2rx, axis=1).reshape(-1, 1)
+    _, rot_mat = ecef_2_enu(
+        rx_pos[:, 0],
+        rx_pos[:, 1],
+        rx_pos[:, 2],
+        rx_pos[:, 0],
+        rx_pos[:, 1],
+        rx_pos[:, 2],
+    )
+    # East unit vector in ecef frame, corresponds to the 1st line of the rotation matrix between ecef to enu
+    a = rot_mat[:, 0, :]
+    # North unit vector in ecef frame, corresponds to the 2nd line of the rotation matrix between ecef to enu
+    b = rot_mat[:, 1, :]
+    d = a - rho * (np.vecdot(rho, a)).reshape(-1, 1) + np.cross(rho, b)
+
+    # satellite effective dipole
+    _, rot_mat = ecef_2_satellite(sat_pos, sat_pos, epoch)
+    # i-pointing unit vector, eq 5.78, corresponds to 1st line of the rotation matrix between ecef to sat frame
+    a = rot_mat[:, 0, :]
+    # j-pointing unit vector, eq 5.77, corresponds to 2nd line of the rotation matrix between ecef to sat frame
+    b = rot_mat[:, 1, :]
+    d_prime = a - rho * (np.vecdot(rho, a)).reshape(-1, 1) + np.cross(rho, b)
+
+    # fractional part of the cycle
+    ksi = np.vecdot(rho, np.cross(d_prime, d))
+    frac_phi_cycle = -1 * (
+        np.sign(ksi)
+        * np.arccos(
+            np.vecdot(d_prime, d)
+            / np.linalg.norm(d_prime, axis=1)
+            / np.linalg.norm(d, axis=1)
+        )
+        / 2
+        / np.pi
+    )
+    return frac_phi_cycle

@@ -540,11 +540,11 @@ def build_records_level_3(
         # create query for single day
         day_query = query.loc[
             (
-                query.query_time_isagpst
+                query["query_time_isagpst"]
                 >= pd.Timestamp(year=year, month=1, day=1) + pd.Timedelta(days=doy - 1)
             )
             & (
-                query.query_time_isagpst
+                query["query_time_isagpst"]
                 < pd.Timestamp(year=year, month=1, day=1) + pd.Timedelta(days=doy)
             )
         ]
@@ -560,6 +560,24 @@ def build_records_level_3(
         ).to_pandas()
         sat_states_single_day = sat_states_single_day.merge(
             sat_bias, on=["sv", "signal", "query_time_isagpst"], how="left"
+        )
+        # add satellite carrier phase wind-up
+        sat_ph_wu = util.compute_phase_wind_up(
+            sat_states_single_day["query_time_isagpst"],
+            sat_states_single_day[
+                ["sat_pos_x_m", "sat_pos_y_m", "sat_pos_z_m"]
+            ].to_numpy(),
+            rx_pos=np.tile(
+                approximate_receiver_ecef_position_m,
+                (len(sat_states_single_day), 1),
+            ),
+        )
+        sat_states_single_day["sat_phase_wind_up_cycles"] = sat_ph_wu
+        # unwrap phase wind-up effect
+        sat_states_single_day["sat_phase_wind_up_cycles"] = (
+            sat_states_single_day.groupby(["sv", "signal"])[
+                "sat_phase_wind_up_cycles"
+            ].transform(lambda s: np.unwrap(s, period=1))
         )
 
         # collect satellite states per day

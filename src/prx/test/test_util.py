@@ -109,7 +109,7 @@ def test_ecef_to_geodetic():
     tolerance_alt = 1e-3
 
     for coord in coords.values():
-        computed_geodetic = util.ecef_2_geodetic(coord["ecef"])
+        computed_geodetic = util.ecef_2_geodetic(*[np.array(c) for c in coord["ecef"]])
         assert (
             np.abs(np.array(coord["geodetic"][:2]) - np.array(computed_geodetic[:2]))
             < tolerance_rad
@@ -121,9 +121,7 @@ def test_geodetic_2_ecef():
     tolerance_ecef = 1e-3
 
     for coord in coords.values():
-        computed_ecef = util.geodetic_2_ecef(
-            coord["geodetic"][0], coord["geodetic"][1], coord["geodetic"][2]
-        )
+        computed_ecef = util.geodetic_2_ecef(*[np.array(c) for c in coord["geodetic"]])
         assert (
             np.linalg.norm(np.array(coord["ecef"]) - np.array(computed_ecef))
             < tolerance_ecef
@@ -373,3 +371,54 @@ def test_timedelta_2_seconds():
         expected_timedelta_s,
         atol=1e-12,
     )
+
+
+def test_ecef2enu():
+    # test with a single position
+    ecef_coords = np.array([6378137.0, 0.0, 0.0])
+    enu, rot = util.ecef_2_enu(
+        np.array(ecef_coords[0]),
+        np.array(ecef_coords[1]),
+        np.array(ecef_coords[2]),
+        np.array(ecef_coords[0]),
+        np.array(ecef_coords[1]),
+        np.array(ecef_coords[2]),
+    )
+
+    # expression of rotation matrix in RTKLIB v2.4.2 manual, eq E.2.10, p 135
+    lat = 0
+    lon = 0
+    rot_expected = np.array(
+        [
+            [-np.sin(lon), np.cos(lon), 0],
+            [-np.sin(lat) * np.cos(lon), -np.sin(lat) * np.sin(lon), np.cos(lat)],
+            [np.cos(lon) * np.cos(lat), np.sin(lon) * np.cos(lat), np.sin(lat)],
+        ]
+    )
+    assert (enu == np.array([0, 0, 0])).all()
+    assert rot[0] == pytest.approx(rot_expected)
+
+    # test with multiple positions
+    ecef_coords = np.array([[6378137.0, 0.0, 0.0], [0.0, 6378137.0, 0.0]])
+    enu, rot = util.ecef_2_enu(
+        np.array(ecef_coords[:, 0]),
+        np.array(ecef_coords[:, 1]),
+        np.array(ecef_coords[:, 2]),
+        np.array(ecef_coords[:, 0]),
+        np.array(ecef_coords[:, 1]),
+        np.array(ecef_coords[:, 2]),
+    )
+    lat = np.array([0, 0])
+    lon = np.array([0, np.pi / 2])
+    rot_expected = np.array(
+        [
+            [
+                [-np.sin(lo), np.cos(lo), 0],
+                [-np.sin(la) * np.cos(lo), -np.sin(la) * np.sin(lo), np.cos(la)],
+                [np.cos(lo) * np.cos(la), np.sin(lo) * np.cos(la), np.sin(la)],
+            ]
+            for la, lo in zip(lat, lon)
+        ]
+    )
+    assert (enu == np.array([[0, 0, 0], [0, 0, 0]])).all()
+    assert rot == pytest.approx(rot_expected)
