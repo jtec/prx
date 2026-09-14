@@ -123,8 +123,8 @@ def add_iono_column(
                 flat_obs.loc[mask_idx, "time_of_emission_isagpst"]
                 - constants.system_time_scale_rinex_utc_epoch["GPST"]
             )[1].to_numpy()
-            [latitude_user_rad, longitude_user_rad, __] = ecef_2_geodetic(
-                approximate_receiver_ecef_position_m
+            latitude_user_rad, longitude_user_rad, __ = ecef_2_geodetic(
+                *[np.array(c) for c in approximate_receiver_ecef_position_m]
             )
             iono_all_days.append(
                 compute_l1_iono_delay_klobuchar(
@@ -434,7 +434,9 @@ def compute_tropo_delay(
     """
     model is either "saastamoinen" or "unb3m"
     """
-    [latitude_user_rad, __, height_user_m] = ecef_2_geodetic(receiver_ecef_position_m)
+    latitude_user_rad, __, height_user_m = ecef_2_geodetic(
+        *[np.array(c) for c in receiver_ecef_position_m]
+    )
     match model:
         case "saastamoinen":
             tropo_delay_m, _, _ = compute_tropo_delay_saastamoinen(

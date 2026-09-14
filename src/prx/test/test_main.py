@@ -646,6 +646,7 @@ def test_prx_level_3(input_for_test_tlse):
         "sat_azimuth_deg",
         "sat_code_bias_m",
         "sat_carrier_bias_m",
+        "sat_phase_wind_up_cycles",
     }
 
     # Checking if all renamed parameters exist in the dataframe columns
