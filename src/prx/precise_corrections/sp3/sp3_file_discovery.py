@@ -147,6 +147,7 @@ def get_sp3_files(
     analysis_center: str,
     db_folder=sp3_file_database_folder(),
 ) -> tuple[list[Path | None], list[Path | None]]:
+    analysis_center = analysis_center.upper()
     sp3_orb_files = []
     sp3_clk_files = []
     date = mid_day_start
